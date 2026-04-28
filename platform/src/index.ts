@@ -90,7 +90,8 @@ function requireAuth(req: AuthenticatedRequest, res: express.Response, next: exp
 }
 
 // Apply auth to all /api/* except public endpoints
-const PUBLIC_PATHS = ["/api/login", "/api/logout", "/api/scim/v2", "/health"];
+// Public paths: auth endpoints, SCIM (IdP service account), health, and system-to-system discovery
+const PUBLIC_PATHS = ["/api/login", "/api/logout", "/api/scim/v2", "/health", "/api/connectors/discover", "/api/connectors/register-capabilities", "/api/connectors/preview"];
 
 app.use((req: AuthenticatedRequest, res, next) => {
   // Only protect /api/ routes (static files, HTML pages pass through)
