@@ -5,7 +5,7 @@ import jwt from "jsonwebtoken";
 import { Kafka } from "kafkajs";
 import path from "path";
 
-import { linkProjects, getAllProjects, getMappings, getOrCreateDimensionMapping, getAllDimensionMappings, updateDimensionMapping, lookupCanonical, configureDimModel, getDimModel, getAllDimModels, configureDimRouting, getAllDimRouting, registerSharedDimension, getAllSharedDimensions, upsertDimensionCode, getDimensionCodes, registerParticipant, getParticipants, upsertCodeMapping, getCodeMappings, registerConnector, registerConnectorDimension, getAllConnectors, getConnectorDimensions, updateConnectorField, registerDimensionAttribute, getDimensionAttributes, setCodeAttribute, getCodeAttributes, getAllCodeAttributes, setHierarchy, getHierarchy, resetAllData, getInboxItems, addInboxItem, updateInboxItem, getConnectorTaskBaseUrl, deleteDimModel, deleteDimRouting, deleteConnector, deleteParticipant } from "./mapper";
+import { linkProjects, getAllProjects, getMappings, getOrCreateDimensionMapping, getAllDimensionMappings, updateDimensionMapping, lookupCanonical, configureDimModel, getDimModel, getAllDimModels, configureDimRouting, getAllDimRouting, registerSharedDimension, getAllSharedDimensions, upsertDimensionCode, getDimensionCodes, registerParticipant, getParticipants, upsertCodeMapping, getCodeMappings, registerConnector, registerConnectorDimension, getAllConnectors, getConnectorDimensions, updateConnectorField, registerDimensionAttribute, getDimensionAttributes, setCodeAttribute, getCodeAttributes, getAllCodeAttributes, setHierarchy, getHierarchy, resetAllData, getInboxItems, addInboxItem, updateInboxItem, getConnectorTaskBaseUrl, deleteDimModel, deleteDimRouting, deleteConnector, deleteParticipant, getAllUsers, getUser, getUserByUsername, getUserByExternalId, upsertUser, updateUser, deleteUser, updateLastLogin, getUserCount } from "./mapper";
 import { startRouter, publishLink, getEventLog } from "./router";
 
 // ── Config ──
@@ -14,11 +14,33 @@ const PORT = 3000;
 const JWT_SECRET = "platform-poc-secret-not-for-production";
 
 const DEMO_USERS = [
-  { username: "anna", password: "demo", user_id: "user-001", name: "Anna Svensson", role: "controller", org_unit: "OU-100", products: ["prod_a", "prod_b"], primary_product: "prod_a" },
-  { username: "erik", password: "demo", user_id: "user-002", name: "Erik Lindgren", role: "analyst", org_unit: "OU-200", products: ["prod_b"], primary_product: "prod_b" },
-  { username: "calle", password: "demo", user_id: "user-003", name: "Calle Björk", role: "controller", org_unit: "OU-100", products: ["prod_a"], primary_product: "prod_a" },
-  { username: "admin", password: "demo", user_id: "user-000", name: "Admin User", role: "admin", org_unit: "ACME", products: ["platform", "prod_a", "prod_b"], primary_product: "platform" },
+  { username: "anna", password: "demo", user_id: "user-001", name: "Anna Svensson", email: "anna@example.com", role: "controller", org_unit: "OU-100", products: ["prod_a", "prod_b"], primary_product: "prod_a" },
+  { username: "erik", password: "demo", user_id: "user-002", name: "Erik Lindgren", email: "erik@example.com", role: "analyst", org_unit: "OU-200", products: ["prod_b"], primary_product: "prod_b" },
+  { username: "calle", password: "demo", user_id: "user-003", name: "Calle Björk", email: "calle@example.com", role: "controller", org_unit: "OU-100", products: ["prod_a"], primary_product: "prod_a" },
+  { username: "admin", password: "demo", user_id: "user-000", name: "Admin User", email: "admin@example.com", role: "admin", org_unit: "ACME", products: ["platform", "prod_a", "prod_b"], primary_product: "platform" },
 ];
+
+// Seed demo users into DB if empty
+function seedDemoUsers() {
+  if (getUserCount() === 0) {
+    for (const u of DEMO_USERS) {
+      upsertUser({
+        user_id: u.user_id,
+        username: u.username,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        org_unit: u.org_unit,
+        products: u.products,
+        primary_product: u.primary_product,
+        source: "local",
+        password_hash: u.password,  // plain text for POC — noted as simulated
+      });
+    }
+    console.log("[PLATFORM] Seeded demo users into DB");
+  }
+}
+seedDemoUsers();
 
 // ── Kafka ──
 
@@ -39,11 +61,12 @@ app.use(express.static(path.join(__dirname, "..", "public")));
 
 app.post("/api/login", (req, res) => {
   const { username, password } = req.body;
-  const user = DEMO_USERS.find((u) => u.username === username && u.password === password);
-  if (!user) {
+  const user = getUserByUsername(username);
+  if (!user || user.password_hash !== password) {
     res.status(401).json({ error: "Invalid credentials" });
     return;
   }
+  updateLastLogin(user.user_id);
   const token = jwt.sign(
     { user_id: user.user_id, name: user.name, role: user.role, org_unit: user.org_unit, products: user.products, primary_product: user.primary_product },
     JWT_SECRET,
@@ -76,16 +99,96 @@ app.get("/api/me", (req, res) => {
   }
 });
 
-// Users: expose demo users for assignment UIs (filter by product if ?product=xxx)
+// Users: from DB (filter by product if ?product=xxx)
 app.get("/api/users", (_req, res) => {
   const product = _req.query.product as string | undefined;
-  let users = DEMO_USERS.map(u => ({
-    user_id: u.user_id, name: u.name, role: u.role, org_unit: u.org_unit, products: u.products,
+  let users = getAllUsers().map(u => ({
+    user_id: u.user_id, name: u.name, role: u.role, org_unit: u.org_unit,
+    products: u.products, email: u.email, status: u.status, source: u.source,
+    groups: u.groups, primary_product: u.primary_product, last_login: u.last_login,
   }));
   if (product) {
     users = users.filter(u => u.products.includes(product));
   }
   res.json(users);
+});
+
+// Single user
+app.get("/api/users/:id", (req, res) => {
+  const user = getUser(req.params.id);
+  if (!user) { res.status(404).json({ error: "User not found" }); return; }
+  const { password_hash, ...safe } = user;
+  res.json(safe);
+});
+
+// Create/update user (admin UI)
+app.put("/api/users/:id", (req, res) => {
+  const result = updateUser(req.params.id, req.body);
+  if (!result) { res.status(404).json({ error: "User not found" }); return; }
+  const { password_hash, ...safe } = result;
+  res.json({ ok: true, user: safe });
+});
+
+// Delete user (admin UI)
+app.delete("/api/users/:id", (req, res) => {
+  const ok = deleteUser(req.params.id);
+  if (!ok) { res.status(404).json({ error: "User not found" }); return; }
+  res.json({ ok: true });
+});
+
+// ── SCIM-like endpoints (simulated) ──
+// In production: IdP (Zitadel/Azure AD) pushes user lifecycle events via SCIM 2.0.
+// Here we simulate the protocol with simplified JSON payloads.
+
+app.post("/api/scim/v2/Users", (req, res) => {
+  const { externalId, userName, displayName, emails, groups, active } = req.body;
+  if (!userName || !displayName) {
+    res.status(400).json({ error: "userName and displayName required" });
+    return;
+  }
+  const userId = "user-" + String(Date.now()).slice(-6);
+  const user = upsertUser({
+    user_id: userId,
+    external_id: externalId || userId,
+    username: userName,
+    name: displayName,
+    email: emails?.[0]?.value || null,
+    groups: groups?.map((g: any) => g.display || g.value) || [],
+    status: active !== false ? "active" : "suspended",
+    source: "scim",
+  });
+  const { password_hash, ...safe } = user;
+  res.status(201).json({ ...safe, schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"] });
+});
+
+app.patch("/api/scim/v2/Users/:id", (req, res) => {
+  const { Operations } = req.body;
+  if (!Operations || !Array.isArray(Operations)) {
+    res.status(400).json({ error: "Operations array required" });
+    return;
+  }
+  // Find user by external_id or user_id
+  let user = getUserByExternalId(req.params.id) || getUser(req.params.id);
+  if (!user) { res.status(404).json({ error: "User not found" }); return; }
+  const updates: any = {};
+  for (const op of Operations) {
+    if (op.op === "replace") {
+      if (op.path === "displayName") updates.name = op.value;
+      if (op.path === "active") updates.status = op.value ? "active" : "suspended";
+      if (op.path === "emails") updates.email = op.value?.[0]?.value;
+    }
+  }
+  const result = updateUser(user.user_id, updates);
+  if (!result) { res.status(404).json({ error: "Update failed" }); return; }
+  const { password_hash, ...safe } = result;
+  res.json({ ...safe, schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"] });
+});
+
+app.delete("/api/scim/v2/Users/:id", (req, res) => {
+  let user = getUserByExternalId(req.params.id) || getUser(req.params.id);
+  if (!user) { res.status(404).json({ error: "User not found" }); return; }
+  updateUser(user.user_id, { status: "deprovisioned" });
+  res.status(204).end();
 });
 
 // Navigation: dynamic product list based on connected systems + user entitlements
@@ -635,6 +738,7 @@ app.post("/api/demo/reset", async (_req, res) => {
   demoState.version_id = null;
   demoState.step = 0;
   resetAllData();
+  seedDemoUsers();
   // Reset downstream products
   try { await fetch("http://product-a:3002/api/reset", { method: "POST" }); } catch {}
   try { await fetch("http://product-b:3003/api/reset", { method: "POST" }); } catch {}

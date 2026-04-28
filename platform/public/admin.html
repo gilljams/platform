@@ -387,6 +387,7 @@
     <nav class="sidebar-nav">
       <div class="sidebar-section">Tabs</div>
       <a href="#" class="active" onclick="switchTab('setup');toggleSidebar();return false">Initial Setup</a>
+      <a href="#" onclick="switchTab('users');toggleSidebar();return false">Users & Identity</a>
       <a href="#" onclick="switchTab('operations');toggleSidebar();return false">Operations</a>
       <a href="#" onclick="switchTab('events');toggleSidebar();return false">Events</a>
       <a href="#" onclick="switchTab('demo');toggleSidebar();return false">Demo</a>
@@ -408,6 +409,7 @@
   <!-- Tab bar -->
   <div class="tab-bar">
     <button class="tab-btn active" onclick="switchTab('setup')">Initial Setup</button>
+    <button class="tab-btn" onclick="switchTab('users')">Users & Identity</button>
     <button class="tab-btn" onclick="switchTab('operations')">Operations</button>
     <button class="tab-btn" onclick="switchTab('events')">Events</button>
     <button class="tab-btn" onclick="switchTab('demo')">Demo</button>
@@ -937,6 +939,232 @@ POST /api/demo/step/9  → Product B: show analytics</pre>
     </div>
   </div>
 
+  <!-- --------------------------------------------------------------- -->
+  <!-- TAB: USERS & IDENTITY -->
+  <!-- --------------------------------------------------------------- -->
+  <div class="tab-panel" id="tab-users">
+    <div class="container">
+
+      <!-- Identity Architecture overview -->
+      <div class="setup-intro">
+        <h2>Users & Identity</h2>
+        <p>
+          Manage platform users: who can log in, what products they access, and their organizational role.
+        </p>
+        <div class="setup-checklist" id="identityChecklist">
+          <div class="setup-check" id="check-users">
+            <span class="setup-check-label">Users</span>
+            <span class="setup-check-status">loading...</span>
+          </div>
+          <div class="setup-check" id="check-idp">
+            <span class="setup-check-label">Identity Provider</span>
+            <span class="setup-check-status">simulated</span>
+          </div>
+          <div class="setup-check" id="check-scim">
+            <span class="setup-check-label">SCIM Provisioning</span>
+            <span class="setup-check-status">simulated</span>
+          </div>
+          <div class="setup-check" id="check-oidc">
+            <span class="setup-check-label">OIDC/SAML</span>
+            <span class="setup-check-status">simulated</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- User list -->
+      <div class="card">
+        <div class="card-header">
+          <h2>User Directory</h2>
+          <span style="font-size:12px;color:#888;">Platform-wide identity store</span>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Name</th>
+              <th>Username</th>
+              <th>Email</th>
+              <th>Role</th>
+              <th>Org Unit</th>
+              <th>Products</th>
+              <th>Source</th>
+              <th>Status</th>
+              <th>Last Login</th>
+              <th style="width:28px"></th>
+            </tr>
+          </thead>
+          <tbody id="usersBody">
+            <tr><td colspan="11" style="color:#999;text-align:center;">Loading...</td></tr>
+          </tbody>
+        </table>
+
+        <!-- Add/edit user form -->
+        <div style="margin-top:12px;padding:12px;background:#f8f9fa;border-radius:8px;">
+          <h4 style="font-size:12px;color:#555;margin-bottom:8px;" id="userFormTitle">+ Add User</h4>
+          <div class="form-row" style="flex-wrap:wrap;">
+            <div class="form-group"><label>Username</label><input type="text" id="userUsername" placeholder="johndoe" style="width:110px"></div>
+            <div class="form-group"><label>Name</label><input type="text" id="userName" placeholder="John Doe" style="width:140px"></div>
+            <div class="form-group"><label>Email</label><input type="text" id="userEmail" placeholder="john@example.com" style="width:160px"></div>
+            <div class="form-group"><label>Role</label>
+              <select id="userRole" style="width:110px">
+                <option value="viewer">viewer</option>
+                <option value="controller">controller</option>
+                <option value="analyst">analyst</option>
+                <option value="admin">admin</option>
+              </select>
+            </div>
+            <div class="form-group"><label>Org Unit</label><input type="text" id="userOrgUnit" placeholder="OU-100" style="width:90px"></div>
+            <div class="form-group"><label>Products</label><input type="text" id="userProducts" placeholder="prod_a, prod_b" style="width:140px"></div>
+            <div class="form-group"><label>Password</label><input type="text" id="userPassword" placeholder="demo" style="width:80px"></div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button class="btn btn-primary btn-sm" onclick="saveUser()">Save User</button>
+            <button class="btn btn-sm" onclick="cancelEditUser()" id="userCancelBtn" style="display:none;background:#eee;color:#555;">Cancel</button>
+            <span id="userFormStatus" style="font-size:12px;color:#888;"></span>
+          </div>
+        </div>
+
+        <div class="info-block" style="margin-top:12px">
+          <div class="info-trigger" onclick="toggleInfo(this)">Show details ▸</div>
+          <div class="info-content">
+            <div class="info-title">How user management works</div>
+            Users are stored in the platform's <code>users</code> table with a shared identity across all products.
+            When a product (e.g., Product A) needs to show user lists for assignments, it calls
+            <code>GET /api/users?product=prod_a</code>. The platform returns users entitled to that product.
+            <br><br>
+            <strong>Source field</strong> indicates where the user came from:<br>
+            • <code>local</code> — created manually in this admin UI<br>
+            • <code>scim</code> — provisioned via SCIM 2.0 from an Identity Provider
+          </div>
+          <div class="info-content">
+            <div class="info-title">Identity architecture (production)</div>
+            <pre>In production, the platform does NOT handle login directly.
+Instead, an external Identity Provider (IdP) manages authentication:
+
+┌───────────┐    OIDC/SAML2     ┌──────────┐
+│ IdP        │ ◄───────redirect──── │ Platform │
+│ (Zitadel/  │ ────id_token+access─► │          │
+│  Azure AD) │                │          │
+└───────────┘                └──────────┘
+      │                          │
+      │ SCIM 2.0 sync           │ GET /api/users
+      ▼                          ▼
+ ┌──────────┐         ┌─────────────┐
+ │  users   │ ◄─read─ │ Product A/B │
+ │ (SQLite) │         └─────────────┘
+ └──────────┘
+
+1. OIDC (OpenID Connect): User logs in at IdP, gets back tokens.
+   Platform validates the id_token, never sees the password.
+
+2. SCIM 2.0: IdP pushes user create/update/deactivate to
+   POST /api/scim/v2/Users. Platform stores in users table.
+
+3. SAML2: Same as OIDC but with XML assertions. Used by
+   enterprise customers (ADFS, Azure AD).a
+
+4. Authorization: Platform stores product entitlements,
+   org membership, and role. Products query via API.
+
+In this POC, we simulate the entire flow:
+- Users are seeded with demo credentials (source: "local")
+- Login is handled directly (no redirect to IdP)
+- SCIM endpoint is available but called manually from admin UI
+- JWT tokens mirror what an OIDC flow would produce</pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- SCIM Provisioning simulator -->
+      <div class="card">
+        <div class="card-header">
+          <h2>SCIM Provisioning</h2>
+          <span style="font-size:12px;color:#888;">Simulates IdP push — in production this is automatic</span>
+        </div>
+        <p style="font-size:13px;color:#666;margin-bottom:12px;">
+          Test the SCIM endpoint by provisioning a user as if coming from an external IdP.
+          In production, the IdP (Zitadel, Azure AD, Okta) automatically pushes user lifecycle events.
+        </p>
+        <div class="form-row" style="flex-wrap:wrap;">
+          <div class="form-group"><label>External ID</label><input type="text" id="scimExternalId" placeholder="azure-abc-123" style="width:120px"></div>
+          <div class="form-group"><label>Username</label><input type="text" id="scimUsername" placeholder="new.user" style="width:120px"></div>
+          <div class="form-group"><label>Display Name</label><input type="text" id="scimName" placeholder="New User" style="width:140px"></div>
+          <div class="form-group"><label>Email</label><input type="text" id="scimEmail" placeholder="new@example.com" style="width:160px"></div>
+          <div class="form-group"><label>Groups</label><input type="text" id="scimGroups" placeholder="controllers, prod_a" style="width:160px"></div>
+          <button class="btn btn-primary btn-sm" onclick="provisionScimUser()">▶ Provision via SCIM</button>
+          <span id="scimStatus" style="font-size:12px;color:#888;"></span>
+        </div>
+        <div class="info-block" style="margin-top:12px">
+          <div class="info-trigger" onclick="toggleInfo(this)">Show details ▸</div>
+          <div class="info-content">
+            <div class="info-title">SCIM 2.0 Protocol (what this simulates)</div>
+            <pre>Provisioning (IdP → Platform):
+  POST /api/scim/v2/Users
+  {
+    "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
+    "externalId": "azure-abc-123",
+    "userName": "new.user",
+    "displayName": "New User",
+    "emails": [{ "value": "new@example.com", "primary": true }],
+    "groups": [{ "display": "controllers" }],
+    "active": true
+  }
+
+Update (IdP → Platform):
+  PATCH /api/scim/v2/Users/:externalId
+  {
+    "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+    "Operations": [
+      { "op": "replace", "path": "displayName", "value": "Updated Name" },
+      { "op": "replace", "path": "active", "value": false }
+    ]
+  }
+
+Deprovision (IdP → Platform):
+  DELETE /api/scim/v2/Users/:externalId
+  → Soft-delete: sets status = "deprovisioned"
+  → User can no longer log in but audit trail is preserved</pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- Token / session info -->
+      <div class="card">
+        <div class="card-header">
+          <h2>Token & Session</h2>
+          <span style="font-size:12px;color:#888;">Current login session details</span>
+        </div>
+        <p style="font-size:13px;color:#666;margin-bottom:12px;">
+          Shows the JWT token claims for the currently logged-in user.
+          In production, this token would come from the IdP via OIDC.
+        </p>
+        <pre id="tokenPayload" style="background:#0d1822;color:#e0e0e0;padding:12px;border-radius:3px;font-size:11px;line-height:1.5;overflow-x:auto;">Loading...</pre>
+        <div class="info-block" style="margin-top:12px">
+          <div class="info-trigger" onclick="toggleInfo(this)">Show details ▸</div>
+          <div class="info-content">
+            <div class="info-title">JWT Token (what it contains)</div>
+            <pre>The platform issues a JWT with these claims:
+{
+  "user_id": "user-001",      // ← sub claim in OIDC
+  "name": "Anna Svensson",    // ← from SCIM displayName
+  "role": "controller",       // ← mapped from IdP group
+  "org_unit": "OU-100",       // ← platform attribute
+  "products": ["prod_a"],     // ← platform entitlement
+  "primary_product": "prod_a" // ← platform attribute
+}
+
+In production:
+- Claims come from the IdP's id_token
+- Platform can enrich with local attributes (products, org)
+- Products validate the token signature (shared secret / JWKS)
+- Token expiry: 8h (configurable)</pre>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
   <!-- JAVASCRIPT -->
   <script>
     var API = '';
@@ -961,7 +1189,7 @@ POST /api/demo/step/9  → Product B: show analytics</pre>
       document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
       document.getElementById('tab-' + tabId).classList.add('active');
       var btns = document.querySelectorAll('.tab-btn');
-      var tabMap = ['setup', 'operations', 'events', 'demo'];
+      var tabMap = ['setup', 'users', 'operations', 'events', 'demo'];
       var idx = tabMap.indexOf(tabId);
       if (idx >= 0 && btns[idx]) btns[idx].classList.add('active');
       localStorage.setItem('activeTab', tabId);
@@ -2015,8 +2243,187 @@ POST /api/demo/step/9  → Product B: show analytics</pre>
       } catch(e) {}
     }
 
+    // ── Users & Identity ──
+    var editingUserId = null;
+
+    async function loadUsers() {
+      try {
+        var res = await fetch(API + '/api/users');
+        var users = await res.json();
+        var body = document.getElementById('usersBody');
+        if (!users.length) {
+          body.innerHTML = '<tr><td colspan="11" style="color:#999;text-align:center;">No users yet</td></tr>';
+        } else {
+          body.innerHTML = users.map(function(u) {
+            var prods = (u.products || []).map(function(p) {
+              return '<span class="tag tag-' + p + '" style="margin:1px">' + p + '</span>';
+            }).join(' ');
+            var sourceTag = u.source === 'scim' ? '<span class="tag" style="background:#e8f4fd;color:#1976d2;">SCIM</span>' :
+                            u.source === 'oidc' ? '<span class="tag" style="background:#f5f0ff;color:#7c3aed;">OIDC</span>' :
+                            '<span class="tag" style="background:#f5f6f8;color:#888;">local</span>';
+            var statusColor = u.status === 'active' ? '#2e7d32' : u.status === 'suspended' ? '#e65100' : '#c62828';
+            var lastLogin = u.last_login ? new Date(u.last_login + 'Z').toLocaleString('sv-SE') : '<span style="color:#ccc">—</span>';
+            return '<tr>' +
+              '<td><code style="font-size:11px">' + u.user_id + '</code></td>' +
+              '<td><strong>' + u.name + '</strong></td>' +
+              '<td>' + (u.username || '') + '</td>' +
+              '<td>' + (u.email || '<span style="color:#ccc">—</span>') + '</td>' +
+              '<td><span class="tag tag-linked">' + u.role + '</span></td>' +
+              '<td>' + (u.org_unit || '<span style="color:#ccc">—</span>') + '</td>' +
+              '<td>' + prods + '</td>' +
+              '<td>' + sourceTag + '</td>' +
+              '<td><span style="color:' + statusColor + ';font-weight:600;font-size:11px">' + u.status + '</span></td>' +
+              '<td>' + lastLogin + '</td>' +
+              '<td><button class="delete-btn" onclick="editUser(\'' + u.user_id + '\')" title="Edit" style="color:#1f64a4">✎</button>' +
+                  '<button class="delete-btn" onclick="confirmDeleteUser(\'' + u.user_id + '\',\'' + u.name.replace(/'/g, '') + '\')" title="Delete">&times;</button></td>' +
+            '</tr>';
+          }).join('');
+        }
+        // Update checklist
+        var uc = document.getElementById('check-users');
+        if (uc) {
+          var active = users.filter(function(u) { return u.status === 'active'; }).length;
+          uc.classList.toggle('done', active > 0);
+          uc.querySelector('.setup-check-status').textContent = active + ' active';
+        }
+      } catch(e) { console.error('loadUsers error:', e); }
+    }
+
+    function editUser(userId) {
+      fetch(API + '/api/users/' + userId).then(function(r) { return r.json(); }).then(function(u) {
+        editingUserId = userId;
+        document.getElementById('userUsername').value = u.username || '';
+        document.getElementById('userName').value = u.name || '';
+        document.getElementById('userEmail').value = u.email || '';
+        document.getElementById('userRole').value = u.role || 'viewer';
+        document.getElementById('userOrgUnit').value = u.org_unit || '';
+        document.getElementById('userProducts').value = (u.products || []).join(', ');
+        document.getElementById('userPassword').value = '';
+        document.getElementById('userFormTitle').textContent = '✎ Edit: ' + u.name;
+        document.getElementById('userCancelBtn').style.display = '';
+      });
+    }
+
+    function cancelEditUser() {
+      editingUserId = null;
+      document.getElementById('userUsername').value = '';
+      document.getElementById('userName').value = '';
+      document.getElementById('userEmail').value = '';
+      document.getElementById('userRole').value = 'viewer';
+      document.getElementById('userOrgUnit').value = '';
+      document.getElementById('userProducts').value = '';
+      document.getElementById('userPassword').value = '';
+      document.getElementById('userFormTitle').textContent = '+ Add User';
+      document.getElementById('userCancelBtn').style.display = 'none';
+      document.getElementById('userFormStatus').textContent = '';
+    }
+
+    async function saveUser() {
+      var username = document.getElementById('userUsername').value.trim();
+      var name = document.getElementById('userName').value.trim();
+      var email = document.getElementById('userEmail').value.trim();
+      var role = document.getElementById('userRole').value;
+      var orgUnit = document.getElementById('userOrgUnit').value.trim();
+      var products = document.getElementById('userProducts').value.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+      var password = document.getElementById('userPassword').value.trim();
+      var statusEl = document.getElementById('userFormStatus');
+
+      if (!username || !name) { statusEl.textContent = 'Username and name are required'; statusEl.style.color = '#c62828'; return; }
+
+      if (editingUserId) {
+        // Update existing
+        var updates = { name: name, email: email || undefined, role: role, org_unit: orgUnit || undefined, products: products, primary_product: products[0] || undefined };
+        var res = await fetch(API + '/api/users/' + editingUserId, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updates) });
+        var data = await res.json();
+        if (data.ok) { showToast('Updated: ' + name); cancelEditUser(); loadUsers(); }
+        else { statusEl.textContent = 'Error: ' + (data.error || 'failed'); statusEl.style.color = '#c62828'; }
+      } else {
+        // Create new via SCIM-like endpoint (internal)
+        var userId = 'user-' + String(Date.now()).slice(-6);
+        var body = { externalId: userId, userName: username, displayName: name, emails: email ? [{ value: email, primary: true }] : [], groups: [], active: true };
+        var res = await fetch(API + '/api/scim/v2/Users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        var data = await res.json();
+        if (data.user_id) {
+          // Set role, products, org via platform update
+          await fetch(API + '/api/users/' + data.user_id, { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ role: role, org_unit: orgUnit || undefined, products: products, primary_product: products[0] || undefined }) });
+          showToast('Created: ' + name); cancelEditUser(); loadUsers();
+        } else { statusEl.textContent = 'Error: ' + (data.error || 'failed'); statusEl.style.color = '#c62828'; }
+      }
+    }
+
+    async function confirmDeleteUser(userId, name) {
+      var ok = await showConfirm({
+        title: 'Delete user?',
+        body: '<strong>' + name + '</strong> (' + userId + ') will be removed from the platform.',
+        impact: 'The user will no longer be able to log in. Inbox items and assignments referencing this user are not affected.',
+        action: 'Delete'
+      });
+      if (!ok) return;
+      await fetch(API + '/api/users/' + userId, { method: 'DELETE' });
+      showToast('Deleted: ' + name);
+      loadUsers();
+    }
+
+    async function provisionScimUser() {
+      var externalId = document.getElementById('scimExternalId').value.trim();
+      var username = document.getElementById('scimUsername').value.trim();
+      var name = document.getElementById('scimName').value.trim();
+      var email = document.getElementById('scimEmail').value.trim();
+      var groups = document.getElementById('scimGroups').value.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+      var statusEl = document.getElementById('scimStatus');
+
+      if (!username || !name) { statusEl.textContent = 'Username and name required'; statusEl.style.color = '#c62828'; return; }
+
+      statusEl.textContent = 'Provisioning...';
+      statusEl.style.color = '#888';
+      try {
+        var res = await fetch(API + '/api/scim/v2/Users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            externalId: externalId || undefined,
+            userName: username,
+            displayName: name,
+            emails: email ? [{ value: email, primary: true }] : [],
+            groups: groups.map(function(g) { return { display: g }; }),
+            active: true
+          })
+        });
+        var data = await res.json();
+        if (res.ok) {
+          statusEl.textContent = '\u2713 Provisioned: ' + data.user_id + ' (source: SCIM)';
+          statusEl.style.color = '#2e7d32';
+          showToast('SCIM provisioned: ' + name);
+          // Clear form
+          document.getElementById('scimExternalId').value = '';
+          document.getElementById('scimUsername').value = '';
+          document.getElementById('scimName').value = '';
+          document.getElementById('scimEmail').value = '';
+          document.getElementById('scimGroups').value = '';
+          loadUsers();
+        } else {
+          statusEl.textContent = 'Error: ' + (data.error || 'failed');
+          statusEl.style.color = '#c62828';
+        }
+      } catch(e) {
+        statusEl.textContent = 'Network error';
+        statusEl.style.color = '#c62828';
+      }
+    }
+
+    async function loadTokenPayload() {
+      try {
+        var res = await fetch(API + '/api/me', { credentials: 'include' });
+        var data = await res.json();
+        document.getElementById('tokenPayload').textContent = JSON.stringify(data, null, 2);
+      } catch(e) {
+        document.getElementById('tokenPayload').textContent = 'Not logged in';
+      }
+    }
+
     function refreshAll() {
-      loadProjects(); loadEventLog(); loadDimensionMappings(); loadDimModel(); loadSharedDimensions(); loadConnectors();
+      loadProjects(); loadEventLog(); loadDimensionMappings(); loadDimModel(); loadSharedDimensions(); loadConnectors(); loadUsers(); loadTokenPayload();
       if (typeof window.__platformShellReloadNav === 'function') window.__platformShellReloadNav();
     }
 

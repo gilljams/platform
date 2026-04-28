@@ -155,6 +155,27 @@ db.exec(`
     created_at  TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
   );
+
+  -- ── Users & Identity ──
+  CREATE TABLE IF NOT EXISTS users (
+    user_id         TEXT PRIMARY KEY,
+    external_id     TEXT UNIQUE,      -- IdP subject / SCIM externalId
+    username        TEXT NOT NULL UNIQUE,
+    name            TEXT NOT NULL,
+    email           TEXT,
+    role            TEXT NOT NULL DEFAULT 'viewer',
+    org_unit        TEXT,
+    products        TEXT NOT NULL DEFAULT '[]',   -- JSON array
+    primary_product TEXT,
+    groups          TEXT NOT NULL DEFAULT '[]',   -- JSON array
+    status          TEXT NOT NULL DEFAULT 'active',  -- active, suspended, deprovisioned
+    source          TEXT NOT NULL DEFAULT 'local',   -- local, scim, oidc
+    password_hash   TEXT,              -- only for local/demo users
+    last_login      TEXT,
+    synced_at       TEXT,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+  );
 `);
 
 // ── Schema migrations (add columns to existing tables) ──
@@ -241,7 +262,7 @@ export function deleteParticipant(dimensionName: string, product: string) {
 
 export function resetAllData() {
   const tables = [
-    'inbox_items',
+    'inbox_items', 'users',
     'dimension_hierarchy', 'dimension_code_attributes', 'dimension_attributes',
     'connector_dimensions', 'connectors', 'dimension_code_mappings',
     'dimension_participants', 'dimension_codes', 'shared_dimensions',
@@ -650,6 +671,149 @@ export function getHierarchy(dimensionName: string) {
   return db.prepare(
     "SELECT child_code, parent_code, level FROM dimension_hierarchy WHERE dimension_name = ? ORDER BY level, parent_code, child_code"
   ).all(dimensionName);
+}
+
+// ── Users & Identity ──
+
+export interface UserRecord {
+  user_id: string;
+  external_id?: string | null;
+  username: string;
+  name: string;
+  email?: string | null;
+  role: string;
+  org_unit?: string | null;
+  products: string[];
+  primary_product?: string | null;
+  groups: string[];
+  status: string;
+  source: string;
+  password_hash?: string | null;
+  last_login?: string | null;
+  synced_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+function rowToUser(row: any): UserRecord {
+  return {
+    ...row,
+    products: JSON.parse(row.products || "[]"),
+    groups: JSON.parse(row.groups || "[]"),
+  };
+}
+
+export function getAllUsers(): UserRecord[] {
+  const rows = db.prepare("SELECT * FROM users ORDER BY user_id").all() as any[];
+  return rows.map(rowToUser);
+}
+
+export function getUser(userId: string): UserRecord | undefined {
+  const row = db.prepare("SELECT * FROM users WHERE user_id = ?").get(userId) as any;
+  return row ? rowToUser(row) : undefined;
+}
+
+export function getUserByUsername(username: string): UserRecord | undefined {
+  const row = db.prepare("SELECT * FROM users WHERE username = ? AND status = 'active'").get(username) as any;
+  return row ? rowToUser(row) : undefined;
+}
+
+export function getUserByExternalId(externalId: string): UserRecord | undefined {
+  const row = db.prepare("SELECT * FROM users WHERE external_id = ?").get(externalId) as any;
+  return row ? rowToUser(row) : undefined;
+}
+
+export function upsertUser(user: {
+  user_id: string;
+  external_id?: string;
+  username: string;
+  name: string;
+  email?: string;
+  role?: string;
+  org_unit?: string;
+  products?: string[];
+  primary_product?: string;
+  groups?: string[];
+  status?: string;
+  source?: string;
+  password_hash?: string;
+}): UserRecord {
+  db.prepare(`
+    INSERT INTO users (user_id, external_id, username, name, email, role, org_unit, products, primary_product, groups, status, source, password_hash, synced_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(user_id) DO UPDATE SET
+      external_id = excluded.external_id,
+      username = excluded.username,
+      name = excluded.name,
+      email = excluded.email,
+      role = excluded.role,
+      org_unit = excluded.org_unit,
+      products = excluded.products,
+      primary_product = excluded.primary_product,
+      groups = excluded.groups,
+      status = excluded.status,
+      source = excluded.source,
+      password_hash = CASE WHEN excluded.password_hash IS NOT NULL THEN excluded.password_hash ELSE users.password_hash END,
+      synced_at = datetime('now'),
+      updated_at = datetime('now')
+  `).run(
+    user.user_id,
+    user.external_id || null,
+    user.username,
+    user.name,
+    user.email || null,
+    user.role || "viewer",
+    user.org_unit || null,
+    JSON.stringify(user.products || []),
+    user.primary_product || null,
+    JSON.stringify(user.groups || []),
+    user.status || "active",
+    user.source || "local",
+    user.password_hash || null,
+  );
+  return getUser(user.user_id)!;
+}
+
+export function updateUser(userId: string, updates: Partial<{
+  name: string;
+  email: string;
+  role: string;
+  org_unit: string;
+  products: string[];
+  primary_product: string;
+  groups: string[];
+  status: string;
+}>): UserRecord | undefined {
+  const user = getUser(userId);
+  if (!user) return undefined;
+  const sets: string[] = [];
+  const params: any[] = [];
+  if (updates.name !== undefined) { sets.push("name = ?"); params.push(updates.name); }
+  if (updates.email !== undefined) { sets.push("email = ?"); params.push(updates.email); }
+  if (updates.role !== undefined) { sets.push("role = ?"); params.push(updates.role); }
+  if (updates.org_unit !== undefined) { sets.push("org_unit = ?"); params.push(updates.org_unit); }
+  if (updates.products !== undefined) { sets.push("products = ?"); params.push(JSON.stringify(updates.products)); }
+  if (updates.primary_product !== undefined) { sets.push("primary_product = ?"); params.push(updates.primary_product); }
+  if (updates.groups !== undefined) { sets.push("groups = ?"); params.push(JSON.stringify(updates.groups)); }
+  if (updates.status !== undefined) { sets.push("status = ?"); params.push(updates.status); }
+  if (sets.length === 0) return user;
+  sets.push("updated_at = datetime('now')");
+  params.push(userId);
+  db.prepare(`UPDATE users SET ${sets.join(", ")} WHERE user_id = ?`).run(...params);
+  return getUser(userId);
+}
+
+export function deleteUser(userId: string): boolean {
+  const result = db.prepare("DELETE FROM users WHERE user_id = ?").run(userId);
+  return result.changes > 0;
+}
+
+export function updateLastLogin(userId: string) {
+  db.prepare("UPDATE users SET last_login = datetime('now') WHERE user_id = ?").run(userId);
+}
+
+export function getUserCount(): number {
+  return (db.prepare("SELECT COUNT(*) as c FROM users").get() as { c: number }).c;
 }
 
 export default db;
