@@ -164,6 +164,14 @@ async function startConsumer() {
 const app = express();
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
+
+// ── API Versioning ──
+app.use((req, _res, next) => {
+  if (req.path.startsWith("/api/v1/")) {
+    req.url = req.url.replace("/api/v1/", "/api/");
+  }
+  next();
+});
 app.use(express.static(path.join(__dirname, "..", "public")));
 
 // GET /api/accounts — reference data

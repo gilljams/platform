@@ -60,9 +60,9 @@ JWT i cookie, `parseJwt` utan signaturverifiering i shell.js, inga middleware gu
 ~~Kafka consumer med `fromBeginning: true` — om en tjänst startar om processas alla events igen utan dedup.~~  
 → ✅ **Implementerat:** `processed_events`-tabell per tjänst med event_id-baserad dedup. Se implementation nedan.
 
-### 7. Saknar API-versionering
-Alla endpoints är `/api/...` utan version. Breaking changes kräver big bang-deployment.  
-→ *Förbättring:* `/api/v1/` prefix eller header-baserad versionering.
+### 7. ~~Saknar API-versionering~~
+~~Alla endpoints är `/api/...` utan version. Breaking changes kräver big bang-deployment.~~
+→ ✅ **Implementerat:** URL-rewrite middleware som accepterar `/api/v1/` parallellt med `/api/`. Se implementation nedan.
 
 ---
 
@@ -95,6 +95,7 @@ Alla endpoints är `/api/...` utan version. Breaking changes kräver big bang-de
 | **Twelve-Factor** | ⭐⭐⭐⭐ | Config via env, port-per-tjänst, stateless processes (utom SQLite). |
 | **Idempotens** | ⭐⭐⭐⭐ | ✅ Implementerad dedup via `processed_events`-tabell. |
 | **Audit trail** | ⭐⭐⭐⭐ | ✅ Persistent event log i DB parallellt med in-memory ring buffer. |
+| **API governance** | ⭐⭐⭐⭐ | ✅ Versioned endpoints (`/api/v1/`) med bakåtkompatibilitet. |
 | **DevX** | ⭐⭐⭐⭐⭐ | `docker compose up`, demo-runner med 10 steg, reset-endpoint. |
 
 ---
@@ -107,7 +108,7 @@ Alla endpoints är `/api/...` utan version. Breaking changes kräver big bang-de
 | 2 | Idempotent consumers (dedup per event_id) | ✅ Implementerad | Hög — säker restart |
 | 3 | Persistent event log / audit trail | ✅ Implementerad | Medel — full spårbarhet |
 | 4 | Auth middleware (centralt JWT-lager) | 📋 Framtida | Hög — security baseline |
-| 5 | API versioning (`/api/v1/`) | 📋 Framtida | Medel — billigt tidigt |
+| 5 | API versioning (`/api/v1/`) | ✅ Implementerad | Medel — billigt tidigt |
 | 6 | Component-based frontend | 📋 Framtida | Medel — testbarhet & reuse |
 
 ---
@@ -145,10 +146,26 @@ CREATE TABLE IF NOT EXISTS processed_events (
 );
 ```
 
+### API Versioning (URL rewrite middleware)
+
+**Filer:** `platform/src/index.ts`, `product-a/src/index.ts`, `product-b/src/index.ts`
+
+Middleware som transparently rewrites `/api/v1/*` → `/api/*`. Alla endpoints svarar på båda prefix.
+När v2 behövs registreras separata routes — v1 fortsätter fungera oförändrat.
+
+```typescript
+app.use((req, _res, next) => {
+  if (req.path.startsWith("/api/v1/")) {
+    req.url = req.url.replace("/api/v1/", "/api/");
+  }
+  next();
+});
+```
+
 ---
 
 ## Slutsats
 
 **POC:n demonstrerar ett arkitekturmönster som ligger i framkant** för multi-produkt-plattformar. Det event-drivna mönstret med plattformen som identitetsmedlare och routing-lager är precis hur Visma, Atlassian och Salesforce bygger sina plattformar. Svagheterna (SQLite, avsaknad av schema registry, minimal auth) är helt förväntade på POC-nivå och visar tydligt *var* investeringar behövs för att gå till produktion. Arkitekturen är **sund och skalbar i sin grunddesign**.
 
-De implementerade förbättringarna (persistent audit log + idempotent consumers) fungerar som **referensimplementationer** som visar exakt hur dessa mönster realiseras i kod — värdefullt som blueprint vid framtida produktionsutveckling.
+De implementerade förbättringarna (persistent audit log, idempotent consumers, API-versionering) fungerar som **referensimplementationer** som visar exakt hur dessa mönster realiseras i kod — värdefullt som blueprint vid framtida produktionsutveckling.

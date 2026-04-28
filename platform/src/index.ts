@@ -55,6 +55,17 @@ const app = express();
 app.use(cors({ origin: true, credentials: true }));
 app.use(cookieParser());
 app.use(express.json());
+
+// ── API Versioning ──
+// /api/v1/* is transparently rewritten to /api/* — establishes versioning pattern
+// while maintaining backward compat. When v2 is needed, add separate routes.
+app.use((req, _res, next) => {
+  if (req.path.startsWith("/api/v1/")) {
+    req.url = req.url.replace("/api/v1/", "/api/");
+  }
+  next();
+});
+
 app.use(express.static(path.join(__dirname, "..", "public")));
 
 // ── Auth endpoints ──
