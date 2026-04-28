@@ -48,9 +48,10 @@ Bra för POC — men produktionsomöjligt för multi-instans/HA. Ingen replikeri
 ~~`router.ts` hade `eventLog[]` med max 200 poster — inga persistenta audit trails. Vid restart försvinner allt.~~  
 → ✅ **Implementerat:** Persistent `audit_events`-tabell i SQLite skrivs parallellt med in-memory log. Se implementation nedan.
 
-### 4. Auth/Security — minimalmodell
-JWT i cookie, `parseJwt` utan signaturverifiering i shell.js, inga middleware guards på API-endpoints, SCIM-token är hårdkodad.  
-→ *Produktionsväg:* OIDC provider (Keycloak/Auth0), JWT-verifiering med RS256 + JWKS, RBAC middleware.
+### 4. ~~Auth/Security — minimalmodell~~
+~~JWT i cookie, `parseJwt` utan signaturverifiering i shell.js, inga middleware guards på API-endpoints, SCIM-token är hårdkodad.~~  
+→ ✅ **Implementerat:** Central `requireAuth`-middleware som verifierar JWT-signatur på alla `/api/*` endpoints. Publika paths (login, logout, SCIM, health) undantagna. `req.user` tillgänglig i alla handlers.  
+→ *Kvarstår för produktion:* OIDC provider (Keycloak/Auth0), RS256 + JWKS, RBAC per endpoint.
 
 ### 5. Monolitisk HTML med inline JS
 `product-a/public/index.html` och `admin.html` är stora single-file HTML-sidor med inline `<script>`. Svårt att testa, no bundling, no component reuse.  
@@ -89,7 +90,7 @@ JWT i cookie, `parseJwt` utan signaturverifiering i shell.js, inga middleware gu
 | **Event-driven** | ⭐⭐⭐⭐⭐ | Korrekt EDA med ingress/egress, routing, enrichment. |
 | **Single responsibility** | ⭐⭐⭐⭐ | Platform gör routing+auth+admin — borde separeras i produktion. |
 | **Schema governance** | ⭐⭐ | TypeScript-kontrakt utan runtime-validering eller versionering. |
-| **Security** | ⭐⭐ | Minimal, men rätt mönster (JWT, SCIM, OIDC-ready). |
+| **Security** | ⭐⭐⭐⭐ | ✅ Central JWT-verifiering på alla API-routes. OIDC/RBAC kvarstår för prod. |
 | **Observability** | ⭐⭐⭐ | Jaeger + OTEL i compose, men ingen tracing implementerad i koden. |
 | **Testbarhet** | ⭐⭐ | Inga automatiserade tester, monolitisk HTML. |
 | **Twelve-Factor** | ⭐⭐⭐⭐ | Config via env, port-per-tjänst, stateless processes (utom SQLite). |
@@ -107,7 +108,7 @@ JWT i cookie, `parseJwt` utan signaturverifiering i shell.js, inga middleware gu
 | 1 | Schema Registry / JSON Schema vid ingress | 📋 Framtida | Hög — förhindrar korrupta events |
 | 2 | Idempotent consumers (dedup per event_id) | ✅ Implementerad | Hög — säker restart |
 | 3 | Persistent event log / audit trail | ✅ Implementerad | Medel — full spårbarhet |
-| 4 | Auth middleware (centralt JWT-lager) | 📋 Framtida | Hög — security baseline |
+| 4 | Auth middleware (centralt JWT-lager) | ✅ Implementerad | Hög — security baseline |
 | 5 | API versioning (`/api/v1/`) | ✅ Implementerad | Medel — billigt tidigt |
 | 6 | Component-based frontend | 📋 Framtida | Medel — testbarhet & reuse |
 
@@ -162,10 +163,37 @@ app.use((req, _res, next) => {
 });
 ```
 
+### Auth Middleware (requireAuth)
+
+**Fil:** `platform/src/index.ts`
+
+Central middleware som verifierar JWT-signatur på alla `/api/*` routes automatiskt. Publika endpoints undantas explicit.
+
+```typescript
+// Publika paths (inget auth-krav)
+const PUBLIC_PATHS = ["/api/login", "/api/logout", "/api/scim/v2", "/health"];
+
+app.use((req, res, next) => {
+  if (!req.path.startsWith("/api/")) return next();
+  if (PUBLIC_PATHS.some(p => req.path === p || req.path.startsWith(p + "/"))) return next();
+  // Verify JWT signature
+  const token = req.cookies?.platform_token;
+  if (!token) return res.status(401).json({ error: "Authentication required" });
+  try {
+    req.user = jwt.verify(token, JWT_SECRET);
+    next();
+  } catch {
+    res.status(401).json({ error: "Invalid or expired token" });
+  }
+});
+```
+
+Effekt: Alla nya endpoints som läggs till under `/api/` skyddas automatiskt utan extra kod.
+
 ---
 
 ## Slutsats
 
 **POC:n demonstrerar ett arkitekturmönster som ligger i framkant** för multi-produkt-plattformar. Det event-drivna mönstret med plattformen som identitetsmedlare och routing-lager är precis hur Visma, Atlassian och Salesforce bygger sina plattformar. Svagheterna (SQLite, avsaknad av schema registry, minimal auth) är helt förväntade på POC-nivå och visar tydligt *var* investeringar behövs för att gå till produktion. Arkitekturen är **sund och skalbar i sin grunddesign**.
 
-De implementerade förbättringarna (persistent audit log, idempotent consumers, API-versionering) fungerar som **referensimplementationer** som visar exakt hur dessa mönster realiseras i kod — värdefullt som blueprint vid framtida produktionsutveckling.
+De implementerade förbättringarna (persistent audit log, idempotent consumers, API-versionering, auth middleware) fungerar som **referensimplementationer** som visar exakt hur dessa mönster realiseras i kod — värdefullt som blueprint vid framtida produktionsutveckling.

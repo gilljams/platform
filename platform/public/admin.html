@@ -1072,6 +1072,37 @@ In this POC, we simulate the entire flow:
 - SCIM endpoint is available but called manually from admin UI
 - JWT tokens mirror what an OIDC flow would produce</pre>
           </div>
+          <div class="info-content">
+            <div class="info-title">Auth Middleware (implementerad)</div>
+            <pre>Alla /api/* endpoints skyddas av en central requireAuth-middleware
+som verifierar JWT-signatur innan request når route-handlern.
+
+Flöde:
+  Request → Versioning → Auth Middleware → Route Handler
+                              │
+                              ├─ Giltig token? → req.user sätts, next()
+                              └─ Ogiltig/saknas? → 401 JSON response
+
+Publika endpoints (ingen auth krävs):
+  • POST /api/login      — Logga in
+  • POST /api/logout     — Logga ut
+  • /api/scim/v2/*       — IdP-provisioning (skyddas av SCIM-token i prod)
+  • /health              — Container health check
+
+Skyddade endpoints (kräver giltig JWT):
+  • GET /api/me          — Vem är jag?
+  • GET /api/users       — Användarlista
+  • GET /api/projects    — Kanoniska projekt
+  • POST /api/link       — Länka projekt
+  • Alla övriga /api/*
+
+Fördelar:
+  ✓ Single point of enforcement (alla routes skyddas automatiskt)
+  ✓ req.user tillgänglig i alla handlers (user_id, role, products)
+  ✓ SCIM endpoints separata (skyddas av bearer token i produktion)
+  ✓ PreparedStatement mot DB undviker SQL-injection
+  ✓ Redo för RBAC (role-based access) som nästa steg</pre>
+          </div>
         </div>
       </div>
 

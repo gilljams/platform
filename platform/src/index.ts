@@ -68,6 +68,38 @@ app.use((req, _res, next) => {
 
 app.use(express.static(path.join(__dirname, "..", "public")));
 
+// ── Auth Middleware ──
+// Verifies JWT signature on protected routes. Public routes are excluded below.
+interface AuthenticatedRequest extends express.Request {
+  user?: { user_id: string; name: string; role: string; org_unit: string; products: string[]; primary_product: string };
+}
+
+function requireAuth(req: AuthenticatedRequest, res: express.Response, next: express.NextFunction) {
+  const token = req.cookies?.platform_token;
+  if (!token) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+  try {
+    const payload = jwt.verify(token, JWT_SECRET) as AuthenticatedRequest["user"];
+    req.user = payload;
+    next();
+  } catch {
+    res.status(401).json({ error: "Invalid or expired token" });
+  }
+}
+
+// Apply auth to all /api/* except public endpoints
+const PUBLIC_PATHS = ["/api/login", "/api/logout", "/api/scim/v2", "/health"];
+
+app.use((req: AuthenticatedRequest, res, next) => {
+  // Only protect /api/ routes (static files, HTML pages pass through)
+  if (!req.path.startsWith("/api/")) return next();
+  // Allow public paths
+  if (PUBLIC_PATHS.some(p => req.path === p || req.path.startsWith(p + "/"))) return next();
+  requireAuth(req, res, next);
+});
+
 // ── Auth endpoints ──
 
 app.post("/api/login", (req, res) => {
@@ -96,18 +128,9 @@ app.post("/api/logout", (_req, res) => {
   res.json({ ok: true });
 });
 
-app.get("/api/me", (req, res) => {
-  const token = req.cookies?.platform_token;
-  if (!token) {
-    res.status(401).json({ error: "Not logged in" });
-    return;
-  }
-  try {
-    const payload = jwt.verify(token, JWT_SECRET);
-    res.json(payload);
-  } catch {
-    res.status(401).json({ error: "Invalid token" });
-  }
+app.get("/api/me", (req: AuthenticatedRequest, res) => {
+  // Auth middleware has already verified token and set req.user
+  res.json(req.user);
 });
 
 // Users: from DB (filter by product if ?product=xxx)
