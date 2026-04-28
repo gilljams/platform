@@ -78,6 +78,11 @@ db.exec(`
     priority INTEGER NOT NULL DEFAULT 100,    -- lower = runs first
     enabled INTEGER NOT NULL DEFAULT 1
   );
+
+  CREATE TABLE IF NOT EXISTS processed_events (
+    event_id TEXT PRIMARY KEY,
+    processed_at TEXT NOT NULL
+  );
 `);
 
 // ── Ingestion rules engine ──
@@ -196,6 +201,17 @@ async function startConsumer() {
     eachMessage: async ({ topic, message }) => {
       if (!message.value) return;
       const data = JSON.parse(message.value.toString());
+
+      // Idempotency: skip already-processed events
+      const eventId = data.event_id || data.original?.event_id;
+      if (eventId) {
+        const already = db.prepare("SELECT 1 FROM processed_events WHERE event_id = ?").get(eventId);
+        if (already) {
+          console.log(`[PROD-B] Skipping duplicate event: ${eventId}`);
+          return;
+        }
+      }
+
       console.log(`[PROD-B] ← ${topic}: ${data.event_type || data.original?.event_type || "enriched"}`);
 
       switch (topic) {
@@ -335,6 +351,11 @@ async function startConsumer() {
           }
           break;
         }
+      }
+
+      // Mark event as processed (idempotency)
+      if (eventId) {
+        db.prepare("INSERT OR IGNORE INTO processed_events (event_id, processed_at) VALUES (?, ?)").run(eventId, new Date().toISOString());
       }
     },
   });
@@ -477,7 +498,7 @@ app.get("/api/dim-labels", async (_req, res) => {
 });
 
 app.post("/api/reset", (_req, res) => {
-  db.exec("DELETE FROM budget_lines; DELETE FROM gl_lines; DELETE FROM projects; DELETE FROM accounts; DELETE FROM org_units; DELETE FROM ingestion_rules;");
+  db.exec("DELETE FROM processed_events; DELETE FROM budget_lines; DELETE FROM gl_lines; DELETE FROM projects; DELETE FROM accounts; DELETE FROM org_units; DELETE FROM ingestion_rules;");
   console.log("[PRODUCT-B] All data reset");
   res.json({ ok: true });
 });

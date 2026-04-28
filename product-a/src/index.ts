@@ -70,6 +70,11 @@ db.exec(`
     status TEXT NOT NULL DEFAULT 'pending',
     completed_at TEXT
   );
+
+  CREATE TABLE IF NOT EXISTS processed_events (
+    event_id TEXT PRIMARY KEY,
+    processed_at TEXT NOT NULL
+  );
 `);
 
 // ── Kafka ──
@@ -100,6 +105,17 @@ async function startConsumer() {
     eachMessage: async ({ topic, message }) => {
       if (!message.value) return;
       const data = JSON.parse(message.value.toString());
+
+      // Idempotency: skip already-processed events
+      const eventId = data.event_id || data.original?.event_id;
+      if (eventId) {
+        const already = db.prepare("SELECT 1 FROM processed_events WHERE event_id = ?").get(eventId);
+        if (already) {
+          console.log(`[PROD-A] Skipping duplicate event: ${eventId}`);
+          return;
+        }
+      }
+
       console.log(`[PROD-A] ← ${topic}: ${data.event_type || data.original?.event_type || "enriched"}`);
 
       switch (topic) {
@@ -133,6 +149,11 @@ async function startConsumer() {
           }
           break;
         }
+      }
+
+      // Mark event as processed (idempotency)
+      if (eventId) {
+        db.prepare("INSERT OR IGNORE INTO processed_events (event_id, processed_at) VALUES (?, ?)").run(eventId, new Date().toISOString());
       }
     },
   });
@@ -633,7 +654,7 @@ app.get("/api/capabilities", (_req, res) => {
 });
 
 app.post("/api/reset", (_req, res) => {
-  db.exec("DELETE FROM budget_assignments; DELETE FROM budget_lines; DELETE FROM budget_versions; DELETE FROM projects; DELETE FROM accounts; DELETE FROM org_units;");
+  db.exec("DELETE FROM processed_events; DELETE FROM budget_assignments; DELETE FROM budget_lines; DELETE FROM budget_versions; DELETE FROM projects; DELETE FROM accounts; DELETE FROM org_units;");
   console.log("[PROD-A] All data reset");
   res.json({ ok: true });
 });

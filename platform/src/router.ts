@@ -1,5 +1,5 @@
 import { Kafka, Consumer, Producer, Partitioners } from "kafkajs";
-import { getOrCreateCanonical, lookupCanonical, getMappings, getOrCreateDimensionMapping, applyDimRouting, addInboxItem, updateInboxItem, upsertDimensionCode, upsertCodeMapping } from "./mapper";
+import { getOrCreateCanonical, lookupCanonical, getMappings, getOrCreateDimensionMapping, applyDimRouting, addInboxItem, updateInboxItem, upsertDimensionCode, upsertCodeMapping, insertAuditEvent, isEventProcessed, markEventProcessed } from "./mapper";
 
 const INGRESS = {
   ERP_PROJECTS: "erp.projects",
@@ -24,9 +24,11 @@ let consumer: Consumer;
 const EVENT_LOG_MAX = 200;
 const eventLog: Array<{ timestamp: string; direction: 'in' | 'out'; topic: string; event_type: string; canonical_id?: string; summary: string }> = [];
 
-function logEvent(direction: 'in' | 'out', topic: string, event_type: string, canonical_id: string | undefined, summary: string) {
+function logEvent(direction: 'in' | 'out', topic: string, event_type: string, canonical_id: string | undefined, summary: string, event_id?: string) {
   eventLog.unshift({ timestamp: new Date().toISOString(), direction, topic, event_type, canonical_id, summary });
   if (eventLog.length > EVENT_LOG_MAX) eventLog.length = EVENT_LOG_MAX;
+  // Persist to audit_events table
+  insertAuditEvent(direction, topic, event_type, event_id, canonical_id, summary);
 }
 
 export function getEventLog(limit = 100) {
@@ -39,13 +41,21 @@ async function publishEgress(topic: string, message: Record<string, unknown>) {
     topic,
     messages: [{ key, value: JSON.stringify(message) }],
   });
-  logEvent('out', topic, (message.event_type as string) || (message.original as any)?.event_type || 'enriched', message.canonical_id as string | undefined, `→ ${topic} [${key}]`);
+  logEvent('out', topic, (message.event_type as string) || (message.original as any)?.event_type || 'enriched', message.canonical_id as string | undefined, `→ ${topic} [${key}]`, (message.event_id as string) || (message.original as any)?.event_id);
   console.log(`[ROUTER] → ${topic}`);
 }
 
 async function handleMessage(topic: string, rawValue: string) {
   const event = JSON.parse(rawValue);
-  logEvent('in', topic, event.event_type || 'unknown', undefined, `← ${topic}: ${event.event_type}`);
+
+  // Idempotency: skip already-processed events
+  const eventId = event.event_id;
+  if (eventId && isEventProcessed(eventId)) {
+    console.log(`[ROUTER] Skipping duplicate event: ${eventId}`);
+    return;
+  }
+
+  logEvent('in', topic, event.event_type || 'unknown', undefined, `← ${topic}: ${event.event_type}`, eventId);
   console.log(`[ROUTER] ← ${topic}: ${event.event_type}`);
 
   switch (topic) {
@@ -152,6 +162,9 @@ async function handleMessage(topic: string, rawValue: string) {
       break;
     }
   }
+
+  // Mark event as processed (idempotency)
+  if (eventId) markEventProcessed(eventId);
 }
 
 export async function startRouter(kafka: Kafka) {

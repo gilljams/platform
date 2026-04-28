@@ -156,6 +156,23 @@ db.exec(`
     updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
+  -- ── Audit & Idempotency ──
+  CREATE TABLE IF NOT EXISTS audit_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    direction TEXT NOT NULL,
+    topic TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    event_id TEXT,
+    canonical_id TEXT,
+    summary TEXT,
+    timestamp TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS processed_events (
+    event_id TEXT PRIMARY KEY,
+    processed_at TEXT NOT NULL
+  );
+
   -- ── Users & Identity ──
   CREATE TABLE IF NOT EXISTS users (
     user_id         TEXT PRIMARY KEY,
@@ -262,6 +279,7 @@ export function deleteParticipant(dimensionName: string, product: string) {
 
 export function resetAllData() {
   const tables = [
+    'processed_events', 'audit_events',
     'inbox_items', 'users',
     'dimension_hierarchy', 'dimension_code_attributes', 'dimension_attributes',
     'connector_dimensions', 'connectors', 'dimension_code_mappings',
@@ -814,6 +832,32 @@ export function updateLastLogin(userId: string) {
 
 export function getUserCount(): number {
   return (db.prepare("SELECT COUNT(*) as c FROM users").get() as { c: number }).c;
+}
+
+// ── Audit Events ──
+
+export function insertAuditEvent(direction: 'in' | 'out', topic: string, event_type: string, event_id: string | undefined, canonical_id: string | undefined, summary: string) {
+  db.prepare(
+    "INSERT INTO audit_events (direction, topic, event_type, event_id, canonical_id, summary, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)"
+  ).run(direction, topic, event_type, event_id || null, canonical_id || null, summary, new Date().toISOString());
+}
+
+export function getAuditEvents(limit = 100): Array<{ id: number; direction: string; topic: string; event_type: string; event_id: string | null; canonical_id: string | null; summary: string; timestamp: string }> {
+  return db.prepare("SELECT * FROM audit_events ORDER BY id DESC LIMIT ?").all(limit) as any;
+}
+
+export function getAuditEventCount(): number {
+  return (db.prepare("SELECT COUNT(*) as c FROM audit_events").get() as { c: number }).c;
+}
+
+// ── Idempotency ──
+
+export function isEventProcessed(eventId: string): boolean {
+  return !!db.prepare("SELECT 1 FROM processed_events WHERE event_id = ?").get(eventId);
+}
+
+export function markEventProcessed(eventId: string) {
+  db.prepare("INSERT OR IGNORE INTO processed_events (event_id, processed_at) VALUES (?, ?)").run(eventId, new Date().toISOString());
 }
 
 export default db;
