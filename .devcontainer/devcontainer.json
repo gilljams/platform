@@ -1,0 +1,23 @@
+{
+  "name": "Platform POC",
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "platform",
+  "workspaceFolder": "/app",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  "forwardPorts": [3000, 3001, 3002, 3003, 8080, 16686],
+  "portsAttributes": {
+    "3000": { "label": "Platform", "onAutoForward": "openBrowser" },
+    "3002": { "label": "Product A" },
+    "3003": { "label": "Product B" },
+    "8080": { "label": "Kafka UI (Redpanda Console)" },
+    "16686": { "label": "Jaeger Tracing" }
+  },
+  "postCreateCommand": "docker compose up -d --build",
+  "customizations": {
+    "vscode": {
+      "extensions": ["ms-azuretools.vscode-docker"]
+    }
+  }
+}
