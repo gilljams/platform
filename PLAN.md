@@ -1145,6 +1145,85 @@ const ekonomimodell = {
 - **dbt** (datamodellering) — shared marts + source mappings
 - **Data Mesh** — federated governance med gemensamma standarder
 
+---
+
+## Deployment-arkitektur (produktion)
+
+POC:n kör allt lokalt i Docker Compose. Här beskrivs hur det skulle se ut i produktion.
+
+### Modell 1: Kubernetes per kund
+
+Alla produkter i samma kluster. Enklast när allt är Hypergene-hostat.
+
+```
+┌─ Kubernetes Cluster (namespace: customer-acme) ─────────────┐
+│  ┌──────────┐  ┌───────────┐  ┌───────────┐  ┌───────────┐ │
+│  │ Platform │  │ Product A │  │ Product B │  │  Kafka    │ │
+│  │ (pod×2)  │  │ (pod×3)   │  │ (pod×2)   │  │ (cluster) │ │
+│  └──────────┘  └───────────┘  └───────────┘  └───────────┘ │
+│       └──────────── Service mesh (Istio/Linkerd) ──┘        │
+│  ┌──────────┐  ┌───────────┐                                │
+│  │ Postgres │  │   IdP     │  (Zitadel / Azure AD)         │
+│  └──────────┘  └───────────┘                                │
+│  Ingress → acme.budget.hypergene.se, acme.analytics...      │
+└──────────────────────────────────────────────────────────────┘
+```
+
+- Varje kund = egen namespace (eller eget kluster vid strikt isolering)
+- Pods skalas oberoende (Product A × 5 under budgetperiod, Product B × 2)
+- Intern kommunikation via Kubernetes Services + Kafka topics
+
+### Modell 2: Hybrid (produkter på olika hosting)
+
+Vanligaste scenariot — vissa produkter kör hos Hypergene, andra hos kund/partner.
+
+```
+┌─ Hypergene Cloud ──────────────┐     ┌─ Kundens datacenter ────┐
+│  Platform, Product A, Kafka    │     │  Product C (extern)     │
+│                                │     │  Kundens ERP            │
+└──────────┬─────────────────────┘     └───────────┬─────────────┘
+           │                                       │
+           └───── API Gateway (mTLS) + Event Bridge ┘
+```
+
+| Utmaning | Lösning |
+|----------|---------|
+| Nätverksåtkomst | API Gateway (Kong, Azure APIM) med mTLS. Inga öppna portar — allt via HTTPS |
+| Events till extern produkt | Event Bridge: HTTP-baserad push (webhook) eller Azure Event Hub som mellanlager |
+| System-till-system-auth | OAuth2 client credentials (`client_id` + `client_secret`) per produkt |
+| Användaridentitet (SSO) | Gemensam IdP-issuer. OIDC-token valideras via JWKS-endpoint |
+| Data-isolering | `tenant_id` i varje request/event |
+
+### Modell 3: Multi-tenant SaaS
+
+Samma kodbas, delad infrastruktur. Data separeras via `tenant_id`.
+
+- Databas: PostgreSQL med schema-per-tenant eller row-level security
+- Kafka: topic-per-tenant (t.ex. `acme.product-a.events`)
+- Billigare att driva, svårare när kunder kräver egen hosting
+
+### POC → Produktion — mappning
+
+| POC (Docker Compose) | Produktion |
+|---------------------|-----------|
+| `docker-compose.yml` | Kubernetes Helm charts |
+| Redpanda (lokal Kafka) | Azure Event Hub / Confluent Cloud |
+| `http://product-a:3002` | K8s Service (`product-a.svc.cluster.local`) |
+| `http://localhost:3000/shell.js` | CDN (`https://shell.hypergene.se/v1/shell.js`) |
+| Cookie JWT (demo) | OIDC-token via IdP, JWKS-validering |
+| SCIM-simulator | Äkta SCIM från Azure AD / Zitadel |
+| SQLite | PostgreSQL (per kund eller schema-per-tenant) |
+| Demo-runner | CI/CD pipeline + Terraform |
+
+### Arkitekturbeslut som håller
+
+Dessa val i POC:n fungerar direkt i produktion:
+- **Frikopplade produkter** — kommunicerar via events + API:er, inte direkt DB-access
+- **Plattformen som router** — inga punkt-till-punkt-kopplingar mellan produkter
+- **Delad dimensionskatalog** — kanoniska koder, per-produkt mappning
+- **Shell.js som injicerbart script** — fungerar oavsett hosting-modell
+- **SCIM + OIDC-mönster** — redan simulerat, ersätts med äkta IdP
+
 ## Nästa steg
 
 ### Klart ✅
