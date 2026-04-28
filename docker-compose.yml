@@ -1,0 +1,103 @@
+services:
+  # ── Redpanda (Kafka-kompatibel event broker) ──
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:latest
+    container_name: redpanda
+    command:
+      - redpanda start
+      - --smp 1
+      - --memory 512M
+      - --overprovisioned
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+      - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:18081
+      - --pandaproxy-addr internal://0.0.0.0:8082,external://0.0.0.0:18082
+      - --advertise-pandaproxy-addr internal://redpanda:8082,external://localhost:18082
+    ports:
+      - "19092:19092"   # Kafka (extern)
+      - "18081:18081"   # Schema Registry
+      - "18082:18082"   # HTTP Proxy / Admin
+    healthcheck:
+      test: ["CMD", "rpk", "cluster", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ── Redpanda Console (Kafka UI) ──
+  redpanda-console:
+    image: docker.redpanda.com/redpandadata/console:latest
+    container_name: redpanda-console
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+      SCHEMA_REGISTRY_URL: http://redpanda:8081
+
+  # ── Jaeger (tracing UI) ──
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    ports:
+      - "16686:16686"   # Jaeger UI
+      - "4318:4318"     # OTLP HTTP
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+
+  # ── ERP Mock ──
+  erp-mock:
+    build: ./erp-mock
+    container_name: erp-mock
+    ports:
+      - "3001:3001"
+    environment:
+      KAFKA_BROKER: redpanda:9092
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+      SERVICE_NAME: erp-mock
+    depends_on:
+      redpanda:
+        condition: service_healthy
+
+  # ── Platform ──
+  platform:
+    build: ./platform
+    container_name: platform
+    ports:
+      - "3000:3000"
+    environment:
+      KAFKA_BROKER: redpanda:9092
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+      SERVICE_NAME: platform
+    depends_on:
+      redpanda:
+        condition: service_healthy
+
+  # ── Product A (Budget & Planning) ──
+  product-a:
+    build: ./product-a
+    container_name: product-a
+    ports:
+      - "3002:3002"
+    environment:
+      KAFKA_BROKER: redpanda:9092
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+      SERVICE_NAME: product-a
+    depends_on:
+      redpanda:
+        condition: service_healthy
+
+  # ── Product B (Analytics) ──
+  product-b:
+    build: ./product-b
+    container_name: product-b
+    ports:
+      - "3003:3003"
+    environment:
+      KAFKA_BROKER: redpanda:9092
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+      SERVICE_NAME: product-b
+    depends_on:
+      redpanda:
+        condition: service_healthy

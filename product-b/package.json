@@ -1,0 +1,25 @@
+{
+  "name": "product-b",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "kafkajs": "^2.2.4",
+    "better-sqlite3": "^11.7.0",
+    "uuid": "^11.1.0",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/uuid": "^10.0.0",
+    "@types/cors": "^2.8.17",
+    "typescript": "^5.7.0",
+    "tsx": "^4.19.0"
+  }
+}

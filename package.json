@@ -1,0 +1,14 @@
+{
+  "name": "platform-poc",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Event-driven platform POC with ERP, Product A, Product B and Platform layer",
+  "scripts": {
+    "infra:up": "docker compose up redpanda redpanda-console jaeger -d",
+    "infra:down": "docker compose down",
+    "up": "docker compose up -d --build",
+    "down": "docker compose down",
+    "logs": "docker compose logs -f",
+    "clean": "docker compose down -v --remove-orphans"
+  }
+}

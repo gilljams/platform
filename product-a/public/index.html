@@ -1,0 +1,1896 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <title>Product A — Budgeting & Forecasting</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: #e3e6e8;
+      color: #1a1a1a;
+      -webkit-font-smoothing: antialiased;
+      font-size: 12px;
+    }
+    .container { max-width: 1480px; margin: 0 auto; padding: 0 8px; }
+    h1 { font-size: 18px; margin-bottom: 20px; color: #0d1822; }
+    h2 { font-size: 14px; margin: 0 0 10px; color: #333; font-weight: 700; }
+
+    .view { display: none; }
+    .view.active { display: block; }
+
+    /* ── Cards ── */
+    .card {
+      background: #fff;
+      border-radius: 0 0 4px 4px;
+      padding: 20px;
+      margin-bottom: 8px;
+      box-shadow: none;
+      border: none;
+    }
+    #view-admin .card {
+      border: 1px solid #e8e9ef;
+      border-radius: 3px;
+      margin-bottom: 16px;
+    }
+    #view-admin .container {
+      padding: 20px;
+    }
+
+    /* ── Base table (Hypergene grid) ── */
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th {
+      text-align: left; padding: 4px 12px 4px 4px; color: rgba(0,0,0,0.82); font-weight: 700;
+      font-size: 12px; white-space: nowrap;
+      background: #f1f3f5; border-bottom: 1px solid #ced4da;
+      height: 23px; line-height: 14px;
+    }
+    td { padding: 4px; border-bottom: 1px solid #ced4da; height: 23px; line-height: 14px; vertical-align: top; }
+
+    /* ── Forms ── */
+    .form-row { display: flex; gap: 12px; margin-bottom: 12px; align-items: end; }
+    .form-group { display: flex; flex-direction: column; gap: 4px; }
+    .form-group label { font-size: 10px; font-weight: 600; color: #666; text-transform: uppercase; letter-spacing: 0.3px; }
+    .form-group input, .form-group select {
+      padding: 0px 6px; border: 1px solid #ced4da; border-radius: 3px; font-size: 12px;
+      background: #fff; transition: all 0.15s; height: 24px; font-family: inherit;
+    }
+    .form-group input:focus, .form-group select:focus {
+      outline: none; border-color: #1f64a4; background: #fff;
+      box-shadow: 0 0 0 2px rgba(31,100,164,0.12);
+    }
+
+    /* ── Buttons ── */
+    .btn {
+      padding: 7px 15px; border: none; border-radius: 3px;
+      font-size: 12px; font-weight: 600; cursor: pointer;
+      transition: all 0.15s; display: inline-flex; align-items: center; gap: 5px;
+    }
+    .btn-primary {
+      background: #1f64a4; color: #fff;
+      box-shadow: none;
+    }
+    .btn-primary:hover { background: #18527f; }
+    .btn-success {
+      background: #2e7d32; color: #fff;
+      box-shadow: none;
+    }
+    .btn-success:hover { background: #256b29; }
+    .btn-ghost {
+      background: transparent; color: #555; border: 1px solid #ced4da;
+    }
+    .btn-ghost:hover { background: #f5f6f8; border-color: #adb5bd; color: #333; }
+    .btn-icon {
+      background: transparent; border: none; cursor: pointer;
+      color: #aaa; font-size: 14px; padding: 3px 5px; border-radius: 3px;
+      transition: all 0.15s; line-height: 1;
+    }
+    .btn-icon:hover { background: #ffebee; color: #c62828; }
+
+    /* ── Tags ── */
+    .tag {
+      display: inline-block; padding: 2px 7px; border-radius: 3px;
+      font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.2px;
+    }
+    .tag-erp { background: #e8f4fd; color: #1976d2; }
+    .tag-own { background: #e8f5e9; color: #2e7d32; }
+    .tag-linked { background: #fff3e0; color: #e65100; }
+
+    /* ── Status bar ── */
+    .status-bar {
+      padding: 10px 14px; border-radius: 3px; margin-bottom: 14px;
+      font-size: 12px; background: #e8f5e9; color: #2e7d32;
+      display: none; font-weight: 500;
+    }
+
+    /* ── Budget grid (spreadsheet) ── */
+    .budget-grid-wrapper {
+      border: 1px solid #ced4da;
+      border-radius: 0px;
+      overflow: hidden;
+    }
+    .budget-grid-scroll { overflow-x: auto; }
+    .budget-grid { min-width: 900px; border-collapse: collapse; }
+    .budget-grid th {
+      background: #f1f3f5;
+      border-bottom: 1px solid #ced4da;
+      padding: 4px 12px 4px 4px;
+      position: sticky; top: 0; z-index: 2;
+      font-size: 12px; font-weight: 700; color: rgba(0,0,0,0.82);
+      white-space: nowrap; height: 23px; line-height: 14px;
+    }
+    .budget-grid td {
+      padding: 0; border-bottom: 1px solid #ced4da; border-right: none;
+      height: 23px;
+    }
+    .budget-grid td:last-child { border-right: none; }
+    .budget-grid tr:last-child td { border-bottom: none; }
+    .budget-grid tbody tr:hover td { background: #f1f3f5; }
+
+    /* Spreadsheet cells: select (Hypergene tiki-dropdown) */
+    .budget-grid .cell-select {
+      width: 100%; border: 1px solid #ced4da; border-radius: 3px;
+      background: #E8F5FE;
+      padding: 0px 6px; font-size: 12px; color: #000;
+      cursor: pointer; appearance: none; -webkit-appearance: none;
+      font-family: inherit;
+      background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%23999' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 6px center;
+      padding-right: 20px; height: 24px; line-height: 24px;
+      box-shadow: none;
+    }
+    .budget-grid .cell-select:focus {
+      outline: none;
+      border-color: #1f64a4;
+      box-shadow: 0 0 0 2px rgba(31,100,164,0.12);
+    }
+
+    /* Spreadsheet cells: number input */
+    .budget-grid .cell-num {
+      width: 100%; border: none;
+      background: #E8F5FE;
+      padding: 4px; font-size: 12px; text-align: right;
+      color: #000; font-variant-numeric: tabular-nums;
+      height: 23px; line-height: 14px;
+      font-family: inherit;
+      -moz-appearance: textfield;
+    }
+    .budget-grid .cell-num::-webkit-inner-spin-button,
+    .budget-grid .cell-num::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    .budget-grid .cell-num:focus {
+      outline: none;
+      background: #e8f0fa;
+      box-shadow: inset 0 0 0 2px rgba(31,100,164,0.3);
+    }
+    .budget-grid .cell-num::placeholder { color: #bbb; }
+
+    /* Sum column */
+    .budget-grid .cell-sum {
+      padding: 4px; text-align: right; font-weight: 700;
+      color: rgba(0,0,0,0.82); font-variant-numeric: tabular-nums;
+      background: #fff; height: 23px; line-height: 14px;
+    }
+
+    /* Footer totals */
+    .budget-grid tfoot td {
+      background: #f1f3f5; padding: 4px;
+      border-top: 1px solid #ced4da; font-weight: 700;
+      color: rgba(0,0,0,0.82); font-variant-numeric: tabular-nums;
+      height: 23px; line-height: 14px;
+    }
+
+    /* Empty state */
+    .grid-empty {
+      text-align: center; padding: 40px 20px; color: #999;
+      font-size: 12px;
+    }
+    .grid-empty-icon { font-size: 28px; margin-bottom: 6px; opacity: 0.4; }
+
+    /* ── Toolbar ── */
+    .grid-toolbar {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 16px;
+    }
+    .grid-toolbar h2 { margin: 0; font-size: 14px; color: #0d1822; }
+    .grid-toolbar-actions { display: flex; gap: 8px; align-items: center; }
+    .grid-toolbar .year-select {
+      padding: 0px 6px; border: 1px solid #ced4da; border-radius: 3px;
+      font-size: 12px; background: #fff; color: #333; font-weight: 600;
+      cursor: pointer; height: 24px;
+    }
+    .grid-toolbar .year-select:focus { outline: none; border-color: #1f64a4; box-shadow: 0 0 0 2px rgba(31,100,164,0.12); }
+
+    /* ── Summary tiles ── */
+    .tile-row {
+      display: flex; gap: 12px; margin-bottom: 16px;
+    }
+    .tile {
+      flex: 1; padding: 14px 16px;
+      background: #f1f3f5; border: 1px solid #ced4da;
+      border-radius: 3px;
+    }
+    .tile-label { font-size: 10px; font-weight: 600; color: #666; text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 4px; }
+    .tile-value { font-size: 18px; font-weight: 700; color: #0d1822; font-variant-numeric: tabular-nums; }
+    .tile-sub { font-size: 10px; color: #888; margin-top: 2px; }
+
+    /* ── Fill-right button ── */
+    .btn-fill-right {
+      background: transparent; border: 1px solid #ced4da; border-radius: 3px;
+      padding: 5px 10px; font-size: 12px; font-weight: 600; color: #555;
+      cursor: pointer; display: inline-flex; align-items: center; gap: 4px;
+      transition: all 0.15s;
+    }
+    .btn-fill-right:hover { background: #f1f3f5; border-color: #adb5bd; color: #333; }
+    .btn-fill-right:disabled { opacity: 0.35; cursor: default; }
+    .btn-fill-right svg { width: 14px; height: 14px; }
+
+    /* Selected cell highlight */
+    .budget-grid .cell-num.selected {
+      box-shadow: inset 0 0 0 2px #1f64a4;
+      background: #daeaf7;
+    }
+
+    /* ── Info-block styles ── */
+    .info-block {
+      background: #f0f5fb;
+      border-left: 4px solid #1f64a4;
+      border-radius: 0 3px 3px 0;
+      padding: 12px 16px;
+      margin-top: 12px;
+      font-size: 12px;
+      line-height: 1.6;
+      color: #444;
+    }
+    .info-block .info-header {
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;
+    }
+    .info-block .info-title { font-weight: 700; font-size: 12px; }
+    .info-toggle {
+      display: inline-flex; background: rgba(255,255,255,0.1); border-radius: 3px;
+      overflow: hidden; font-size: 10px;
+    }
+    .info-toggle button {
+      border: none; background: transparent; padding: 4px 12px;
+      cursor: pointer; font-weight: 600; color: rgba(255,255,255,0.5); transition: all 0.15s;
+    }
+    .info-toggle button.active { background: #1f64a4; color: #fff; }
+    .info-block pre {
+      background: #0d1822; color: #e0e0e0; padding: 10px 12px;
+      border-radius: 3px; font-size: 11px; line-height: 1.5;
+      overflow-x: auto; margin-top: 6px;
+    }
+    .info-block code { font-family: 'Consolas', 'Monaco', monospace; }
+
+    /* ── Product bar ── */
+    .product-bar {
+      background: #0d1822;
+      border-bottom: none;
+      padding: 0 16px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      gap: 0;
+      position: sticky;
+      top: var(--shell-height, 32px);
+      z-index: 9999;
+      box-shadow: none;
+    }
+    .burger-btn {
+      background: none; border: none; font-size: 18px; cursor: pointer;
+      padding: 3px 6px; border-radius: 3px; color: rgba(255,255,255,0.7);
+    }
+    .burger-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+    .product-name { font-weight: 700; font-size: 13px; color: #fff; margin: 0 4px; }
+    .bar-icon {
+      background: none; border: none; cursor: pointer;
+      padding: 5px 7px; border-radius: 3px; color: rgba(255,255,255,0.5);
+      display: flex; align-items: center; transition: all 0.15s;
+    }
+    .bar-icon:hover { color: #fff; background: rgba(255,255,255,0.1); }
+    .bar-icon svg { width: 20px; height: 20px; }
+    .bar-divider { width: 1px; height: 20px; background: rgba(255,255,255,0.12); margin: 0 8px; }
+    .product-bar-spacer { flex: 1; }
+
+    /* ── Open report tabs ── */
+    .report-tabs { display: flex; gap: 4px; height: 100%; align-items: flex-end; margin-left: 10px; padding-bottom: 0; }
+    .report-tab {
+      display: flex; align-items: center; gap: 4px;
+      padding: 0 12px; height: 37px; font-size: 12px; font-weight: 500;
+      color: #000; text-decoration: none; cursor: pointer;
+      border: none; background: #dee2e6;
+      border-radius: 6px 6px 0 0;
+      transition: all 0.15s; white-space: nowrap;
+      min-width: 120px;
+    }
+    .report-tab:hover { background: #d0d4d8; }
+    .report-tab.active { background: #fff; }
+    .report-tab .tab-close {
+      display: flex; align-items: center; justify-content: center;
+      width: 21px; height: 21px; border-radius: 3px;
+      font-size: 14px; color: rgba(0,0,0,0.4);
+      cursor: pointer; line-height: 1; margin-left: 4px;
+    }
+    .report-tab .tab-close:hover { background: rgba(0,0,0,0.1); color: #000; }
+
+    /* ── Sidebar ── */
+    .sidebar-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.25);
+      z-index: 99998; display: none; backdrop-filter: blur(2px);
+    }
+    .sidebar-overlay.open { display: block; }
+    .sidebar {
+      position: fixed; top: 0; left: -260px; width: 260px; height: 100%;
+      background: #0d1822; z-index: 100000;
+      box-shadow: 4px 0 16px rgba(0,0,0,0.2);
+      transition: left 0.25s ease;
+      color: #fff;
+    }
+    .sidebar.open { left: 0; }
+    .sidebar-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 14px 18px; border-bottom: 1px solid rgba(255,255,255,0.1);
+      font-weight: 700; font-size: 13px; color: #fff;
+    }
+    .sidebar-header button {
+      background: none; border: none; font-size: 16px; cursor: pointer;
+      color: rgba(255,255,255,0.5); padding: 3px 6px; border-radius: 3px;
+    }
+    .sidebar-header button:hover { background: rgba(255,255,255,0.1); color: #fff; }
+    .sidebar-brand {
+      padding: 16px 18px; border-bottom: 1px solid rgba(255,255,255,0.1);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .sidebar-brand .brand-dot { width: 8px; height: 8px; border-radius: 50%; background: #1f64a4; }
+    .sidebar-brand .brand-name { font-weight: 600; font-size: 12px; color: rgba(255,255,255,0.7); }
+    .sidebar-nav { padding: 10px 0; }
+    .sidebar-nav a {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 18px; color: rgba(255,255,255,0.6); text-decoration: none;
+      font-size: 12px; font-weight: 500; transition: all 0.15s;
+    }
+    .sidebar-nav a:hover { background: rgba(255,255,255,0.05); color: #fff; }
+    .sidebar-nav a.active { background: rgba(31,100,164,0.3); color: #fff; font-weight: 600; }
+    .sidebar-nav a .nav-icon { font-size: 14px; width: 18px; text-align: center; }
+    .sidebar-section {
+      padding: 10px 18px 4px; font-size: 10px; font-weight: 600;
+      color: rgba(255,255,255,0.35); text-transform: uppercase; letter-spacing: 0.5px;
+    }
+
+    /* ── Collapsible info-blocks ── */
+    .info-trigger {
+      cursor: pointer; font-size: 11px; color: #1f64a4; font-weight: 600; user-select: none;
+    }
+    .info-trigger:hover { text-decoration: underline; }
+    .info-block:not(.expanded) .info-content { display: none !important; }
+
+    /* ── Portal cards ── */
+    .portal-card {
+      background: #fff; border: 1px solid #e8e9ef; border-radius: 6px;
+      padding: 18px; cursor: pointer; transition: all 0.15s;
+    }
+    .portal-card:hover { border-color: #1f64a4; box-shadow: 0 2px 8px rgba(31,100,164,0.1); }
+    .portal-card-icon { font-size: 22px; margin-bottom: 8px; }
+    .portal-card-name { font-weight: 700; font-size: 13px; color: #0d1822; margin-bottom: 4px; }
+    .portal-card-desc { font-size: 11px; color: #888; line-height: 1.4; }
+
+    /* ── Sub-toolbar (below product bar) ── */
+    .sub-toolbar {
+      background: #fff;
+      border-bottom: 1px solid #dee2e6;
+      height: 36px;
+      padding: 6px 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .sub-toolbar .toolbar-spacer { flex: 1; }
+    .sub-toolbar .toolbar-icon {
+      background: none; border: none; cursor: pointer;
+      padding: 3px; border-radius: 3px; color: #555;
+      display: flex; align-items: center; transition: all 0.15s;
+    }
+    .sub-toolbar .toolbar-icon:hover { color: #000; background: rgba(0,0,0,0.06); }
+    .sub-toolbar .toolbar-icon svg { width: 20px; height: 20px; }
+
+    /* ── Report content wrapper ── */
+    .report-content {
+      padding: 0 8px;
+    }
+    .report-panel {
+      background: #fff;
+      border-radius: 0 0 4px 4px;
+      margin-bottom: 8px;
+    }
+  </style>
+</head>
+<body>
+  <script src="http://localhost:3000/shell.js"></script>
+
+  <!-- Sidebar -->
+  <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <span>Menu</span>
+      <button onclick="toggleSidebar()">&#xd7;</button>
+    </div>
+    <div class="sidebar-brand">
+      <div class="brand-dot"></div>
+      <span class="brand-name">Product A &#x2014; Budgeting &amp; Forecasting</span>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="sidebar-section">Views</div>
+      <a href="#" data-view="portal" onclick="navigateTo('portal',this);toggleSidebar();return false" class="active"><span class="nav-icon">&#x1f3e0;</span> Home</a>
+      <a href="#" data-view="report" onclick="openReport('report','Budget Entry');toggleSidebar();return false"><span class="nav-icon">&#x1f4ca;</span> Budget Entry</a>
+      <a href="#"><span class="nav-icon">&#x1f4cb;</span> Forecasts</a>
+      <div class="sidebar-section">Administration</div>
+      <a href="#" data-view="admin" onclick="openReport('admin','Admin');toggleSidebar();return false"><span class="nav-icon">&#x2699;&#xfe0f;</span> Admin</a>
+      <a href="#" data-view="process" onclick="openReport('process','Process Mgmt');toggleSidebar();return false"><span class="nav-icon">&#x1f4cb;</span> Process Management</a>
+      <div class="sidebar-section">Settings</div>
+      <div style="padding:6px 18px;display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:12px;color:rgba(255,255,255,0.6)">Explanation mode</span>
+        <div class="info-toggle" id="globalToggle">
+          <button class="active" onclick="setMode('simple')">Simple</button>
+          <button onclick="setMode('tech')">Technical</button>
+        </div>
+      </div>
+    </nav>
+    <div style="position:absolute;bottom:0;left:0;right:0;padding:14px 18px;border-top:1px solid rgba(255,255,255,0.1)">
+      <button onclick="doLogout()" style="width:100%;background:none;border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.6);padding:8px;border-radius:3px;cursor:pointer;font-size:12px;font-family:inherit;transition:all 0.15s">Log out</button>
+    </div>
+  </div>
+
+  <!-- Product bar -->
+  <div class="product-bar">
+    <button class="burger-btn" onclick="toggleSidebar()">&#x2630;</button>
+    <button class="bar-icon" title="Favorites"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17.75l-6.172 3.245l1.179 -6.873l-5 -4.867l6.9 -1l3.086 -6.253l3.086 6.253l6.9 1l-5 4.867l1.179 6.873l-6.158 -3.245"></path></svg></button>
+    <button class="bar-icon" title="Search"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0"></path><path d="M21 21l-6 -6"></path></svg></button>
+    <div class="bar-divider"></div>
+    <span class="product-name">Product A</span>
+    <button class="bar-icon" title="Home" onclick="navigateTo('portal')"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l-2 0l9 -9l9 9l-2 0"></path><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7"></path><path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6"></path></svg></button>
+    <div class="bar-divider"></div>
+    <div class="report-tabs" id="reportTabs"></div>
+    <div class="product-bar-spacer"></div>
+  </div>
+
+  <!-- Sub-toolbar -->
+  <div class="sub-toolbar">
+    <div class="toolbar-spacer"></div>
+    <button class="toolbar-icon" title="Refresh" onclick="location.reload()"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4"></path><path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4"></path></svg></button>
+  </div>
+
+  <!-- ═══ PORTAL VIEW ═══ -->
+  <div id="view-portal">
+    <div style="padding:30px 30px 20px;max-width:900px">
+      <h1 style="font-size:18px;color:#0d1822;margin:0 0 4px">Product A &mdash; Budgeting &amp; Forecasting</h1>
+      <p style="color:#888;font-size:13px;margin:0 0 24px">Welcome. Select a report or view from the sidebar, or open one below.</p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px">
+        <div class="portal-card" onclick="openReport('report','Budget Entry')">
+          <div class="portal-card-icon">&#x1f4ca;</div>
+          <div class="portal-card-name">Budget Entry</div>
+          <div class="portal-card-desc">Enter and edit budget data per account, org unit and period.</div>
+        </div>
+        <div class="portal-card">
+          <div class="portal-card-icon">&#x1f4cb;</div>
+          <div class="portal-card-name">Forecasts</div>
+          <div class="portal-card-desc">View and manage rolling forecasts.</div>
+        </div>
+        <div class="portal-card">
+          <div class="portal-card-icon">&#x1f4c8;</div>
+          <div class="portal-card-name">Variance Analysis</div>
+          <div class="portal-card-desc">Compare budget vs actuals across periods.</div>
+        </div>
+        <div class="portal-card" onclick="openReport('admin','Admin')">
+          <div class="portal-card-icon">&#x2699;&#xfe0f;</div>
+          <div class="portal-card-name">Admin</div>
+          <div class="portal-card-desc">Manage budget versions, submit, publish.</div>
+        </div>
+        <div class="portal-card" onclick="openReport('process','Process Mgmt')">
+          <div class="portal-card-icon">&#x1f4cb;</div>
+          <div class="portal-card-name">Process Management</div>
+          <div class="portal-card-desc">Create budget rounds, assign org units to users, open &amp; close.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ ADMIN VIEW ═══ -->
+  <div id="view-admin" style="display:none;background:#f5f6f8;min-height:calc(100vh - 120px)">
+  <div class="filter-bar" style="padding:10px 20px;background:#fff;border-bottom:1px solid #e8e9ef;display:flex;align-items:center">
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="font-weight:700;font-size:13px;color:#0d1822">Admin</span>
+      <span style="color:#999;font-size:12px">/ Projects &amp; Setup</span>
+    </div>
+  </div>
+  <div class="view active" id="view-overview">
+    <div class="container">
+      <div class="status-bar" id="statusBar"></div>
+
+      <!-- Active Process Versions summary -->
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+          <h2 style="margin:0">Budget Versions &amp; Rounds</h2>
+          <div style="flex:1"></div>
+          <button class="btn btn-primary" onclick="openReport('process','Process Mgmt')">Open Process Management</button>
+        </div>
+        <div id="adminProcessSummary" style="font-size:12px;color:#888">Loading...</div>
+      </div>
+
+      <!-- Create budget project -->
+      <div class="card">
+        <h2>Create Budget Project</h2>
+        <div class="form-row">
+          <div class="form-group" style="flex:1">
+            <label>Project Name</label>
+            <input type="text" id="projectName" placeholder="E.g. New Office Building &#x2014; planning">
+          </div>
+          <button class="btn btn-primary" onclick="createProject()">Create</button>
+        </div>
+        <div class="info-block">
+          <div class="info-trigger" onclick="toggleInfo(this)">&#x2139;&#xfe0f; Show explanation &#x25b8;</div>
+          <div class="info-content simple">
+            <div class="info-title">&#x2139;&#xfe0f; What happens?</div>
+            Here you create a budget project that only exists in Product A. The project
+            is automatically registered in the platform and becomes visible to other products
+            (e.g. Product B) without them needing to know where it came from.
+          </div>
+          <div class="info-content tech" style="display:none">
+            <div class="info-title">&#x2699;&#xfe0f; Technical flow</div>
+            <pre>1. POST /api/projects &#x2192; Product A creates project locally (SQLite)
+2. Publishes BudgetProjectCreated &#x2192; Kafka topic: product-a.events
+3. Platform consumes &#x2192; creates canonical_id (platform-XXX) in mapper (SQLite)
+4. Platform publishes enriched event &#x2192; Kafka topic: platform.projects.out
+5. Product B consumes from platform.projects.out &#x2192; stores in its read model
+
+Technologies: Express, KafkaJS (Redpanda), better-sqlite3</pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- Project list -->
+      <div class="card">
+        <h2>Projects</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Name</th>
+              <th>Source</th>
+              <th>Canonical ID</th>
+              <th>ERP Link</th>
+            </tr>
+          </thead>
+          <tbody id="projectsBody"></tbody>
+        </table>
+        <div class="info-block">
+          <div class="info-trigger" onclick="toggleInfo(this)">&#x2139;&#xfe0f; Show explanation &#x25b8;</div>
+          <div class="info-content simple">
+            <div class="info-title">&#x2139;&#xfe0f; What is this?</div>
+            Here you see all projects &#x2014; both ones you created yourself (prod_a) and real projects
+            from ERP. When the platform has linked them together, the ERP link is shown.
+          </div>
+          <div class="info-content tech" style="display:none">
+            <div class="info-title">&#x2699;&#xfe0f; Technical</div>
+            <pre>Reference data flow:
+  ERP &#x2192; erp.accounts &#x2192; Platform &#x2192; platform.accounts.out &#x2192; Product A consumes
+
+Project flow:
+  ERP &#x2192; erp.projects &#x2192; Platform (creates canonical_id) &#x2192; platform.projects.out &#x2192; Product A
+  Product A &#x2192; product-a.events &#x2192; Platform (creates canonical_id) &#x2192; platform.projects.out
+
+Linking:
+  POST /api/link &#x2192; Platform merges canonical IDs &#x2192; platform.links.out &#x2192; Product A updates
+
+Storage: SQLite (better-sqlite3), each product has its own database</pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- Resiliens -->
+      <div class="card">
+        <h2>Resilience &amp; Event Sourcing</h2>
+        <div class="info-block">
+          <div class="info-trigger" onclick="toggleInfo(this)">&#x2139;&#xfe0f; Show explanation &#x25b8;</div>
+          <div class="info-content simple">
+            <div class="info-title">&#x2139;&#xfe0f; What happens if a product goes down?</div>
+            If Product B (Analytics) is temporarily down, no data is lost.
+            All events are stored in the queue and wait. When Product B starts again
+            it automatically catches up on everything it missed &#x2014; without you needing to do anything.
+          </div>
+          <div class="info-content tech" style="display:none">
+            <div class="info-title">&#x2699;&#xfe0f; Technical: Kafka offset &amp; catch-up</div>
+            <pre>Each Kafka consumer has a consumer group with saved offsets.
+When a consumer (e.g. product-b) crashes or stops:
+
+1. New events continue to be written to topics by Platform
+2. The consumer group's offset remains at the last committed position
+3. On restart: consumer resumes from saved offset &#x2192; processes everything it missed
+4. At-least-once delivery: events may arrive twice &#x2192; idempotent handling required
+
+Demo command:
+  docker compose stop product-b    # simulate crash
+  # ... publish data via ERP / Product A ...
+  docker compose start product-b   # catch-up happens automatically
+
+Redpanda retention: default 7 days &#x2192; events persist for a long time</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  </div><!-- end view-admin -->
+
+  <!-- ═══ PROCESS MANAGEMENT VIEW ═══ -->
+  <div id="view-process" style="display:none;background:#f5f6f8;min-height:calc(100vh - 120px)">
+    <div class="filter-bar" style="padding:10px 20px;background:#fff;border-bottom:1px solid #e8e9ef;display:flex;align-items:center">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-weight:700;font-size:13px;color:#0d1822">Process Management</span>
+        <span style="color:#999;font-size:12px">/ Budget Versions</span>
+      </div>
+    </div>
+    <div style="padding:20px;max-width:1480px;margin:0 auto">
+      <div class="status-bar" id="statusBarProcess"></div>
+
+      <!-- Create new version -->
+      <div class="card" style="border:1px solid #e8e9ef;border-radius:3px;margin-bottom:16px">
+        <h2>Create New Budget Version</h2>
+        <div class="form-row">
+          <div class="form-group" style="flex:1">
+            <label>Name</label>
+            <input type="text" id="pvName" placeholder="E.g. Budget 2025 — Round 1">
+          </div>
+          <div class="form-group">
+            <label>Year</label>
+            <select id="pvYear" style="padding:0 6px;border:1px solid #ced4da;border-radius:3px;font-size:12px;height:24px;font-family:inherit">
+              <option value="2025">2025</option>
+              <option value="2026">2026</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Org Root</label>
+            <select id="pvOrgRoot" style="padding:0 6px;border:1px solid #ced4da;border-radius:3px;font-size:12px;height:24px;font-family:inherit">
+              <option value="">All</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" onclick="createProcessVersion()">Create</button>
+        </div>
+      </div>
+
+      <!-- Version list -->
+      <div class="card" style="border:1px solid #e8e9ef;border-radius:3px;margin-bottom:16px">
+        <h2>Budget Versions</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Year</th>
+              <th>Org Root</th>
+              <th>Status</th>
+              <th>Assignments</th>
+              <th>Progress</th>
+              <th style="width:200px">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="pvListBody">
+            <tr><td colspan="7" style="text-align:center;color:#999;padding:24px">No budget rounds created yet</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Assignment matrix (shown when a version is selected) -->
+      <div id="pvAssignmentPanel" class="card" style="border:1px solid #e8e9ef;border-radius:3px;margin-bottom:16px;display:none">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+          <h2 style="margin:0">Assignment Matrix</h2>
+          <span id="pvAssignmentTitle" style="color:#666;font-size:12px"></span>
+          <div style="flex:1"></div>
+          <button class="btn btn-primary" onclick="saveAssignments()" id="btnSaveAssignments">Save Assignments</button>
+        </div>
+        <div style="font-size:11px;color:#888;margin-bottom:12px">
+          Assign a user to an org unit or group. Assigning to a group (e.g. Acme Inc) gives that person responsibility for all units beneath it.
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Org Unit</th>
+              <th>Code</th>
+              <th>Assigned User</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="pvAssignmentBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div><!-- end view-process -->
+
+  <!-- ═══ REPORT VIEW ═══ -->
+  <div id="view-report" style="display:none">
+  <!-- ═══════════ VIEW: Budget ═══════════ -->
+  <div class="view active" id="view-budget">
+    <div class="container">
+      <div class="status-bar" id="statusBarBudget"></div>
+
+      <!-- Year / Org / Task context toolbar -->
+      <div class="card" style="padding:8px 20px; margin-top:8px; display:flex; align-items:center; gap:14px; flex-wrap:wrap">
+        <div id="taskContextLabel" style="display:none;font-size:13px;font-weight:600;color:#0d1822"></div>
+        <div style="display:flex;align-items:center;gap:5px">
+          <label style="font-size:10px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.3px;white-space:nowrap">Year</label>
+          <select id="budgetYear" class="year-select">
+            <option value="2025">2025</option>
+            <option value="2026">2026</option>
+          </select>
+        </div>
+        <div id="orgScopeBox" style="display:none;align-items:center;gap:5px">
+          <label style="font-size:10px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.3px;white-space:nowrap">Org Unit</label>
+          <select id="orgScopeSelect" class="year-select" style="min-width:180px"></select>
+        </div>
+        <span id="versionBadge" style="display:none;padding:3px 10px;border-radius:3px;font-size:11px;font-weight:600;letter-spacing:0.2px"></span>
+        <span id="taskContextStatus" style="display:none;font-size:12px"></span>
+        <div style="flex:1"></div>
+        <button id="btnCompleteTask" class="btn btn-success" style="display:none;font-size:11px;padding:5px 14px" onclick="completeTask()">&#x2714; Mark complete</button>
+        <button id="btnDismissTask" class="btn btn-ghost" style="display:none;font-size:11px;padding:5px 10px" onclick="dismissTaskContext()" title="Clear task context">&#x2715;</button>
+      </div>
+
+      <!-- Panel 1: Summary tiles -->
+      <div class="card" style="padding:16px 20px">
+        <div class="tile-row" id="budgetTiles">
+          <div class="tile">
+            <div class="tile-label">Budget Year</div>
+            <div class="tile-value" id="tileBudgetYear">2025</div>
+          </div>
+          <div class="tile">
+            <div class="tile-label">Rows</div>
+            <div class="tile-value" id="tileRowCount">0</div>
+          </div>
+          <div class="tile">
+            <div class="tile-label">Grand Total</div>
+            <div class="tile-value" id="tileGrandTotal">&mdash;</div>
+            <div class="tile-sub">SEK</div>
+          </div>
+          <div class="tile">
+            <div class="tile-label">Status</div>
+            <div class="tile-value" id="tileStatus" style="font-size:14px">&mdash;</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Panel 2: Budget grid -->
+      <div class="card" style="padding:16px 20px">
+        <div style="display:flex; align-items:center; margin-bottom:10px; gap:10px;">
+          <h2 style="margin:0;font-size:14px;color:#0d1822">Budget Entry</h2>
+          <div id="versionContext" style="display:none; padding:6px 0; font-size:12px; color:#666; display:flex; align-items:center; gap:10px;">
+            <span style="font-weight:600">Version:</span>
+            <span id="versionIdLabel" style="font-family:monospace; color:#666"></span>
+            <span style="color:#ced4da">|</span>
+            <span id="versionStatusLabel"></span>
+            <span style="color:#ced4da">|</span>
+            <span>Year: <strong id="versionYearLabel"></strong></span>
+          </div>
+          <div style="flex:1"></div>
+          <button class="btn-fill-right" onclick="fillRight()" id="btnFillRight" disabled title="Select an amount cell, then click to fill its value to all months to the right"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg> Fill right</button>
+          <button class="btn btn-ghost" onclick="addBudgetRow()" id="btnAddRow">Add</button>
+          <button class="btn btn-primary" onclick="saveBudget()" id="btnSave">Save</button>
+        </div>
+
+        <div class="budget-grid-wrapper">
+          <div class="budget-grid-scroll">
+            <table class="budget-grid">
+              <thead id="budgetGridHead"></thead>
+              <tbody id="budgetGridBody"></tbody>
+              <tfoot id="budgetGridFoot"></tfoot>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="info-block" style="margin-top:20px">
+        <div class="info-trigger" onclick="toggleInfo(this)">&#x2139;&#xfe0f; Show explanation &#x25b8;</div>
+        <div class="info-content simple">
+          <div class="info-title">What happens?</div>
+          Edit the budget directly in the grid. When you save, it is stored as a <strong>draft</strong>
+          locally in Product A &#x2014; no other product can see it yet. Open <strong>Admin</strong> from the menu to submit
+          the budget to the platform.
+        </div>
+        <div class="info-content tech" style="display:none">
+          <div class="info-title">&#x2699;&#xfe0f; Technical flow</div>
+          <pre>Save (draft):
+  POST /api/budget &#x2192; Product A saves lines locally (SQLite)
+  No Kafka publishing &#x2014; data stays in Product A
+
+Submit:
+  POST /api/budget-versions/:id/submit
+  1. Status changes draft &#x2192; submitted
+  2. Publishes BudgetSubmitted &#x2192; Kafka topic: product-a.events
+  3. Platform consumes &#x2192; looks up canonical_id via prod_a_id
+  4. Platform publishes enriched event &#x2192; Kafka topic: platform.budget.out
+  5. Product B consumes &#x2192; stores in its read model &#x2192; shows budget vs actuals</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+  </div><!-- end view-report -->
+
+  <script>
+    const API = '';  // same origin
+
+    // ── View navigation ──
+    // ── Open report tabs ──
+    var openTabs = [];
+    function openReport(view, label) {
+      if (!openTabs.find(t => t.view === view)) {
+        openTabs.push({ view, label });
+      }
+      navigateTo(view);
+      renderReportTabs(view);
+    }
+    function closeTab(view) {
+      openTabs = openTabs.filter(t => t.view !== view);
+      renderReportTabs(null);
+      navigateTo('portal');
+    }
+    function renderReportTabs(activeView) {
+      var container = document.getElementById('reportTabs');
+      if (!container) return;
+      container.innerHTML = openTabs.map(function(t) {
+        var cls = t.view === activeView ? 'report-tab active' : 'report-tab';
+        return '<button class="' + cls + '" onclick="navigateTo(\'' + t.view + '\');renderReportTabs(\'' + t.view + '\')">' +
+          t.label + '<span class="tab-close" onclick="event.stopPropagation();closeTab(\'' + t.view + '\')">&times;</span></button>';
+      }).join('');
+    }
+
+    function navigateTo(view, navLink) {
+      document.getElementById('view-portal').style.display = view === 'portal' ? '' : 'none';
+      document.getElementById('view-report').style.display = view === 'report' ? '' : 'none';
+      document.getElementById('view-admin').style.display = view === 'admin' ? '' : 'none';
+      document.getElementById('view-process').style.display = view === 'process' ? '' : 'none';
+      // Update sidebar active state
+      document.querySelectorAll('.sidebar-nav a[data-view]').forEach(a => a.classList.remove('active'));
+      if (navLink) { navLink.classList.add('active'); }
+      else {
+        const el = document.querySelector('.sidebar-nav a[data-view="' + view + '"]');
+        if (el) el.classList.add('active');
+      }
+      if (view === 'report') renderBudgetGrid();
+      if (view === 'process') loadProcessVersions();
+      if (view === 'admin') loadAdminProcessSummary();
+    }
+
+    // ── Sidebar toggle ──
+    function toggleSidebar() {
+      document.getElementById('sidebar').classList.toggle('open');
+      document.getElementById('sidebarOverlay').classList.toggle('open');
+    }
+
+    // ── Logout ──
+    function doLogout() {
+      fetch('http://localhost:3000/api/logout', { method: 'POST', credentials: 'include' }).then(function() {
+        document.cookie = 'platform_token=; Max-Age=0; path=/';
+        window.location.href = 'http://localhost:3000/login.html';
+      });
+    }
+
+    // ── Info-block collapse ──
+    function toggleInfo(trigger) {
+      const block = trigger.closest('.info-block');
+      const expanded = block.classList.toggle('expanded');
+      trigger.innerHTML = expanded ? '&#x2139;&#xfe0f; Hide explanation &#x25be;' : '&#x2139;&#xfe0f; Show explanation &#x25b8;';
+    }
+
+    // ── Info-block toggle ──
+    function setMode(mode) {
+      localStorage.setItem('infoMode', mode);
+      document.querySelectorAll('.info-content.simple').forEach(el => el.style.display = mode === 'simple' ? '' : 'none');
+      document.querySelectorAll('.info-content.tech').forEach(el => el.style.display = mode === 'tech' ? '' : 'none');
+      const btns = document.querySelectorAll('#globalToggle button');
+      btns[0].className = mode === 'simple' ? 'active' : '';
+      btns[1].className = mode === 'tech' ? 'active' : '';
+    }
+    const savedMode = localStorage.getItem('infoMode') || 'simple';
+    setTimeout(() => setMode(savedMode), 0);
+
+    function showStatus(msg) {
+      ['statusBar', 'statusBarBudget'].forEach(id => {
+        const bar = document.getElementById(id);
+        if (bar) { bar.textContent = msg; bar.style.display = 'block'; setTimeout(() => bar.style.display = 'none', 3000); }
+      });
+    }
+
+    async function loadAccounts() {
+      const res = await fetch(API + '/api/accounts');
+      const data = await res.json();
+      window._accounts = data.accounts || [];
+      window._orgUnits = data.org_units || [];
+    }
+
+    async function loadProjects() {
+      const res = await fetch(API + '/api/projects');
+      const projects = await res.json();
+      const body = document.getElementById('projectsBody');
+
+      body.innerHTML = projects.map(p => `
+        <tr>
+          <td><code style="font-size:12px;color:#7a7fa0">${p.id}</code></td>
+          <td style="font-weight:500">${p.name}</td>
+          <td><span class="tag ${p.source === 'erp' ? 'tag-erp' : 'tag-own'}">${p.source}</span></td>
+          <td>${p.canonical_id ? `<code style="font-size:12px;color:#7a7fa0">${p.canonical_id}</code>` : '<span style="color:#ccc">&#x2014;</span>'}</td>
+          <td>${p.erp_id && p.source === 'prod_a' ? `<span class="tag tag-linked">${p.erp_id}</span>` : '<span style="color:#ccc">&#x2014;</span>'}</td>
+        </tr>
+      `).join('');
+
+      window._ownProjects = projects.filter(p => p.source === 'prod_a');
+    }
+
+    async function createProject() {
+      const name = document.getElementById('projectName').value;
+      if (!name) return;
+      const res = await fetch(API + '/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      const data = await res.json();
+      const newId = data.event.prod_a_id;
+      showStatus(`Budget project created: ${newId}`);
+      document.getElementById('projectName').value = '';
+      await loadProjects();
+    }
+
+    // ── Budget grid state ──
+    const MONTHS = ['01','02','03','04','05','06','07','08','09','10','11','12'];
+    const MONTH_LABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    let budgetRows = [];
+    let dirty = false;
+    let currentVersion = null; // { id, status, ... }
+    let taskContext = null; // { version, org, assignmentStatus } — set from inbox deep link
+
+    function getOrgScope() {
+      // Returns the currently selected org scope (from dropdown), or null
+      var sel = document.getElementById('orgScopeSelect');
+      return sel && sel.value ? sel.value : null;
+    }
+
+    function getScopedOrgUnits() {
+      var allOrgs = window._orgUnits || [];
+      var scope = getOrgScope();
+      if (!scope) return allOrgs.filter(function(o) { return o.type !== 'group'; });
+      var descendants = getDescendantOrgs(scope, allOrgs);
+      return descendants.filter(function(o) { return o.type !== 'group'; });
+    }
+
+    function addBudgetRow() {
+      const proj = (window._ownProjects || [])[0];
+      const acc = (window._accounts || [])[0];
+      const scopedOrgs = getScopedOrgUnits();
+      const org = scopedOrgs[0] || (window._orgUnits || [])[0];
+      const amounts = {};
+      MONTHS.forEach(m => amounts[m] = 0);
+      budgetRows.push({
+        project: proj ? proj.id : '',
+        account: acc ? acc.code : '',
+        org_unit: org ? org.code : '',
+        amounts,
+      });
+      dirty = true;
+      renderBudgetGrid();
+      // Auto-switch to budget view
+      if (document.getElementById('view-report').style.display === 'none') {
+        openReport('report', 'Budget Entry');
+      }
+    }
+
+    function removeBudgetRow(idx) {
+      budgetRows.splice(idx, 1);
+      dirty = true;
+      renderBudgetGrid();
+    }
+
+    function onGridChange(idx, field, value) {
+      if (field.startsWith('m_')) {
+        const m = field.slice(2);
+        budgetRows[idx].amounts[m] = parseFloat(value) || 0;
+      } else {
+        budgetRows[idx][field] = value;
+      }
+      dirty = true;
+      updateSaveBtn();
+    }
+
+    function updateSaveBtn() {
+      const status = currentVersion?.status || 'draft';
+      const published = status === 'published';
+      const locked = published || isTaskDone();
+      const btn = document.getElementById('btnSave');
+      const btnSubmit = document.getElementById('btnSubmit');
+      const btnPublish = document.getElementById('btnPublish');
+      const btnAdd = document.getElementById('btnAddRow');
+      const btnReopen = document.getElementById('btnReopen');
+      const badge = document.getElementById('versionBadge');
+      const year = document.getElementById('budgetYear')?.value || '—';
+
+      // Save button — disabled when published or task done
+      if (locked) {
+        btn.style.opacity = '0.3'; btn.style.pointerEvents = 'none';
+      } else {
+        btn.style.opacity = dirty ? '1' : '0.5';
+        btn.style.pointerEvents = dirty ? 'auto' : 'none';
+      }
+
+      // Submit button — enabled when saved (not dirty), has rows, not published
+      if (btnSubmit) {
+        if (locked || budgetRows.length === 0 || dirty) {
+          btnSubmit.style.opacity = '0.5'; btnSubmit.style.pointerEvents = 'none';
+        } else {
+          btnSubmit.style.opacity = '1'; btnSubmit.style.pointerEvents = 'auto';
+        }
+      }
+
+      // Publish button — enabled when saved, has rows, not published
+      if (btnPublish) {
+        if (locked || budgetRows.length === 0 || dirty) {
+          btnPublish.style.opacity = '0.5'; btnPublish.style.pointerEvents = 'none';
+        } else {
+          btnPublish.style.opacity = '1'; btnPublish.style.pointerEvents = 'auto';
+        }
+      }
+
+      // Add row button — disabled when published or task done
+      if (locked) {
+        btnAdd.style.opacity = '0.3'; btnAdd.style.pointerEvents = 'none';
+      } else {
+        btnAdd.style.opacity = '1'; btnAdd.style.pointerEvents = 'auto';
+      }
+
+      // Reopen button — only visible when published
+      if (btnReopen) btnReopen.style.display = published ? '' : 'none';
+
+      // Version badge (budget entry toolbar)
+      if (currentVersion) {
+        badge.style.display = '';
+        if (published) {
+          badge.textContent = 'Published';
+          badge.style.background = '#e3f2fd'; badge.style.color = '#1565c0';
+        } else if (status === 'submitted') {
+          badge.textContent = 'Submitted';
+          badge.style.background = '#e8f5e9'; badge.style.color = '#2e7d32';
+        } else {
+          badge.textContent = 'Draft';
+          badge.style.background = '#fff3e0'; badge.style.color = '#e65100';
+        }
+      } else {
+        badge.style.display = 'none';
+      }
+
+      // Version context bar (budget entry)
+      const vc = document.getElementById('versionContext');
+      if (currentVersion) {
+        vc.style.display = 'flex';
+        document.getElementById('versionIdLabel').textContent = currentVersion.id;
+        document.getElementById('versionYearLabel').textContent = year;
+        const sl = document.getElementById('versionStatusLabel');
+        if (published) {
+          sl.innerHTML = '<span style="color:#1565c0;font-weight:600">Published (locked)</span>';
+        } else if (status === 'submitted') {
+          sl.innerHTML = '<span style="color:#2e7d32;font-weight:600">Submitted</span>';
+        } else {
+          sl.innerHTML = '<span style="color:#e65100;font-weight:600">Draft</span>';
+        }
+      } else {
+        vc.style.display = 'none';
+      }
+
+    }
+
+    function renderBudgetGrid() {
+      const year = document.getElementById('budgetYear').value;
+      const projects = window._ownProjects || [];
+      const accounts = (window._accounts || []).filter(a => a.type !== 'group');
+      const orgUnits = getScopedOrgUnits();
+      const orgCodes = new Set(orgUnits.map(o => o.code));
+      // Filter rows to only show those matching the org scope (if active)
+      const scope = getOrgScope();
+      const visibleRows = scope
+        ? budgetRows.filter(r => orgCodes.has(r.org_unit))
+        : budgetRows;
+
+      // Header
+      const head = document.getElementById('budgetGridHead');
+      head.innerHTML = `<tr>
+        <th style="min-width:150px;text-align:left">Project</th>
+        <th style="min-width:120px;text-align:left">Account</th>
+        <th style="min-width:120px;text-align:left">Org Unit</th>
+        ${MONTH_LABELS.map(l => `<th style="text-align:right;width:58px">${l}</th>`).join('')}
+        <th style="text-align:right;width:72px">Total</th>
+        <th style="width:32px"></th>
+      </tr>`;
+
+      // Body
+      const body = document.getElementById('budgetGridBody');
+      if (visibleRows.length === 0) {
+        body.innerHTML = `<tr><td colspan="16" class="grid-empty">
+          ${scope ? 'No budget rows for this org unit — click <strong>Add</strong> to start' : 'Click <strong>Add</strong> to start budgeting'}
+        </td></tr>`;
+      } else {
+        const locked = isTaskDone() || (currentVersion && currentVersion.status === 'published');
+        body.innerHTML = visibleRows.map((row) => {
+          const i = budgetRows.indexOf(row);
+          const projOpts = projects.map(p =>
+            `<option value="${p.id}" ${p.id === row.project ? 'selected' : ''}>${p.id} ${p.name}</option>`
+          ).join('');
+          const accOpts = accounts.map(a =>
+            `<option value="${a.code}" ${a.code === row.account ? 'selected' : ''}>${a.code} ${a.name}</option>`
+          ).join('');
+          const orgOpts = orgUnits.map(o =>
+            `<option value="${o.code}" ${o.code === row.org_unit ? 'selected' : ''}>${o.code} ${o.name}</option>`
+          ).join('');
+          const rowSum = MONTHS.reduce((s, m) => s + (row.amounts[m] || 0), 0);
+          const dis = locked ? 'disabled style="background:#fff;color:#333;pointer-events:none"' : '';
+          const selDis = locked ? 'disabled style="background:#fff;color:#333;-webkit-appearance:none;pointer-events:none"' : '';
+          const monthCells = MONTHS.map((m, mi) =>
+            `<td><input type="number" class="cell-num" data-row="${i}" data-month="${mi}" value="${row.amounts[m] || ''}" placeholder="0" onclick="selectCell(this)" onchange="onGridChange(${i},'m_${m}',this.value)" ${dis}></td>`
+          ).join('');
+          return `<tr>
+            <td><select class="cell-select" onchange="onGridChange(${i},'project',this.value)" ${selDis}>${projOpts}</select></td>
+            <td><select class="cell-select" onchange="onGridChange(${i},'account',this.value)" ${selDis}>${accOpts}</select></td>
+            <td><select class="cell-select" onchange="onGridChange(${i},'org_unit',this.value)" ${selDis}>${orgOpts}</select></td>
+            ${monthCells}
+            <td class="cell-sum">${rowSum ? rowSum.toLocaleString('en-US') : '&#x2014;'}</td>
+            <td style="text-align:center">${locked ? '' : `<button class="btn-icon" onclick="removeBudgetRow(${i})" title="Remove row">&#x2715;</button>`}</td>
+          </tr>`;
+        }).join('');
+      }
+
+      // Footer totals (based on visible rows only)
+      const foot = document.getElementById('budgetGridFoot');
+      if (visibleRows.length > 0) {
+        const totals = MONTHS.map(m => visibleRows.reduce((s, r) => s + (r.amounts[m] || 0), 0));
+        const grandTotal = totals.reduce((a, b) => a + b, 0);
+        foot.innerHTML = `<tr>
+          <td colspan="3" style="text-align:right;padding-right:14px">Total</td>
+          ${totals.map(t => `<td style="text-align:right">${t ? t.toLocaleString('en-US') : '&#x2014;'}</td>`).join('')}
+          <td style="text-align:right">${grandTotal ? grandTotal.toLocaleString('en-US') : '&#x2014;'}</td>
+          <td></td>
+        </tr>`;
+      } else {
+        foot.innerHTML = '';
+      }
+
+      // Update tiles (based on visible rows)
+      document.getElementById('tileBudgetYear').textContent = year;
+      document.getElementById('tileRowCount').textContent = visibleRows.length;
+      const gt = visibleRows.reduce((s, r) => s + MONTHS.reduce((ms, m) => ms + (r.amounts[m] || 0), 0), 0);
+      document.getElementById('tileGrandTotal').textContent = gt ? gt.toLocaleString('en-US') : '\u2014';
+      const tileStatus = document.getElementById('tileStatus');
+      if (currentVersion) {
+        if (currentVersion.status === 'published') {
+          tileStatus.innerHTML = '<span style="color:#1565c0">Published</span>';
+        } else if (currentVersion.status === 'submitted') {
+          tileStatus.innerHTML = '<span style="color:#2e7d32">Submitted</span>';
+        } else {
+          tileStatus.innerHTML = '<span style="color:#e65100">Draft</span>';
+        }
+      } else {
+        tileStatus.textContent = budgetRows.length > 0 ? 'Unsaved' : '\u2014';
+      }
+
+      updateSaveBtn();
+    }
+
+    // ── Cell selection & Fill Right ──
+    let selectedCell = null;
+
+    function selectCell(el) {
+      document.querySelectorAll('.cell-num.selected').forEach(c => c.classList.remove('selected'));
+      el.classList.add('selected');
+      selectedCell = el;
+      document.getElementById('btnFillRight').disabled = false;
+    }
+
+    function fillRight() {
+      if (!selectedCell) return;
+      const row = parseInt(selectedCell.dataset.row);
+      const startMonth = parseInt(selectedCell.dataset.month);
+      const value = parseFloat(selectedCell.value) || 0;
+      if (isNaN(row) || isNaN(startMonth)) return;
+
+      for (let mi = startMonth + 1; mi < MONTHS.length; mi++) {
+        budgetRows[row].amounts[MONTHS[mi]] = value;
+      }
+      dirty = true;
+      renderBudgetGrid();
+    }
+
+    async function saveBudget() {
+      if (budgetRows.length === 0 || !dirty) return;
+      if (currentVersion?.status === 'published') return;
+      const year = document.getElementById('budgetYear').value;
+
+      const byProject = {};
+      for (const row of budgetRows) {
+        if (!byProject[row.project]) byProject[row.project] = [];
+        for (const m of MONTHS) {
+          const amt = row.amounts[m] || 0;
+          if (amt !== 0) {
+            byProject[row.project].push({
+              account: row.account,
+              org_unit: row.org_unit,
+              amount: amt,
+              currency: 'SEK',
+              period: `${year}-${m}`,
+            });
+          }
+        }
+      }
+
+      let ok = true;
+      for (const [projId, lines] of Object.entries(byProject)) {
+        if (lines.length === 0) continue;
+        try {
+          const res = await fetch(API + '/api/budget', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prod_a_id: projId, lines, year }),
+          });
+          const data = await res.json();
+          if (data.version_id) {
+            currentVersion = { id: data.version_id, status: data.status || 'draft' };
+          }
+        } catch (e) { ok = false; }
+      }
+
+      if (ok) {
+        dirty = false;
+        showStatus('Budget saved as draft');
+        renderBudgetGrid();
+      } else {
+        showStatus('Error saving');
+      }
+    }
+
+    async function reopenBudget() {
+      if (!currentVersion || currentVersion.status !== 'published') return;
+      try {
+        const res = await fetch(API + `/api/budget-versions/${currentVersion.id}/reopen`, { method: 'POST' });
+        const data = await res.json();
+        if (data.ok) {
+          currentVersion.status = 'draft';
+          dirty = false;
+          showStatus('Version reopened for editing');
+          renderBudgetGrid();
+        } else {
+          showStatus(data.error || 'Could not reopen');
+        }
+      } catch (e) {
+        showStatus('Error reopening');
+      }
+    }
+
+    async function submitBudget() {
+      if (!currentVersion || currentVersion.status === 'published') return;
+      if (dirty) { showStatus('Save first before submitting'); return; }
+
+      try {
+        const res = await fetch(API + `/api/budget-versions/${currentVersion.id}/submit`, { method: 'POST' });
+        const data = await res.json();
+        if (data.ok) {
+          currentVersion.status = data.status || 'submitted';
+          showStatus('Budget data submitted to the platform');
+          renderBudgetGrid();
+        } else {
+          showStatus(data.error || 'Could not submit');
+        }
+      } catch (e) {
+        showStatus('Error submitting');
+      }
+    }
+
+    async function publishBudget() {
+      if (!currentVersion || currentVersion.status === 'published') return;
+      if (dirty) { showStatus('Save first before publishing'); return; }
+
+      try {
+        const res = await fetch(API + `/api/budget-versions/${currentVersion.id}/publish`, { method: 'POST' });
+        const data = await res.json();
+        if (data.ok) {
+          currentVersion.status = 'published';
+          showStatus('Budget published and locked');
+          renderBudgetGrid();
+        } else {
+          showStatus(data.error || 'Could not publish');
+        }
+      } catch (e) {
+        showStatus('Error publishing');
+      }
+    }
+
+    async function loadBudget() {
+      const projects = window._ownProjects || [];
+      const year = document.getElementById('budgetYear')?.value || '2025';
+      currentVersion = null;
+
+      const newRows = [];
+      for (const p of projects) {
+        try {
+          // Load version info so submit button works
+          const vRes = await fetch(API + `/api/budget-versions/${p.id}`);
+          const versions = await vRes.json();
+          const yearVersion = versions.find(v => v.year === year);
+          if (yearVersion && !currentVersion) {
+            currentVersion = { id: yearVersion.id, status: yearVersion.status };
+          }
+
+          // Fetch lines filtered by year (avoids duplicates across versions)
+          const res = await fetch(API + `/api/budget/${p.id}?year=${year}`);
+          const lines = await res.json();
+          const groups = {};
+          for (const l of lines) {
+            const key = `${p.id}|${l.account}|${l.org_unit}`;
+            if (!groups[key]) {
+              const amounts = {};
+              MONTHS.forEach(m => amounts[m] = 0);
+              groups[key] = { project: p.id, account: l.account, org_unit: l.org_unit, amounts };
+            }
+            const month = l.period.slice(5, 7);
+            if (MONTHS.includes(month)) {
+              groups[key].amounts[month] = l.amount;
+            }
+          }
+          newRows.push(...Object.values(groups));
+        } catch (e) { /* ignore */ }
+      }
+      budgetRows = newRows;
+      dirty = false;
+      renderBudgetGrid();
+    }
+
+    // Initial load
+    loadAccounts().then(() => loadProjects().then(() => { loadBudget(); renderBudgetGrid(); }));
+    document.getElementById('budgetYear').addEventListener('change', () => loadBudget());
+    setInterval(() => { loadProjects(); }, 5000);
+
+    // ═══ Process Management ═══
+
+    let pvUsers = [];      // available users from platform
+    let pvVersions = [];   // all budget versions
+    let pvSelectedId = null; // currently selected version for assignment editing
+
+    async function loadPlatformUsers() {
+      try {
+        const res = await fetch('http://localhost:3000/api/users?product=prod_a', { credentials: 'include' });
+        pvUsers = await res.json();
+      } catch { pvUsers = []; }
+    }
+
+    function populateOrgRootDropdown() {
+      const sel = document.getElementById('pvOrgRoot');
+      const orgUnits = (window._orgUnits || []);
+      const parents = orgUnits.filter(o => o.type === 'group');
+      sel.innerHTML = '<option value="">All org units</option>' +
+        parents.map(o => '<option value="' + o.code + '">' + o.code + ' — ' + o.name + '</option>').join('') +
+        (parents.length === 0 ? orgUnits.map(o => '<option value="' + o.code + '">' + o.code + ' — ' + o.name + '</option>').join('') : '');
+    }
+
+    async function loadProcessVersions() {
+      if (pvUsers.length === 0) await loadPlatformUsers();
+      populateOrgRootDropdown();
+      try {
+        const res = await fetch(API + '/api/budget-versions');
+        pvVersions = await res.json();
+      } catch { pvVersions = []; }
+      renderProcessVersions();
+    }
+
+    function statusBadge(status) {
+      var colors = {
+        draft: { bg: '#fff3e0', fg: '#e65100' },
+        open: { bg: '#e8f5e9', fg: '#2e7d32' },
+        submitted: { bg: '#e8f5e9', fg: '#1565c0' },
+        published: { bg: '#e3f2fd', fg: '#1565c0' },
+      };
+      var c = colors[status] || { bg: '#eee', fg: '#666' };
+      return '<span style="display:inline-block;padding:2px 7px;border-radius:3px;font-size:10px;font-weight:600;text-transform:uppercase;background:' + c.bg + ';color:' + c.fg + '">' + status + '</span>';
+    }
+
+    function renderProcessVersions() {
+      const body = document.getElementById('pvListBody');
+      if (pvVersions.length === 0) {
+        body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#999;padding:24px">No budget versions yet</td></tr>';
+        return;
+      }
+      body.innerHTML = pvVersions.map(function(v) {
+        var actions = '';
+        if (v.status === 'draft') {
+          actions += '<button class="btn btn-ghost" style="font-size:11px;padding:4px 10px" onclick="selectProcessVersion(\'' + v.id + '\')">Assignments</button> ';
+          actions += '<button class="btn btn-success" style="font-size:11px;padding:4px 10px" onclick="openBudgetVersion(\'' + v.id + '\')">Open</button> ';
+          actions += '<button class="btn-icon" onclick="deleteBudgetVersion(\'' + v.id + '\')" title="Delete">&#x2715;</button>';
+        } else if (v.status === 'open') {
+          actions += '<button class="btn btn-ghost" style="font-size:11px;padding:4px 10px" onclick="selectProcessVersion(\'' + v.id + '\')">Assignments</button> ';
+          actions += '<button class="btn btn-primary" style="font-size:11px;padding:4px 10px" onclick="submitBudgetVersion(\'' + v.id + '\')">Submit</button>';
+        } else if (v.status === 'submitted') {
+          actions += '<button class="btn btn-ghost" style="font-size:11px;padding:4px 10px" onclick="selectProcessVersion(\'' + v.id + '\')">View</button> ';
+          actions += '<button class="btn btn-ghost" style="font-size:11px;padding:4px 10px" onclick="reopenBudgetVersion(\'' + v.id + '\')">Reopen</button> ';
+          actions += '<button class="btn btn-primary" style="font-size:11px;padding:4px 10px" onclick="publishBudgetVersion(\'' + v.id + '\')">Publish</button>';
+        } else if (v.status === 'published') {
+          actions += '<button class="btn btn-ghost" style="font-size:11px;padding:4px 10px" onclick="selectProcessVersion(\'' + v.id + '\')">View</button> ';
+          actions += '<button class="btn btn-ghost" style="font-size:11px;padding:4px 10px" onclick="reopenBudgetVersion(\'' + v.id + '\')">Reopen</button>';
+        }
+
+        return '<tr>' +
+          '<td style="font-weight:500">' + v.name + '</td>' +
+          '<td>' + v.year + '</td>' +
+          '<td>' + (v.org_root || '<span style="color:#ccc">—</span>') + '</td>' +
+          '<td>' + statusBadge(v.status) + '</td>' +
+          '<td id="pv-acount-' + v.id + '">—</td>' +
+          '<td id="pv-progress-' + v.id + '">—</td>' +
+          '<td>' + actions + '</td>' +
+        '</tr>';
+      }).join('');
+
+      // Load assignment counts for each version
+      pvVersions.forEach(function(v) {
+        fetch(API + '/api/budget-versions/' + v.id + '/assignments')
+          .then(function(r) { return r.json(); })
+          .then(function(assignments) {
+            var countEl = document.getElementById('pv-acount-' + v.id);
+            var progEl = document.getElementById('pv-progress-' + v.id);
+            if (countEl) countEl.textContent = assignments.length;
+            if (progEl && assignments.length > 0) {
+              var done = assignments.filter(function(a) { return a.status === 'done'; }).length;
+              progEl.innerHTML = done + '/' + assignments.length +
+                ' <span style="color:' + (done === assignments.length ? '#2e7d32' : '#888') + '">' +
+                (done === assignments.length ? '&#x2714; Complete' : Math.round(done / assignments.length * 100) + '%') + '</span>';
+            }
+          }).catch(function() {});
+      });
+    }
+
+    async function createProcessVersion() {
+      var name = document.getElementById('pvName').value.trim();
+      var year = document.getElementById('pvYear').value;
+      var orgRoot = document.getElementById('pvOrgRoot').value;
+      if (!name) { showProcessStatus('Enter a name'); return; }
+      try {
+        var res = await fetch(API + '/api/budget-versions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: name, year: year, org_root: orgRoot || undefined }),
+        });
+        var data = await res.json();
+        if (data.ok) {
+          document.getElementById('pvName').value = '';
+          showProcessStatus('Budget version "' + name + '" created');
+          await loadProcessVersions();
+          selectProcessVersion(data.id);
+        } else {
+          showProcessStatus(data.error || 'Error creating');
+        }
+      } catch { showProcessStatus('Error creating'); }
+    }
+
+    async function selectProcessVersion(id) {
+      pvSelectedId = id;
+      var version = pvVersions.find(function(v) { return v.id === id; });
+      if (!version) return;
+
+      document.getElementById('pvAssignmentPanel').style.display = '';
+      document.getElementById('pvAssignmentTitle').textContent = version.name + ' (' + version.year + ') — ' + version.status;
+
+      // Editable in draft and open, read-only in submitted/published
+      var btn = document.getElementById('btnSaveAssignments');
+      var isEditable = version.status === 'draft' || version.status === 'open';
+      btn.style.display = isEditable ? '' : 'none';
+
+      // Get org units for this version
+      var allOrgs = window._orgUnits || [];
+      var orgUnits;
+      if (version.org_root) {
+        orgUnits = getDescendantOrgs(version.org_root, allOrgs);
+      } else {
+        orgUnits = allOrgs.slice();
+      }
+      orgUnits = sortOrgsByHierarchy(orgUnits, allOrgs);
+
+      // Load existing assignments
+      var assignments = [];
+      try {
+        var res = await fetch(API + '/api/budget-versions/' + id + '/assignments');
+        assignments = await res.json();
+      } catch {}
+
+      var assignMap = {};
+      assignments.forEach(function(a) { assignMap[a.org_unit] = a; });
+
+      // Ensure assigned orgs appear even if not found in local hierarchy
+      assignments.forEach(function(a) {
+        if (!orgUnits.find(function(o) { return o.code === a.org_unit; })) {
+          orgUnits.push({ code: a.org_unit, name: a.org_unit, type: 'leaf' });
+        }
+      });
+
+      var body = document.getElementById('pvAssignmentBody');
+
+      body.innerHTML = orgUnits.map(function(org) {
+        var existing = assignMap[org.code];
+        var userId = existing ? existing.user_id : '';
+        var status = existing ? existing.status : '';
+
+        var userCell;
+        if (isEditable) {
+          userCell = '<select class="cell-select pv-user-select" data-org="' + org.code + '" style="width:auto;min-width:200px">' +
+            '<option value="">— Not assigned —</option>' +
+            pvUsers.map(function(u) {
+              return '<option value="' + u.user_id + '" data-name="' + u.name + '"' + (u.user_id === userId ? ' selected' : '') + '>' + u.name + ' (' + u.role + ')</option>';
+            }).join('') +
+          '</select>';
+        } else {
+          userCell = existing ? existing.user_name || userId : '<span style="color:#ccc">—</span>';
+        }
+
+        var statusCell = '';
+        if (status === 'done' && existing) {
+          statusCell = '<span style="color:#2e7d32;font-weight:600">&#x2714; Done</span>' +
+            (isEditable ? ' <button class="btn btn-ghost" style="font-size:10px;padding:2px 8px;margin-left:4px" onclick="toggleAssignmentStatus(' + existing.id + ',\'pending\')">Reopen</button>' : '');
+        } else if (status === 'pending' && version.status !== 'draft' && existing) {
+          statusCell = '<span style="color:#e65100">Pending</span>' +
+            (isEditable ? ' <button class="btn btn-success" style="font-size:10px;padding:2px 8px;margin-left:4px" onclick="toggleAssignmentStatus(' + existing.id + ',\'done\')">&#x2714; Done</button>' : '');
+        } else {
+          statusCell = '<span style="color:#ccc">—</span>';
+        }
+
+        var depth = getOrgDepth(org.code, allOrgs);
+        var indent = Math.max(0, depth) * 16;
+        var isGroup = org.type === 'group';
+        var nameStyle = 'font-weight:' + (isGroup ? '600' : '400') + ';padding-left:' + indent + 'px';
+        var icon = isGroup ? '<span style="margin-right:4px;opacity:0.5">&#x1F4C1;</span>' : '';
+        var sublabel = '';
+        if (isGroup) {
+          var childCount = allOrgs.filter(function(o) { return o.parent === org.code; }).length;
+          sublabel = ' <span style="font-size:10px;color:#999">(' + childCount + ' sub-units)</span>';
+        }
+
+        return '<tr style="' + (isGroup ? 'background:#f9fafb' : '') + '">' +
+          '<td style="' + nameStyle + '">' + icon + org.name + sublabel + '</td>' +
+          '<td><code style="font-size:11px;color:#7a7fa0">' + org.code + '</code></td>' +
+          '<td>' + userCell + '</td>' +
+          '<td>' + statusCell + '</td>' +
+        '</tr>';
+      }).join('');
+    }
+
+    function getOrgDepth(code, allOrgs) {
+      var depth = 0;
+      var current = allOrgs.find(function(o) { return o.code === code; });
+      while (current && current.parent) {
+        depth++;
+        current = allOrgs.find(function(o) { return o.code === current.parent; });
+      }
+      return depth;
+    }
+
+    function sortOrgsByHierarchy(orgUnits, allOrgs) {
+      var result = [];
+      var codes = {};
+      orgUnits.forEach(function(o) { codes[o.code] = o; });
+      function visit(code) {
+        if (codes[code]) result.push(codes[code]);
+        orgUnits.forEach(function(o) {
+          if (o.parent === code) visit(o.code);
+        });
+      }
+      var roots = orgUnits.filter(function(o) {
+        return !o.parent || !codes[o.parent];
+      });
+      roots.forEach(function(r) { visit(r.code); });
+      return result;
+    }
+
+    function getDescendantOrgs(rootCode, allOrgs) {
+      var result = [];
+      var queue = [rootCode];
+      var visited = {};
+      var root = allOrgs.find(function(o) { return o.code === rootCode; });
+      if (root) result.push(root);
+      visited[rootCode] = true;
+      while (queue.length > 0) {
+        var current = queue.shift();
+        allOrgs.forEach(function(o) {
+          if (o.parent === current && !visited[o.code]) {
+            visited[o.code] = true;
+            result.push(o);
+            queue.push(o.code);
+          }
+        });
+      }
+      return result;
+    }
+
+    async function saveAssignments() {
+      if (!pvSelectedId) return;
+      var selects = document.querySelectorAll('#pvAssignmentBody .pv-user-select');
+      var assignments = [];
+      selects.forEach(function(sel) {
+        var orgUnit = sel.getAttribute('data-org');
+        var userId = sel.value;
+        if (userId) {
+          var opt = sel.options[sel.selectedIndex];
+          var userName = opt.getAttribute('data-name') || '';
+          assignments.push({ org_unit: orgUnit, user_id: userId, user_name: userName });
+        }
+      });
+
+      try {
+        var res = await fetch(API + '/api/budget-versions/' + pvSelectedId + '/assignments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ assignments: assignments }),
+        });
+        var data = await res.json();
+        if (data.ok) {
+          var msg = 'Assignments saved (' + assignments.length + ')';
+          if (data.new_tasks > 0) msg += ' — ' + data.new_tasks + ' new inbox task(s)';
+          showProcessStatus(msg);
+          await loadProcessVersions();
+          if (pvSelectedId) await selectProcessVersion(pvSelectedId);
+          if (data.new_tasks > 0 && window.parent !== window) window.parent.postMessage({ type: 'refresh-inbox' }, '*');
+        } else {
+          showProcessStatus(data.error || 'Error saving');
+        }
+      } catch { showProcessStatus('Error saving assignments'); }
+    }
+
+    async function toggleAssignmentStatus(assignmentId, newStatus) {
+      try {
+        var endpoint = newStatus === 'done'
+          ? API + '/api/budget-assignments/' + assignmentId + '/complete'
+          : API + '/api/budget-assignments/' + assignmentId + '/reopen';
+        var res = await fetch(endpoint, { method: 'PUT' });
+        var data = await res.json();
+        if (data.ok) {
+          showProcessStatus('Assignment ' + (newStatus === 'done' ? 'completed' : 'reopened'));
+          if (pvSelectedId) await selectProcessVersion(pvSelectedId);
+          await loadProcessVersions();
+          if (newStatus === 'done' && window.parent !== window) window.parent.postMessage({ type: 'refresh-inbox' }, '*');
+        } else {
+          showProcessStatus(data.error || 'Error updating status');
+        }
+      } catch { showProcessStatus('Error updating assignment status'); }
+    }
+
+    async function openBudgetVersion(id) {
+      if (!confirm('Open this version? Tasks will be created in users\\\' inboxes.')) return;
+      try {
+        var res = await fetch(API + '/api/budget-versions/' + id + '/open', { method: 'PUT' });
+        var data = await res.json();
+        if (data.ok) {
+          showProcessStatus('Version opened — ' + data.tasks_created + ' tasks created');
+          await loadProcessVersions();
+          if (pvSelectedId === id) await selectProcessVersion(id);
+          if (window.parent !== window) window.parent.postMessage({ type: 'refresh-inbox' }, '*');
+        } else {
+          showProcessStatus(data.error || 'Error opening');
+        }
+      } catch { showProcessStatus('Error opening'); }
+    }
+
+    async function submitBudgetVersion(id) {
+      try {
+        var res = await fetch(API + '/api/budget-versions/' + id + '/submit', { method: 'POST' });
+        var data = await res.json();
+        if (data.ok) {
+          showProcessStatus('Budget submitted to platform');
+          await loadProcessVersions();
+          if (pvSelectedId === id) await selectProcessVersion(id);
+        } else {
+          showProcessStatus(data.error || 'Error submitting');
+        }
+      } catch { showProcessStatus('Error submitting'); }
+    }
+
+    async function publishBudgetVersion(id) {
+      if (!confirm('Publish and lock this version?')) return;
+      try {
+        var res = await fetch(API + '/api/budget-versions/' + id + '/publish', { method: 'POST' });
+        var data = await res.json();
+        if (data.ok) {
+          showProcessStatus('Budget published and locked');
+          await loadProcessVersions();
+          if (pvSelectedId === id) await selectProcessVersion(id);
+        } else {
+          showProcessStatus(data.error || 'Error publishing');
+        }
+      } catch { showProcessStatus('Error publishing'); }
+    }
+
+    async function reopenBudgetVersion(id) {
+      try {
+        var res = await fetch(API + '/api/budget-versions/' + id + '/reopen', { method: 'POST' });
+        var data = await res.json();
+        if (data.ok) {
+          showProcessStatus('Version reopened for editing');
+          await loadProcessVersions();
+          if (pvSelectedId === id) await selectProcessVersion(id);
+          if (window.parent !== window) window.parent.postMessage({ type: 'refresh-inbox' }, '*');
+        } else {
+          showProcessStatus(data.error || 'Error reopening');
+        }
+      } catch { showProcessStatus('Error reopening'); }
+    }
+
+    async function deleteBudgetVersion(id) {
+      if (!confirm('Delete this draft version?')) return;
+      try {
+        var res = await fetch(API + '/api/budget-versions/' + id, { method: 'DELETE' });
+        var data = await res.json();
+        if (data.ok) {
+          if (pvSelectedId === id) {
+            pvSelectedId = null;
+            document.getElementById('pvAssignmentPanel').style.display = 'none';
+          }
+          showProcessStatus('Version deleted');
+          await loadProcessVersions();
+        }
+      } catch { showProcessStatus('Error deleting'); }
+    }
+
+    function showProcessStatus(msg) {
+      var bar = document.getElementById('statusBarProcess');
+      if (bar) { bar.textContent = msg; bar.style.display = 'block'; setTimeout(function() { bar.style.display = 'none'; }, 3000); }
+    }
+
+    // ═══ Admin: Summary card ═══
+    async function loadAdminProcessSummary() {
+      var el = document.getElementById('adminProcessSummary');
+      if (!el) return;
+      try {
+        var res = await fetch(API + '/api/budget-versions');
+        var versions = await res.json();
+        if (versions.length === 0) {
+          el.innerHTML = '<span style="color:#999">No budget versions yet.</span>';
+          return;
+        }
+        var statuses = {};
+        versions.forEach(function(v) { statuses[v.status] = (statuses[v.status] || 0) + 1; });
+        var parts = [];
+        if (statuses.open) parts.push('<span style="color:#2e7d32;font-weight:600">' + statuses.open + ' open</span>');
+        if (statuses.draft) parts.push('<span style="color:#e65100">' + statuses.draft + ' draft</span>');
+        if (statuses.submitted) parts.push('<span style="color:#1565c0">' + statuses.submitted + ' submitted</span>');
+        if (statuses.published) parts.push('<span style="color:#1565c0;font-weight:600">' + statuses.published + ' published</span>');
+        el.innerHTML = parts.join(' &middot; ') + ' <span style="color:#999">(' + versions.length + ' total)</span>';
+      } catch {
+        el.innerHTML = '<span style="color:#999">Could not load summary</span>';
+      }
+    }
+
+    // ═══ URL Parameter Handling & Task Context ═══
+
+    function populateOrgScopeDropdown(rootCode) {
+      var allOrgs = window._orgUnits || [];
+      var descendants = getDescendantOrgs(rootCode, allOrgs);
+      var sel = document.getElementById('orgScopeSelect');
+      // Root option = the assigned org itself
+      var rootOrg = allOrgs.find(function(o) { return o.code === rootCode; });
+      sel.innerHTML = '<option value="' + rootCode + '">' + (rootOrg ? rootOrg.name : rootCode) + ' (all)</option>';
+      descendants.forEach(function(o) {
+        if (o.code !== rootCode) {
+          var depth = getOrgDepth(o.code, allOrgs);
+          var prefix = '\u00A0\u00A0'.repeat(Math.max(0, depth - getOrgDepth(rootCode, allOrgs)));
+          sel.innerHTML += '<option value="' + o.code + '">' + prefix + o.name + '</option>';
+        }
+      });
+      document.getElementById('orgScopeBox').style.display = 'flex';
+      sel.onchange = function() { renderBudgetGrid(); };
+    }
+
+    function isTaskDone() {
+      return taskContext && taskContext.assignmentStatus === 'done';
+    }
+
+    function updateTaskContextBar() {
+      var label = document.getElementById('taskContextLabel');
+      var statusEl = document.getElementById('taskContextStatus');
+      var btn = document.getElementById('btnCompleteTask');
+      var dismiss = document.getElementById('btnDismissTask');
+      if (!taskContext) {
+        label.style.display = 'none';
+        statusEl.style.display = 'none';
+        btn.style.display = 'none';
+        dismiss.style.display = 'none';
+        return;
+      }
+      label.style.display = '';
+      label.textContent = taskContext.versionName || taskContext.version;
+      statusEl.style.display = '';
+      dismiss.style.display = '';
+      if (taskContext.assignmentStatus === 'done') {
+        statusEl.innerHTML = '<span style="color:#2e7d32;font-weight:600">&#x2714; Completed</span>';
+        btn.style.display = 'none';
+      } else {
+        statusEl.innerHTML = '<span style="color:#e65100;font-weight:600">Pending</span>';
+        btn.style.display = '';
+      }
+      renderBudgetGrid();
+    }
+
+    async function completeTask() {
+      if (!taskContext || !taskContext.version || !taskContext.org) return;
+      try {
+        var res = await fetch(API + '/api/budget-versions/' + taskContext.version + '/assignments/' + taskContext.org + '/complete', { method: 'PUT' });
+        var data = await res.json();
+        if (data.ok) {
+          taskContext.assignmentStatus = 'done';
+          updateTaskContextBar();
+          showStatus('Task marked as complete');
+          if (window.parent !== window) window.parent.postMessage({ type: 'refresh-inbox' }, '*');
+        } else {
+          showStatus(data.error || 'Could not complete task');
+        }
+      } catch { showStatus('Error completing task'); }
+    }
+
+    function dismissTaskContext() {
+      taskContext = null;
+      updateTaskContextBar();
+      document.getElementById('orgScopeBox').style.display = 'none';
+      document.getElementById('orgScopeSelect').innerHTML = '';
+      renderBudgetGrid();
+    }
+
+    async function initTaskContext(versionId, orgUnit) {
+      taskContext = { version: versionId, org: orgUnit, assignmentStatus: 'pending', versionName: versionId };
+
+      // Fetch version info to get name and set year
+      try {
+        var res = await fetch(API + '/api/budget-versions');
+        var versions = await res.json();
+        var ver = versions.find(function(v) { return v.id === versionId; });
+        if (ver) {
+          taskContext.versionName = ver.name;
+          // Set year selector to match version
+          var yearSel = document.getElementById('budgetYear');
+          if (yearSel && ver.year) {
+            // Add year option if it doesn't exist
+            var exists = Array.from(yearSel.options).some(function(o) { return o.value === ver.year; });
+            if (!exists) yearSel.innerHTML += '<option value="' + ver.year + '">' + ver.year + '</option>';
+            yearSel.value = ver.year;
+          }
+        }
+      } catch {}
+
+      // Fetch assignment status for this version+org
+      try {
+        var res2 = await fetch(API + '/api/budget-versions/' + versionId + '/assignments');
+        var assignments = await res2.json();
+        var match = assignments.find(function(a) { return a.org_unit === orgUnit; });
+        if (match) taskContext.assignmentStatus = match.status;
+      } catch {}
+
+      // Set org scope
+      if (orgUnit) populateOrgScopeDropdown(orgUnit);
+
+      updateTaskContextBar();
+
+      // Navigate to budget entry and reload
+      openReport('report', 'Budget Entry');
+      await loadBudget();
+    }
+
+    (function handleUrlParams() {
+      var params = new URLSearchParams(window.location.search);
+      var versionId = params.get('version');
+      var orgUnit = params.get('org');
+      if (versionId) {
+        // Clean the URL first
+        window.history.replaceState({}, '', window.location.pathname);
+        // Wait for accounts/org units to load, then init task context
+        loadAccounts().then(function() {
+          return loadProjects();
+        }).then(function() {
+          initTaskContext(versionId, orgUnit);
+        });
+      }
+    })();
+  </script>
+</body>
+</html>

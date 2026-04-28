@@ -1,0 +1,1564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <title>Product B — Analytics</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: #e3e6e8;
+      color: #1a1a1a;
+      font-size: 12px;
+    }
+    .container { max-width: 1300px; margin: 0 auto; padding: 0 8px; }
+    h2 { font-size: 14px; margin: 0 0 10px; color: #333; font-weight: 700; }
+
+    .card {
+      background: #fff;
+      border-radius: 0 0 4px 4px;
+      padding: 18px;
+      margin-bottom: 8px;
+      box-shadow: none;
+      border: none;
+    }
+    #view-admin .card {
+      border: 1px solid #e8e9ef;
+      border-radius: 3px;
+      margin-bottom: 16px;
+    }
+    #view-admin .container {
+      padding: 20px;
+    }
+
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th { text-align: left; padding: 4px 12px 4px 4px; background: #f1f3f5; border-bottom: 1px solid #ced4da; color: rgba(0,0,0,0.82); font-weight: 700; font-size: 12px; white-space: nowrap; height: 23px; line-height: 14px; }
+    td { padding: 4px; border-bottom: 1px solid #ced4da; height: 23px; line-height: 14px; vertical-align: top; }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+    .positive { color: #2e7d32; }
+    .negative { color: #c62828; }
+    .neutral { color: #999; }
+
+    .tag {
+      display: inline-block; padding: 2px 7px; border-radius: 3px;
+      font-size: 10px; font-weight: 600; text-transform: uppercase;
+    }
+    .tag-linked { background: #e8f5e9; color: #2e7d32; }
+    .tag-unlinked { background: #fff3e0; color: #e65100; }
+    .tag-real { background: #e8f5e9; color: #2e7d32; }
+
+    /* ── Filter bar ── */
+    .filter-bar {
+      background: #fff;
+      border-bottom: 1px solid #e8e9ef;
+      padding: 8px 20px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+      position: sticky;
+      z-index: 9998;
+    }
+    .filter-group { display: flex; align-items: center; gap: 5px; }
+    .filter-group label {
+      font-size: 10px; font-weight: 600; color: #666;
+      text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap;
+    }
+    .filter-group select {
+      padding: 0px 6px; border: 1px solid #ced4da; border-radius: 3px;
+      font-size: 12px; background: #fff; color: #000; cursor: pointer;
+      height: 24px; box-shadow: none; font-family: inherit;
+    }
+    .filter-group select:focus { outline: none; border-color: #1f64a4; box-shadow: 0 0 0 2px rgba(31,100,164,0.12); }
+    .filter-sep { width: 1px; height: 24px; background: #e4e6ef; }
+
+    /* ── Dimension switcher ── */
+    .dim-switcher {
+      display: flex; gap: 3px; padding: 5px 20px;
+      background: #f5f8fc; border-bottom: 1px solid #e8e9ef;
+    }
+    .dim-btn {
+      padding: 4px 12px; border: 1px solid #ced4da; border-radius: 3px;
+      font-size: 11px; font-weight: 600; color: #666; background: #fff;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .dim-btn:hover { border-color: #1f64a4; color: #555; }
+    .dim-btn.active { background: #1f64a4; color: #fff; border-color: #1f64a4; }
+
+    /* ── Tab bar ── */
+    .tab-bar {
+      display: flex; gap: 0; padding: 0 20px;
+      background: #fff; border-bottom: 2px solid #e8e9ef;
+    }
+    .tab-btn {
+      padding: 10px 16px; border: none; background: none;
+      font-size: 12px; font-weight: 600; color: #888; cursor: pointer;
+      border-bottom: 2px solid transparent; margin-bottom: -2px;
+      transition: all 0.15s; display: flex; align-items: center; gap: 5px;
+    }
+    .tab-btn:hover { color: #1f64a4; }
+    .tab-btn.active { color: #1f64a4; border-bottom-color: #1f64a4; }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ── Summary tiles ── */
+    .tiles {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 14px;
+      margin-bottom: 0;
+    }
+    .tile {
+      background: #fff;
+      border-radius: 3px;
+      padding: 14px 12px;
+      box-shadow: none;
+      border: 1px solid #e8e9ef;
+      text-align: center;
+    }
+    .tile .tile-value {
+      font-size: 18px;
+      font-weight: 700;
+      color: #0d1822;
+      font-variant-numeric: tabular-nums;
+    }
+    .tile .tile-label {
+      font-size: 10px;
+      color: #888;
+      text-transform: uppercase;
+      margin-top: 3px;
+      letter-spacing: 0.2px;
+    }
+    .tile.accent { }
+
+    /* ── Chart ── */
+    .chart-card {
+      background: #fff; border-radius: 3px; padding: 16px 20px;
+      box-shadow: none; border: 1px solid #e8e9ef; margin-bottom: 14px;
+    }
+    .chart-header {
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;
+    }
+    .chart-toggle {
+      display: inline-flex; background: #f0f1f8; border-radius: 3px; overflow: hidden;
+    }
+    .chart-toggle button {
+      border: none; background: transparent; padding: 4px 12px;
+      font-size: 11px; font-weight: 600; color: #666; cursor: pointer; transition: all 0.15s;
+    }
+    .chart-toggle button.active { background: #1f64a4; color: #fff; }
+    .chart-legend { display: flex; gap: 14px; align-items: center; }
+    .chart-legend-item { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #666; }
+    .chart-legend-dot { width: 8px; height: 8px; border-radius: 2px; }
+    #chartCanvas { width: 100%; }
+
+    /* ── Info-block styles ── */
+    .info-block {
+      background: #f0f5fb;
+      border-left: 4px solid #1f64a4;
+      border-radius: 0 3px 3px 0;
+      padding: 12px 16px;
+      margin-top: 10px;
+      font-size: 12px;
+      line-height: 1.6;
+      color: #444;
+    }
+    .info-block .info-title { font-weight: 700; font-size: 12px; margin-bottom: 4px; }
+    .info-block pre {
+      background: #0d1822; color: #e0e0e0; padding: 10px 12px;
+      border-radius: 3px; font-size: 11px; line-height: 1.5;
+      overflow-x: auto; margin-top: 6px;
+    }
+    .info-toggle {
+      display: inline-flex; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;
+      font-size: 10px;
+    }
+    .info-toggle button {
+      border: none; background: transparent; padding: 4px 10px;
+      cursor: pointer; font-weight: 600; color: rgba(255,255,255,0.5); transition: all 0.15s;
+    }
+    .info-toggle button.active { background: #1f64a4; color: #fff; }
+    .info-trigger {
+      cursor: pointer; font-size: 11px; color: #1f64a4;
+      font-weight: 600; user-select: none;
+    }
+    .info-trigger:hover { text-decoration: underline; }
+    .info-block:not(.expanded) .info-content { display: none !important; }
+
+    /* ── Portal cards ── */
+    .portal-card {
+      background: #fff; border: 1px solid #e8e9ef; border-radius: 6px;
+      padding: 18px; cursor: pointer; transition: all 0.15s;
+    }
+    .portal-card:hover { border-color: #1f64a4; box-shadow: 0 2px 8px rgba(31,100,164,0.1); }
+    .portal-card-icon { font-size: 22px; margin-bottom: 8px; }
+    .portal-card-name { font-weight: 700; font-size: 13px; color: #0d1822; margin-bottom: 4px; }
+    .portal-card-desc { font-size: 11px; color: #888; line-height: 1.4; }
+
+    /* ── Sub-toolbar (below product bar) ── */
+    .sub-toolbar {
+      background: #fff;
+      border-bottom: 1px solid #dee2e6;
+      height: 36px;
+      padding: 6px 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .sub-toolbar .toolbar-spacer { flex: 1; }
+    .sub-toolbar .toolbar-icon {
+      background: none; border: none; cursor: pointer;
+      padding: 3px; border-radius: 3px; color: #555;
+      display: flex; align-items: center; transition: all 0.15s;
+    }
+    .sub-toolbar .toolbar-icon:hover { color: #000; background: rgba(0,0,0,0.06); }
+    .sub-toolbar .toolbar-icon svg { width: 20px; height: 20px; }
+
+    /* ── Report content wrapper ── */
+    .report-content {
+      padding: 0 8px;
+    }
+    .report-panel {
+      background: #fff;
+      border-radius: 0 0 4px 4px;
+      margin-bottom: 8px;
+    }
+
+    /* ── Product bar ── */
+    .product-bar {
+      background: #0d1822;
+      border-bottom: none;
+      padding: 0 16px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      gap: 0;
+      position: sticky;
+      top: var(--shell-height, 32px);
+      z-index: 9999;
+    }
+    .burger-btn {
+      background: none; border: none; font-size: 18px; cursor: pointer;
+      padding: 3px 6px; border-radius: 3px; color: rgba(255,255,255,0.7);
+    }
+    .burger-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+    .product-name { font-weight: 700; font-size: 13px; color: #fff; margin: 0 4px; }
+    .bar-icon {
+      background: none; border: none; cursor: pointer;
+      padding: 5px 7px; border-radius: 3px; color: rgba(255,255,255,0.5);
+      display: flex; align-items: center; transition: all 0.15s;
+    }
+    .bar-icon:hover { color: #fff; background: rgba(255,255,255,0.1); }
+    .bar-icon svg { width: 20px; height: 20px; }
+    .bar-divider { width: 1px; height: 20px; background: rgba(255,255,255,0.12); margin: 0 8px; }
+    .product-bar-spacer { flex: 1; }
+
+    /* ── Open report tabs ── */
+    .report-tabs { display: flex; gap: 4px; height: 100%; align-items: flex-end; margin-left: 10px; padding-bottom: 0; }
+    .report-tab {
+      display: flex; align-items: center; gap: 4px;
+      padding: 0 12px; height: 37px; font-size: 12px; font-weight: 500;
+      color: #000; text-decoration: none; cursor: pointer;
+      border: none; background: #dee2e6;
+      border-radius: 6px 6px 0 0;
+      transition: all 0.15s; white-space: nowrap;
+      min-width: 120px;
+    }
+    .report-tab:hover { background: #d0d4d8; }
+    .report-tab.active { background: #fff; }
+    .report-tab .tab-close {
+      display: flex; align-items: center; justify-content: center;
+      width: 21px; height: 21px; border-radius: 3px;
+      font-size: 14px; color: rgba(0,0,0,0.4);
+      cursor: pointer; line-height: 1; margin-left: 4px;
+    }
+    .report-tab .tab-close:hover { background: rgba(0,0,0,0.1); color: #000; }
+
+    /* ── Sidebar ── */
+    .sidebar-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.3);
+      z-index: 99998; display: none;
+    }
+    .sidebar-overlay.open { display: block; }
+    .sidebar {
+      position: fixed; top: 0; left: -260px; width: 260px; height: 100%;
+      background: #0d1822; z-index: 100000;
+      box-shadow: 4px 0 16px rgba(0,0,0,0.2);
+      transition: left 0.25s ease;
+      color: #fff;
+    }
+    .sidebar.open { left: 0; }
+    .sidebar-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 14px 18px; border-bottom: 1px solid rgba(255,255,255,0.1);
+      font-weight: 700; font-size: 13px; color: #fff;
+    }
+    .sidebar-header button {
+      background: none; border: none; font-size: 16px; cursor: pointer;
+      color: rgba(255,255,255,0.5); padding: 3px 6px; border-radius: 3px;
+    }
+    .sidebar-header button:hover { background: rgba(255,255,255,0.1); color: #fff; }
+    .sidebar-brand {
+      padding: 16px 18px; border-bottom: 1px solid rgba(255,255,255,0.1);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .sidebar-brand .brand-dot { width: 8px; height: 8px; border-radius: 50%; background: #1f64a4; }
+    .sidebar-brand .brand-name { font-weight: 600; font-size: 12px; color: rgba(255,255,255,0.7); }
+    .sidebar-nav { padding: 10px 0; }
+    .sidebar-nav a {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 18px; color: rgba(255,255,255,0.6); text-decoration: none;
+      font-size: 12px; font-weight: 500; transition: all 0.15s;
+    }
+    .sidebar-nav a:hover { background: rgba(255,255,255,0.05); color: #fff; }
+    .sidebar-nav a.active { background: rgba(31,100,164,0.3); color: #fff; font-weight: 600; }
+    .sidebar-nav a .nav-icon { font-size: 14px; width: 18px; text-align: center; }
+    .sidebar-section {
+      padding: 10px 18px 4px; font-size: 10px; font-weight: 600;
+      color: rgba(255,255,255,0.35); text-transform: uppercase; letter-spacing: 0.5px;
+    }
+  </style>
+</head>
+<body>
+  <script src="http://localhost:3000/shell.js"></script>
+
+  <!-- Sidebar -->
+  <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <span>Menu</span>
+      <button onclick="toggleSidebar()">&times;</button>
+    </div>
+    <div class="sidebar-brand">
+      <div class="brand-dot"></div>
+      <span class="brand-name">Product B &mdash; Analytics</span>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="sidebar-section">Views</div>
+      <a href="#" class="active" data-view="portal" onclick="navigateTo('portal',this);toggleSidebar()"><span class="nav-icon">&#x1f3e0;</span> Home</a>
+      <a href="#" data-view="report" onclick="openReport('report','Budget vs Actuals');toggleSidebar()"><span class="nav-icon">&#x1f4ca;</span> Budget vs Actuals</a>
+      <a href="#"><span class="nav-icon">&#x1f4c1;</span> Projects</a>
+      <a href="#"><span class="nav-icon">&#x1f4cb;</span> Reports</a>
+      <div class="sidebar-section">Administration</div>
+      <a href="#" data-view="admin" onclick="openReport('admin','Admin');toggleSidebar()"><span class="nav-icon">&#x2699;&#xfe0f;</span> Admin</a>
+      <div class="sidebar-section">Settings</div>
+      <div style="padding:6px 18px;display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:12px;color:rgba(255,255,255,0.6)">Explanation mode</span>
+        <div class="info-toggle" id="globalToggle">
+          <button class="active" onclick="setMode('simple')">Simple</button>
+          <button onclick="setMode('tech')">Technical</button>
+        </div>
+      </div>
+    </nav>
+    <div style="position:absolute;bottom:0;left:0;right:0;padding:14px 18px;border-top:1px solid rgba(255,255,255,0.1)">
+      <button onclick="doLogout()" style="width:100%;background:none;border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.6);padding:8px;border-radius:3px;cursor:pointer;font-size:12px;font-family:inherit;transition:all 0.15s">Log out</button>
+    </div>
+  </div>
+
+  <!-- Product bar -->
+  <div class="product-bar">
+    <button class="burger-btn" onclick="toggleSidebar()">&#x2630;</button>
+    <button class="bar-icon" title="Favorites"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17.75l-6.172 3.245l1.179 -6.873l-5 -4.867l6.9 -1l3.086 -6.253l3.086 6.253l6.9 1l-5 4.867l1.179 6.873l-6.158 -3.245"></path></svg></button>
+    <button class="bar-icon" title="Search"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0"></path><path d="M21 21l-6 -6"></path></svg></button>
+    <div class="bar-divider"></div>
+    <span class="product-name">Product B</span>
+    <button class="bar-icon" title="Home" onclick="navigateTo('portal')"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l-2 0l9 -9l9 9l-2 0"></path><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7"></path><path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6"></path></svg></button>
+    <div class="bar-divider"></div>
+    <div class="report-tabs" id="reportTabs"></div>
+    <div class="product-bar-spacer"></div>
+  </div>
+
+  <!-- Sub-toolbar -->
+  <div class="sub-toolbar">
+    <button id="btnFetchActuals" onclick="fetchActuals()" style="display:flex;align-items:center;gap:5px;background:none;border:1px solid #ced4da;border-radius:3px;padding:2px 10px;font-size:11px;font-weight:600;color:#333;cursor:pointer;height:24px;font-family:inherit;transition:all 0.15s" onmouseover="this.style.borderColor='#1f64a4';this.style.color='#1f64a4'" onmouseout="this.style.borderColor='#ced4da';this.style.color='#333'"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M12 21a9 9 0 1 1 0 -18a9 9 0 0 1 0 18"></path><path d="M12 8v4l2 2"></path></svg>Fetch Actuals</button>
+    <span id="fetchStatus" style="font-size:11px;color:#888;display:none"></span>
+    <div class="toolbar-spacer"></div>
+    <button class="toolbar-icon" title="Refresh" onclick="location.reload()"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4"></path><path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4"></path></svg></button>
+  </div>
+
+  <!-- ═══ PORTAL VIEW ═══ -->
+  <div id="view-portal">
+    <div style="padding:30px 30px 20px;max-width:900px">
+      <h1 style="font-size:18px;color:#0d1822;margin:0 0 4px">Product B &mdash; Analytics</h1>
+      <p style="color:#888;font-size:13px;margin:0 0 24px">Welcome. Select a report or view from the sidebar, or open one below.</p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px">
+        <div class="portal-card" onclick="openReport('report','Budget vs Actuals')">
+          <div class="portal-card-icon">&#x1f4ca;</div>
+          <div class="portal-card-name">Budget vs Actuals</div>
+          <div class="portal-card-desc">Compare budget figures against actual outcomes across dimensions.</div>
+        </div>
+        <div class="portal-card">
+          <div class="portal-card-icon">&#x1f4c1;</div>
+          <div class="portal-card-name">Projects</div>
+          <div class="portal-card-desc">Browse linked projects and their cross-system mappings.</div>
+        </div>
+        <div class="portal-card">
+          <div class="portal-card-icon">&#x1f4cb;</div>
+          <div class="portal-card-name">Custom Reports</div>
+          <div class="portal-card-desc">Build and view ad-hoc analytical reports.</div>
+        </div>
+        <div class="portal-card" onclick="openReport('admin','Admin')">
+          <div class="portal-card-icon">&#x2699;&#xfe0f;</div>
+          <div class="portal-card-name">Admin</div>
+          <div class="portal-card-desc">Manage ingestion rules and system dimensions.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ REPORT VIEW ═══ -->
+  <div id="view-report" style="display:none">
+
+  <!-- Filter bar -->
+  <div class="filter-bar" id="filterBar">
+    <div class="filter-group">
+      <label>Year</label>
+      <select id="fYear" onchange="onFilterChange()">
+        <option value="2025">2025</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Period</label>
+      <select id="fPeriod" onchange="onFilterChange()">
+        <option value="">Full year</option>
+      </select>
+    </div>
+    <div class="filter-sep"></div>
+    <div class="filter-group">
+      <label>Organization</label>
+      <select id="fOrg" onchange="onFilterChange()">
+        <option value="">All</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Dimension switcher -->
+  <div class="dim-switcher" id="dimSwitcher">
+    <button class="dim-btn active" data-dim="account" onclick="setDim('account',this)">Account</button>
+    <button class="dim-btn" data-dim="org_unit" onclick="setDim('org_unit',this)">Org Unit</button>
+    <button class="dim-btn" data-dim="project" onclick="setDim('project',this)">Project</button>
+    <button class="dim-btn" data-dim="dim1" onclick="setDim('dim1',this)" id="dimBtn1">Dim1</button>
+    <button class="dim-btn" data-dim="dim2" onclick="setDim('dim2',this)" id="dimBtn2">Dim2</button>
+    <button class="dim-btn" data-dim="dim3" onclick="setDim('dim3',this)" id="dimBtn3">Dim3</button>
+  </div>
+
+  <!-- Tab bar -->
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('overview',this)">Overview</button>
+    <button class="tab-btn" onclick="switchTab('gl',this)">GL Transactions</button>
+    <button class="tab-btn" onclick="switchTab('planning',this)">Planning Transactions</button>
+  </div>
+
+  <!-- === TAB: Overview === -->
+  <div class="tab-panel active" id="tab-overview">
+    <div class="container">
+      <!-- Tiles -->
+      <div class="card" style="padding:16px 20px; margin-top:8px">
+      <div class="tiles" id="tilesRow">
+        <div class="tile accent">
+          <div class="tile-value" id="tileBudgetYear">&mdash;</div>
+          <div class="tile-label" id="tileBudgetYearLabel">Budget 2025</div>
+        </div>
+        <div class="tile accent">
+          <div class="tile-value" id="tileActualYear">&mdash;</div>
+          <div class="tile-label" id="tileActualYearLabel">Actuals 2025</div>
+        </div>
+        <div class="tile">
+          <div class="tile-value" id="tileBudgetPeriod">&mdash;</div>
+          <div class="tile-label" id="tileBudgetPeriodLabel">Budget period</div>
+        </div>
+        <div class="tile">
+          <div class="tile-value" id="tileActualPeriod">&mdash;</div>
+          <div class="tile-label" id="tileActualPeriodLabel">Actuals period</div>
+        </div>
+        <div class="tile">
+          <div class="tile-value" id="tileVariance">&mdash;</div>
+          <div class="tile-label" id="tileVarianceLabel">Variance 2025</div>
+        </div>
+      </div>
+      </div><!-- end tiles card -->
+
+      <!-- Chart -->
+      <div class="chart-card">
+        <div class="chart-header">
+          <div style="display:flex;align-items:center;gap:14px">
+            <h2 style="margin:0">Budget vs Actuals per Period</h2>
+            <div class="chart-legend">
+              <span class="chart-legend-item"><span class="chart-legend-dot" style="background:#123B5C"></span> Budget</span>
+              <span class="chart-legend-item"><span class="chart-legend-dot" style="background:#59A5E6"></span> Actuals</span>
+            </div>
+          </div>
+          <div class="chart-toggle" id="chartToggle">
+            <button class="active" onclick="setChartType('bar',this)">Bar</button>
+            <button onclick="setChartType('line',this)">Line</button>
+          </div>
+        </div>
+        <canvas id="chartCanvas" height="220"></canvas>
+      </div>
+
+      <!-- Overview table (grouped by selected dimension) -->
+      <div class="card">
+        <h2 id="overviewTableTitle">Budget vs Actuals per Account</h2>
+        <table>
+          <thead>
+            <tr>
+              <th id="ovDimHead" style="min-width:180px">Account</th>
+              <th style="text-align:right">Budget</th>
+              <th style="text-align:right">Actuals</th>
+              <th style="text-align:right">Variance</th>
+              <th style="text-align:right">Variance %</th>
+            </tr>
+          </thead>
+          <tbody id="overviewBody"></tbody>
+          <tfoot id="overviewFoot"></tfoot>
+        </table>
+      </div>
+
+      <!-- Info block -->
+      <div class="info-block">
+        <div class="info-trigger" onclick="toggleInfo(this)">&#x2139;&#xfe0f; Show explanation &#x25b8;</div>
+        <div class="info-content simple">
+          <div class="info-title">&#x2139;&#xfe0f; What does this view show?</div>
+          The overview shows budget (from Product A) compared with actuals (from ERP).
+          Use the filters at the top to select year, period and organization.
+          The dimension switcher controls which dimension is shown in the table below.
+          <br><br>
+          <strong>Flex dimensions</strong> (Activity, Cost Center, Counterpart) come
+          from the platform's routing &mdash; ERP data gets values automatically,
+          budget data lacks these.
+        </div>
+        <div class="info-content tech" style="display:none">
+          <div class="info-title">&#x2699;&#xfe0f; Technical: Read Model + Flex Dimensions</div>
+          <pre>Product B builds a read model by consuming egress topics:
+
+Budget: platform.budget.out &rarr; { canonical_id, planning_dimensions, dim_values_per_line }
+Actuals: platform.gl.out &rarr; { canonical_id, dim_values_per_entry }
+
+Flex dimensions (Approach C):
+  account, org_unit, period = named standard dimensions
+  dim1, dim2, dim3 = generic flex dims with labels from dim-model
+
+SQL: UNION ALL budget_lines + gl_lines
+Filtering is done client-side on the complete dataset.
+Chart rendered with Canvas 2D API (no external lib).</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ TAB: GL Transactions ═══ -->
+  <div class="tab-panel" id="tab-gl">
+    <div class="container">
+      <div class="card">
+        <h2>GL Transactions</h2>
+        <div style="overflow-x:auto">
+          <table>
+            <thead>
+              <tr>
+                <th>Account</th>
+                <th>Org Unit</th>
+                <th>Project</th>
+                <th id="glDimHead1">Dim1</th>
+                <th id="glDimHead2">Dim2</th>
+                <th id="glDimHead3">Dim3</th>
+                <th>Period</th>
+                <th>Date</th>
+                <th style="text-align:right">Amount</th>
+              </tr>
+            </thead>
+            <tbody id="glBody"></tbody>
+            <tfoot id="glFoot"></tfoot>
+          </table>
+        </div>
+      </div>
+
+      <!-- Resiliens info -->
+      <div class="info-block">
+        <div class="info-trigger" onclick="toggleInfo(this)">&#x2139;&#xfe0f; Show explanation &#x25b8;</div>
+        <div class="info-content simple">
+          <div class="info-title">&#x2139;&#xfe0f; What happens if Product B goes down?</div>
+          If this product is temporarily down, no data is lost.
+          All events are stored in the queue and wait. When Product B starts again
+          it automatically catches up on everything it missed.
+        </div>
+        <div class="info-content tech" style="display:none">
+          <div class="info-title">&#x2699;&#xfe0f; Kafka offset &amp; catch-up</div>
+          <pre>Consumer group (product-b-consumer) has saved offsets in Redpanda.
+On restart consumer.run() resumes from latest offset.
+At-least-once delivery + INSERT OR REPLACE = idempotent.</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ TAB: Planning Transactions ═══ -->
+  <div class="tab-panel" id="tab-planning">
+    <div class="container">
+      <div class="card">
+        <h2>Planning Transactions</h2>
+        <div style="overflow-x:auto">
+          <table>
+            <thead>
+              <tr>
+                <th>Account</th>
+                <th>Org Unit</th>
+                <th>Project</th>
+                <th id="plDimHead1">Dim1</th>
+                <th id="plDimHead2">Dim2</th>
+                <th id="plDimHead3">Dim3</th>
+                <th>Period</th>
+                <th style="text-align:right">Amount</th>
+              </tr>
+            </thead>
+            <tbody id="plBody"></tbody>
+            <tfoot id="plFoot"></tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  </div><!-- end view-report -->
+
+  <!-- ═══ ADMIN VIEW ═══ -->
+  <div id="view-admin" style="display:none;background:#f5f6f8;min-height:calc(100vh - 120px)">
+  <div class="filter-bar" style="justify-content:space-between">
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="font-weight:700;font-size:13px;color:#0d1822">Admin</span>
+      <span style="color:#999;font-size:12px">/ Ingestion Rules</span>
+    </div>
+  </div>
+  <div id="tab-rules">
+    <div class="container">
+      <div class="card">
+        <h2>Ingestion Rules</h2>
+        <p style="color:#666;font-size:12px;margin-bottom:12px">
+          Rules are applied to each incoming line (budget or GL) before storage.
+          They run in priority order (lowest first). <strong>Default</strong> rules only set a value if the field is empty.
+          <strong>Derive</strong> rules always overwrite.
+        </p>
+        <div style="overflow-x:auto">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:28px"></th>
+                <th>Rule Name</th>
+                <th>Source</th>
+                <th>Type</th>
+                <th>If Field</th>
+                <th>Op</th>
+                <th>Value</th>
+                <th>Then Set</th>
+                <th>To</th>
+                <th style="text-align:right">Priority</th>
+                <th style="width:28px"></th>
+              </tr>
+            </thead>
+            <tbody id="rulesBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Add Rule</h2>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end">
+          <div class="filter-group" style="flex-direction:column;align-items:start">
+            <label>Name</label>
+            <input id="rName" style="padding:0 6px;border:1px solid #ced4da;border-radius:3px;height:24px;font-size:12px;width:160px;font-family:inherit" placeholder="My rule">
+          </div>
+          <div class="filter-group" style="flex-direction:column;align-items:start">
+            <label>Source</label>
+            <select id="rSource" style="padding:0 6px;border:1px solid #ced4da;border-radius:3px;height:24px;font-size:12px;font-family:inherit">
+              <option value="all">All</option>
+              <option value="budget">Budget</option>
+              <option value="gl">GL</option>
+            </select>
+          </div>
+          <div class="filter-group" style="flex-direction:column;align-items:start">
+            <label>Type</label>
+            <select id="rType" style="padding:0 6px;border:1px solid #ced4da;border-radius:3px;height:24px;font-size:12px;font-family:inherit">
+              <option value="default">Default</option>
+              <option value="derive">Derive</option>
+            </select>
+          </div>
+          <div class="filter-group" style="flex-direction:column;align-items:start">
+            <label>If field</label>
+            <select id="rCondField" style="padding:0 6px;border:1px solid #ced4da;border-radius:3px;height:24px;font-size:12px;font-family:inherit">
+              <option value="account">account</option>
+              <option value="org_unit">org_unit</option>
+              <option value="dim1">dim1</option>
+              <option value="dim2">dim2</option>
+              <option value="dim3">dim3</option>
+              <option value="dim4">dim4</option>
+              <option value="dim5">dim5</option>
+            </select>
+          </div>
+          <div class="filter-group" style="flex-direction:column;align-items:start">
+            <label>Op</label>
+            <select id="rCondOp" style="padding:0 6px;border:1px solid #ced4da;border-radius:3px;height:24px;font-size:12px;font-family:inherit">
+              <option value="IS NULL">IS NULL</option>
+              <option value="=">=</option>
+              <option value="LIKE">LIKE</option>
+              <option value="IN">IN</option>
+            </select>
+          </div>
+          <div class="filter-group" style="flex-direction:column;align-items:start">
+            <label>Value</label>
+            <input id="rCondVal" style="padding:0 6px;border:1px solid #ced4da;border-radius:3px;height:24px;font-size:12px;width:80px;font-family:inherit" placeholder="3%">
+          </div>
+          <div class="filter-group" style="flex-direction:column;align-items:start">
+            <label>Set field</label>
+            <select id="rTarget" style="padding:0 6px;border:1px solid #ced4da;border-radius:3px;height:24px;font-size:12px;font-family:inherit">
+              <option value="dim1">dim1</option>
+              <option value="dim2">dim2</option>
+              <option value="dim3">dim3</option>
+              <option value="dim4">dim4</option>
+              <option value="dim5">dim5</option>
+            </select>
+          </div>
+          <div class="filter-group" style="flex-direction:column;align-items:start">
+            <label>To value</label>
+            <input id="rTargetVal" style="padding:0 6px;border:1px solid #ced4da;border-radius:3px;height:24px;font-size:12px;width:100px;font-family:inherit" placeholder="REVENUE">
+          </div>
+          <div class="filter-group" style="flex-direction:column;align-items:start">
+            <label>Priority</label>
+            <input id="rPriority" type="number" value="100" style="padding:0 6px;border:1px solid #ced4da;border-radius:3px;height:24px;font-size:12px;width:50px;font-family:inherit;font-variant-numeric:tabular-nums">
+          </div>
+          <button onclick="addRule()" style="padding:0 12px;height:24px;border:1px solid #1f64a4;border-radius:3px;background:#1f64a4;color:#fff;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">Add</button>
+        </div>
+      </div>
+
+      <div class="info-block">
+        <div class="info-trigger" onclick="toggleInfo(this)">&#x2139;&#xfe0f; Show explanation &#x25b8;</div>
+        <div class="info-content simple">
+          <div class="info-title">&#x2139;&#xfe0f; What are ingestion rules?</div>
+          When budget or GL data flows into Product B, each line passes through these rules before being stored.
+          This lets Product B add product-specific enrichment &mdash; for example, deriving a cost category from the account number,
+          or setting a default value for a dimension that the source system doesn't provide.
+          The platform handles <em>routing between systems</em>; ingestion rules handle <em>product-specific knowledge</em>.
+        </div>
+        <div class="info-content tech" style="display:none">
+          <div class="info-title">&#x2699;&#xfe0f; Ingestion pipeline architecture</div>
+          <pre>Kafka event (platform.budget.out / platform.gl.out)
+  │
+  ├─ Platform enrichment: canonical_id, planning_dimensions, dim_values_per_line
+  │
+  └─ Product B ingestion pipeline (per line):
+       1. Merge original line + platform dim routing
+       2. Load rules from ingestion_rules table (WHERE enabled=1 ORDER BY priority)
+       3. Per rule: evaluate condition → if match, set target_field
+          - "default": only if target is NULL/empty
+          - "derive": always overwrite
+       4. Store enriched line in budget_lines / gl_lines
+
+This separation means:
+  - Platform knows how to ROUTE dims between systems
+  - Product B knows its own business logic (defaults, derivations)</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+  </div><!-- end view-admin -->
+
+  <script>
+    const API = '';
+
+    // ── Global state ──
+    let allRows = [];
+    let accMap = {}, orgMap = {};
+    let allAccounts = [], allOrgUnits = [];
+    let dimLabels = { dim1: 'Dim1', dim2: 'Dim2', dim3: 'Dim3' };
+    let currentDim = 'account';
+    let chartType = 'bar';
+
+    // ── Sidebar ──
+    function toggleSidebar() {
+      document.getElementById('sidebar').classList.toggle('open');
+      document.getElementById('sidebarOverlay').classList.toggle('open');
+    }
+
+    // ── Logout ──
+    function doLogout() {
+      fetch('http://localhost:3000/api/logout', { method: 'POST', credentials: 'include' }).then(function() {
+        document.cookie = 'platform_token=; Max-Age=0; path=/';
+        window.location.href = 'http://localhost:3000/login.html';
+      });
+    }
+
+    // ── Open report tabs ──
+    var openTabs = [];
+    function openReport(view, label) {
+      if (!openTabs.find(t => t.view === view)) {
+        openTabs.push({ view, label });
+      }
+      navigateTo(view);
+      renderReportTabs(view);
+    }
+    function closeTab(view) {
+      openTabs = openTabs.filter(t => t.view !== view);
+      renderReportTabs(null);
+      navigateTo('portal');
+    }
+    function renderReportTabs(activeView) {
+      var container = document.getElementById('reportTabs');
+      if (!container) return;
+      container.innerHTML = openTabs.map(function(t) {
+        var cls = t.view === activeView ? 'report-tab active' : 'report-tab';
+        return '<button class="' + cls + '" onclick="navigateTo(\'' + t.view + '\');renderReportTabs(\'' + t.view + '\')">' +
+          t.label + '<span class="tab-close" onclick="event.stopPropagation();closeTab(\'' + t.view + '\')">&times;</span></button>';
+      }).join('');
+    }
+
+    // ── View navigation ──
+    function navigateTo(view, navLink) {
+      document.getElementById('view-portal').style.display = view === 'portal' ? '' : 'none';
+      document.getElementById('view-report').style.display = view === 'report' ? '' : 'none';
+      document.getElementById('view-admin').style.display = view === 'admin' ? '' : 'none';
+      // Re-render chart after view becomes visible (canvas needs layout dimensions)
+      if (view === 'report' && typeof renderChart === 'function') {
+        requestAnimationFrame(function() { renderChart(getFiltered()); });
+      }
+      // Update sidebar active state
+      document.querySelectorAll('.sidebar-nav a[data-view]').forEach(a => a.classList.remove('active'));
+      if (navLink) { navLink.classList.add('active'); }
+      else {
+        const el = document.querySelector('.sidebar-nav a[data-view="' + view + '"]');
+        if (el) el.classList.add('active');
+      }
+    }
+
+    // ── Info blocks ──
+    function toggleInfo(trigger) {
+      const block = trigger.closest('.info-block');
+      const expanded = block.classList.toggle('expanded');
+      trigger.innerHTML = expanded ? '&#x2139;&#xfe0f; Hide explanation &#x25be;' : '&#x2139;&#xfe0f; Show explanation &#x25b8;';
+    }
+    function setMode(mode) {
+      localStorage.setItem('infoMode', mode);
+      document.querySelectorAll('.info-content.simple').forEach(el => el.style.display = mode === 'simple' ? '' : 'none');
+      document.querySelectorAll('.info-content.tech').forEach(el => el.style.display = mode === 'tech' ? '' : 'none');
+      const btns = document.querySelectorAll('#globalToggle button');
+      btns[0].className = mode === 'simple' ? 'active' : '';
+      btns[1].className = mode === 'tech' ? 'active' : '';
+    }
+    setTimeout(() => setMode(localStorage.getItem('infoMode') || 'simple'), 0);
+
+    // ── Tabs ──
+    function switchTab(tabId, btn) {
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('tab-' + tabId).classList.add('active');
+      btn.classList.add('active');
+    }
+
+    // ── Dimension switcher ──
+    function setDim(dim, btn) {
+      currentDim = dim;
+      document.querySelectorAll('.dim-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderAll();
+    }
+
+    // ── Chart type ──
+    function setChartType(type, btn) {
+      chartType = type;
+      document.querySelectorAll('#chartToggle button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderChart(getFiltered());
+    }
+
+    // ── Formatting ──
+    function fmt(n) {
+      if (n == null || isNaN(n)) return '&mdash;';
+      return Number(n).toLocaleString('en-US');
+    }
+    function fmtShort(n) {
+      if (n == null || isNaN(n)) return '—';
+      const abs = Math.abs(n);
+      if (abs >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+      if (abs >= 1e3) return (n / 1e3).toFixed(0) + 'k';
+      return n.toLocaleString('en-US');
+    }
+    const MONTH_LABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+    // ── Filters ──
+    function getFilters() {
+      return {
+        year: document.getElementById('fYear').value,
+        period: document.getElementById('fPeriod').value,
+        org: document.getElementById('fOrg').value,
+      };
+    }
+    function getFiltered() {
+      const f = getFilters();
+      return allRows.filter(r => {
+        if (f.year && r.period && !r.period.startsWith(f.year)) return false;
+        if (f.period && r.period !== f.period) return false;
+        if (f.org && r.org_unit !== f.org) return false;
+        return true;
+      });
+    }
+    function onFilterChange() { renderAll(); }
+
+    function populateFilters() {
+      const years = [...new Set(allRows.map(r => r.period?.slice(0,4)).filter(Boolean))].sort();
+      const fYear = document.getElementById('fYear');
+      const curYear = fYear.value;
+      fYear.innerHTML = years.map(y => `<option value="${y}" ${y === curYear ? 'selected' : ''}>${y}</option>`).join('')
+        || '<option value="2025">2025</option>';
+
+      const periods = [...new Set(allRows.map(r => r.period).filter(Boolean))].sort();
+      const fPeriod = document.getElementById('fPeriod');
+      const curPeriod = fPeriod.value;
+      fPeriod.innerHTML = '<option value="">Full year</option>' +
+        periods.map(p => `<option value="${p}" ${p === curPeriod ? 'selected' : ''}>${p}</option>`).join('');
+
+      const orgs = [...new Set(allRows.map(r => r.org_unit))].sort();
+      const fOrg = document.getElementById('fOrg');
+      const curOrg = fOrg.value;
+      fOrg.innerHTML = '<option value="">All</option>' +
+        orgs.map(o => `<option value="${o}" ${o === curOrg ? 'selected' : ''}>${o}${orgMap[o] ? ' — ' + orgMap[o] : ''}</option>`).join('');
+    }
+
+    function dimValue(row) {
+      if (currentDim === 'account') return row.account;
+      if (currentDim === 'org_unit') return row.org_unit;
+      if (currentDim === 'project') return row.project_name || row.canonical_id;
+      return row[currentDim] || null;
+    }
+    function dimName(code) {
+      if (!code) return '—';
+      if (currentDim === 'account') return code + (accMap[code] ? ' ' + accMap[code] : '');
+      if (currentDim === 'org_unit') return code + (orgMap[code] ? ' ' + orgMap[code] : '');
+      return code;
+    }
+    function dimLabel() {
+      if (currentDim === 'account') return 'Account';
+      if (currentDim === 'org_unit') return 'Org Unit';
+      if (currentDim === 'project') return 'Project';
+      return dimLabels[currentDim] || currentDim;
+    }
+
+    // ── Render all ──
+    function renderAll() {
+      const filtered = getFiltered();
+      const f = getFilters();
+      renderTiles(filtered, f);
+      renderChart(filtered);
+      renderOverview(filtered);
+      renderGLTransactions(filtered.filter(r => r.source !== 'budget'));
+      renderPlanningTransactions(filtered.filter(r => r.source === 'budget'));
+    }
+
+    // ── Tiles ──
+    function renderTiles(rows, f) {
+      const year = f.year || '2025';
+      const period = f.period;
+      const yearRows = allRows.filter(r => r.period?.startsWith(year) && (!f.org || r.org_unit === f.org));
+      const budgetYear = yearRows.filter(r => r.source === 'budget').reduce((s, r) => s + (r.amount || 0), 0);
+      const actualYear = yearRows.filter(r => r.source === 'actual').reduce((s, r) => s + (r.amount || 0), 0);
+
+      document.getElementById('tileBudgetYear').textContent = fmtShort(budgetYear);
+      document.getElementById('tileBudgetYearLabel').textContent = 'Budget ' + year;
+      document.getElementById('tileActualYear').textContent = fmtShort(actualYear);
+      document.getElementById('tileActualYearLabel').textContent = 'Actuals ' + year;
+
+      const variance = actualYear - budgetYear;
+      const varEl = document.getElementById('tileVariance');
+      varEl.textContent = budgetYear || actualYear ? (variance > 0 ? '+' : '') + fmtShort(variance) : '—';
+      varEl.className = 'tile-value ' + (variance > 0 ? 'negative' : variance < 0 ? 'positive' : 'neutral');
+      document.getElementById('tileVarianceLabel').textContent = 'Variance ' + year;
+
+      if (period) {
+        const periodRows = yearRows.filter(r => r.period === period);
+        const bPer = periodRows.filter(r => r.source === 'budget').reduce((s, r) => s + (r.amount || 0), 0);
+        const aPer = periodRows.filter(r => r.source === 'actual').reduce((s, r) => s + (r.amount || 0), 0);
+        document.getElementById('tileBudgetPeriod').textContent = fmtShort(bPer);
+        document.getElementById('tileActualPeriod').textContent = fmtShort(aPer);
+        document.getElementById('tileBudgetPeriodLabel').textContent = 'Budget ' + period;
+        document.getElementById('tileActualPeriodLabel').textContent = 'Actuals ' + period;
+      } else {
+        document.getElementById('tileBudgetPeriod').textContent = '—';
+        document.getElementById('tileActualPeriod').textContent = '—';
+        document.getElementById('tileBudgetPeriodLabel').textContent = 'Budget (select period)';
+        document.getElementById('tileActualPeriodLabel').textContent = 'Actuals (select period)';
+      }
+    }
+
+    // ── Chart ──
+    function renderChart(rows) {
+      const canvas = document.getElementById('chartCanvas');
+      const ctx = canvas.getContext('2d');
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width * dpr;
+      canvas.height = 220 * dpr;
+      ctx.scale(dpr, dpr);
+      const W = rect.width, H = 220;
+      ctx.clearRect(0, 0, W, H);
+
+      const f = getFilters();
+      const year = f.year || '2025';
+      const yearRows = allRows.filter(r => r.period?.startsWith(year) && (!f.org || r.org_unit === f.org));
+
+      // Build monthly data
+      const months = [];
+      for (let m = 1; m <= 12; m++) {
+        const p = year + '-' + String(m).padStart(2, '0');
+        const budget = yearRows.filter(r => r.source === 'budget' && r.period === p).reduce((s, r) => s + (r.amount || 0), 0);
+        const actual = yearRows.filter(r => r.source === 'actual' && r.period === p).reduce((s, r) => s + (r.amount || 0), 0);
+        months.push({ label: MONTH_LABELS[m - 1], budget, actual });
+      }
+
+      const maxVal = Math.max(1, ...months.map(m => Math.max(m.budget, m.actual))) * 1.15;
+      const pad = { top: 16, right: 20, bottom: 32, left: 65 };
+      const cW = W - pad.left - pad.right;
+      const cH = H - pad.top - pad.bottom;
+
+      // Y axis
+      ctx.strokeStyle = '#e8e9ef';
+      ctx.fillStyle = '#999';
+      ctx.font = '11px -apple-system, sans-serif';
+      ctx.textAlign = 'right';
+      const ticks = 5;
+      for (let i = 0; i <= ticks; i++) {
+        const y = pad.top + cH - (cH / ticks) * i;
+        const val = (maxVal / ticks) * i;
+        ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W - pad.right, y); ctx.stroke();
+        ctx.fillText(fmtShort(val), pad.left - 8, y + 4);
+      }
+
+      const groupW = cW / 12;
+
+      if (chartType === 'bar') {
+        const barW = Math.min(groupW * 0.32, 28);
+        const gap = 3;
+        months.forEach((m, i) => {
+          const cx = pad.left + groupW * i + groupW / 2;
+          const bH = (m.budget / maxVal) * cH;
+          const aH = (m.actual / maxVal) * cH;
+          // Budget bar
+          ctx.fillStyle = '#123B5C';
+          ctx.beginPath();
+          roundRect(ctx, cx - barW - gap / 2, pad.top + cH - bH, barW, bH, 3);
+          ctx.fill();
+          // Actual bar
+          ctx.fillStyle = '#59A5E6';
+          ctx.beginPath();
+          roundRect(ctx, cx + gap / 2, pad.top + cH - aH, barW, aH, 3);
+          ctx.fill();
+          // Month label
+          ctx.fillStyle = '#888';
+          ctx.textAlign = 'center';
+          ctx.font = '11px -apple-system, sans-serif';
+          ctx.fillText(m.label, cx, H - 10);
+        });
+      } else {
+        // Line chart
+        const points = { budget: [], actual: [] };
+        months.forEach((m, i) => {
+          const x = pad.left + groupW * i + groupW / 2;
+          points.budget.push({ x, y: pad.top + cH - (m.budget / maxVal) * cH });
+          points.actual.push({ x, y: pad.top + cH - (m.actual / maxVal) * cH });
+          ctx.fillStyle = '#888';
+          ctx.textAlign = 'center';
+          ctx.font = '11px -apple-system, sans-serif';
+          ctx.fillText(m.label, x, H - 10);
+        });
+        [{ pts: points.budget, color: '#123B5C' }, { pts: points.actual, color: '#59A5E6' }].forEach(({ pts, color }) => {
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 2.5;
+          ctx.lineJoin = 'round';
+          ctx.beginPath();
+          pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+          ctx.stroke();
+          // Dots
+          ctx.fillStyle = color;
+          pts.forEach(p => {
+            ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill();
+          });
+        });
+        ctx.lineWidth = 1;
+      }
+    }
+    function roundRect(ctx, x, y, w, h, r) {
+      if (h < 1) return;
+      r = Math.min(r, h / 2, w / 2);
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h);
+      ctx.lineTo(x, y + h);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+    }
+
+    // ── Overview table ──
+    function renderOverview(rows) {
+      if (currentDim === 'account' && allAccounts.some(a => a.parent)) {
+        return renderPLOverview(rows);
+      }
+      if (currentDim === 'org_unit' && allOrgUnits.some(o => o.parent)) {
+        return renderHierarchyOverview(rows, allOrgUnits, orgMap, 'Org Unit');
+      }
+      return renderFlatOverview(rows);
+    }
+
+    // ── Flat overview (original, for project/dim1-3) ──
+    function renderFlatOverview(rows) {
+      const label = dimLabel();
+      document.getElementById('overviewTableTitle').textContent = 'Budget vs Actuals per ' + label;
+      document.getElementById('ovDimHead').textContent = label;
+
+      const groups = {};
+      rows.forEach(r => {
+        const key = dimValue(r) || '(not set)';
+        if (!groups[key]) groups[key] = { budget: 0, actual: 0 };
+        if (r.source === 'budget') groups[key].budget += r.amount || 0;
+        else groups[key].actual += r.amount || 0;
+      });
+
+      const sorted = Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0], 'en'));
+      const body = document.getElementById('overviewBody');
+      let totBudget = 0, totActual = 0;
+
+      body.innerHTML = sorted.map(([key, g]) => {
+        totBudget += g.budget; totActual += g.actual;
+        const variance = g.actual - g.budget;
+        const pct = g.budget ? ((variance / g.budget) * 100).toFixed(1) : '—';
+        const cls = variance > 0 ? 'negative' : variance < 0 ? 'positive' : 'neutral';
+        return `<tr>
+          <td>${dimName(key === '(not set)' ? null : key)}</td>
+          <td class="num">${fmt(g.budget)}</td>
+          <td class="num">${fmt(g.actual)}</td>
+          <td class="num ${cls}">${variance ? (variance > 0 ? '+' : '') + fmt(variance) : '&mdash;'}</td>
+          <td class="num ${cls}">${pct !== '—' ? pct + ' %' : '&mdash;'}</td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="5" style="color:#999;text-align:center">No data &mdash; run the demo steps!</td></tr>';
+
+      const foot = document.getElementById('overviewFoot');
+      const totVar = totActual - totBudget;
+      const totPct = totBudget ? ((totVar / totBudget) * 100).toFixed(1) : '—';
+      const totCls = totVar > 0 ? 'negative' : totVar < 0 ? 'positive' : 'neutral';
+      foot.innerHTML = `<tr style="border-top:2px solid #ddd;font-weight:700">
+        <td>Total</td>
+        <td class="num">${fmt(totBudget)}</td>
+        <td class="num">${fmt(totActual)}</td>
+        <td class="num ${totCls}">${totVar ? (totVar > 0 ? '+' : '') + fmt(totVar) : '&mdash;'}</td>
+        <td class="num ${totCls}">${totPct !== '—' ? totPct + ' %' : '&mdash;'}</td>
+      </tr>`;
+    }
+
+    // ── P&L (resultaträkning) overview for Account dimension ──
+    // P&L expand/collapse state: { groupCode: true/false }
+    const plCollapsed = {};
+
+    function togglePLGroup(code) {
+      plCollapsed[code] = !plCollapsed[code];
+      document.querySelectorAll(`[data-pl-ancestors~="${code}"]`).forEach(tr => {
+        // Show only if NONE of the row's ancestors are collapsed
+        const ancestors = (tr.dataset.plAncestors || '').split(' ');
+        const anyCollapsed = ancestors.some(a => plCollapsed[a]);
+        tr.style.display = anyCollapsed ? 'none' : '';
+      });
+      const arrow = document.getElementById('pl-arrow-' + code);
+      if (arrow) arrow.textContent = plCollapsed[code] ? '\u25b6' : '\u25bc';
+    }
+
+    function renderPLOverview(rows) {
+      document.getElementById('overviewTableTitle').textContent = 'Income Statement (P&L)';
+      document.getElementById('ovDimHead').textContent = 'Account';
+
+      // Aggregate amounts by leaf account code
+      const byAccount = {};
+      rows.forEach(r => {
+        if (!r.account) return;
+        if (!byAccount[r.account]) byAccount[r.account] = { budget: 0, actual: 0 };
+        if (r.source === 'budget') byAccount[r.account].budget += r.amount || 0;
+        else byAccount[r.account].actual += r.amount || 0;
+      });
+
+      // Build lookup
+      const accByCode = Object.fromEntries(allAccounts.map(a => [a.code, a]));
+
+      // Recursively collect children
+      function getChildren(parentCode) {
+        return allAccounts.filter(a => a.parent === parentCode);
+      }
+
+      // Sum up budget/actual for a node (its own data + all descendants)
+      function sumNode(code) {
+        const own = byAccount[code] || { budget: 0, actual: 0 };
+        const children = getChildren(code);
+        if (children.length === 0) return { budget: own.budget, actual: own.actual };
+        let b = own.budget, a = own.actual;
+        children.forEach(c => { const s = sumNode(c.code); b += s.budget; a += s.actual; });
+        return { budget: b, actual: a };
+      }
+
+      // Render tree recursively — groupCode is the nearest group ancestor for collapse tracking
+      function renderNode(code, depth, ancestorCodes) {
+        const node = accByCode[code];
+        if (!node) return '';
+        const s = sumNode(code);
+        const children = getChildren(code);
+        const isGroup = node.type === 'group';
+        const indent = depth * 16;
+        const variance = s.actual - s.budget;
+        const pct = s.budget ? ((variance / s.budget) * 100).toFixed(1) : '—';
+        const cls = variance > 0 ? 'negative' : variance < 0 ? 'positive' : 'neutral';
+        const ancestorsAttr = ancestorCodes.length ? ` data-pl-ancestors="${ancestorCodes.join(' ')}"` : '';
+        const anyCollapsed = ancestorCodes.some(a => plCollapsed[a]);
+        const hidden = anyCollapsed ? ' style="display:none"' : '';
+
+        let html = '';
+        if (isGroup && children.length > 0) {
+          // Render children first, then group subtotal
+          children.sort((a, b) => a.code.localeCompare(b.code));
+          const childAncestors = [...ancestorCodes, code];
+          children.forEach(c => { html += renderNode(c.code, depth + 1, childAncestors); });
+          // Group subtotal row (clickable to toggle)
+          const fw = depth === 0 ? '700' : '600';
+          const bg = depth === 0 ? '#f5f5f5' : 'transparent';
+          const bt = depth === 0 ? '2px solid #ccc' : '1px solid #e0e0e0';
+          const arrow = plCollapsed[code] ? '\u25b6' : '\u25bc';
+          html += `<tr${ancestorsAttr}${hidden} style="font-weight:${fw};background:${bg};border-top:${bt};cursor:pointer" onclick="togglePLGroup('${code}')">
+            <td style="padding-left:${indent}px"><span id="pl-arrow-${code}" style="display:inline-block;width:14px;font-size:10px;color:#888">${arrow}</span> ${node.name}</td>
+            <td class="num">${fmt(s.budget)}</td>
+            <td class="num">${fmt(s.actual)}</td>
+            <td class="num ${cls}">${variance ? (variance > 0 ? '+' : '') + fmt(variance) : '&mdash;'}</td>
+            <td class="num ${cls}">${pct !== '—' ? pct + ' %' : '&mdash;'}</td>
+          </tr>`;
+        } else {
+          // Leaf account
+          html += `<tr${ancestorsAttr}${hidden}>
+            <td style="padding-left:${indent}px">${code} ${node.name}</td>
+            <td class="num">${fmt(s.budget)}</td>
+            <td class="num">${fmt(s.actual)}</td>
+            <td class="num ${cls}">${variance ? (variance > 0 ? '+' : '') + fmt(variance) : '&mdash;'}</td>
+            <td class="num ${cls}">${pct !== '—' ? pct + ' %' : '&mdash;'}</td>
+          </tr>`;
+        }
+        return html;
+      }
+
+      // Find root node (parent === null)
+      const root = allAccounts.find(a => !a.parent);
+      const body = document.getElementById('overviewBody');
+
+      if (root) {
+        // Render from root's children (Revenue, Costs), then root as grand total
+        const rootChildren = getChildren(root.code);
+        rootChildren.sort((a, b) => a.code.localeCompare(b.code));
+        let html = '';
+        rootChildren.forEach(c => { html += renderNode(c.code, 0, []); });
+        body.innerHTML = html || '<tr><td colspan="5" style="color:#999;text-align:center">No data</td></tr>';
+
+        // Footer = net result
+        const total = sumNode(root.code);
+        const totVar = total.actual - total.budget;
+        const totPct = total.budget ? ((totVar / total.budget) * 100).toFixed(1) : '—';
+        const totCls = totVar > 0 ? 'negative' : totVar < 0 ? 'positive' : 'neutral';
+        document.getElementById('overviewFoot').innerHTML = `<tr style="border-top:2px solid #333;font-weight:700">
+          <td>${root.name}</td>
+          <td class="num">${fmt(total.budget)}</td>
+          <td class="num">${fmt(total.actual)}</td>
+          <td class="num ${totCls}">${totVar ? (totVar > 0 ? '+' : '') + fmt(totVar) : '&mdash;'}</td>
+          <td class="num ${totCls}">${totPct !== '—' ? totPct + ' %' : '&mdash;'}</td>
+        </tr>`;
+      } else {
+        // Fallback to flat if no hierarchy
+        renderFlatOverview(rows);
+      }
+    }
+
+    // ── Hierarchy overview for Org Unit (or any hierarchical dimension) ──
+    function renderHierarchyOverview(rows, items, nameMap, label) {
+      document.getElementById('overviewTableTitle').textContent = 'Budget vs Actuals per ' + label;
+      document.getElementById('ovDimHead').textContent = label;
+
+      const byCode = {};
+      rows.forEach(r => {
+        const key = r.org_unit || '(not set)';
+        if (!byCode[key]) byCode[key] = { budget: 0, actual: 0 };
+        if (r.source === 'budget') byCode[key].budget += r.amount || 0;
+        else byCode[key].actual += r.amount || 0;
+      });
+
+      const itemByCode = Object.fromEntries(items.map(i => [i.code, i]));
+      function getChildren(parentCode) { return items.filter(i => i.parent === parentCode); }
+      function sumNode(code) {
+        const own = byCode[code] || { budget: 0, actual: 0 };
+        const children = getChildren(code);
+        if (children.length === 0) return { budget: own.budget, actual: own.actual };
+        let b = own.budget, a = own.actual;
+        children.forEach(c => { const s = sumNode(c.code); b += s.budget; a += s.actual; });
+        return { budget: b, actual: a };
+      }
+
+      function renderNode(code, depth) {
+        const node = itemByCode[code];
+        if (!node) return '';
+        const s = sumNode(code);
+        const children = getChildren(code);
+        const isGroup = node.type === 'group';
+        const indent = depth * 16;
+        const variance = s.actual - s.budget;
+        const pct = s.budget ? ((variance / s.budget) * 100).toFixed(1) : '—';
+        const cls = variance > 0 ? 'negative' : variance < 0 ? 'positive' : 'neutral';
+        let html = '';
+        if (isGroup && children.length > 0) {
+          // Group header
+          const fw = depth === 0 ? '700' : '600';
+          const bg = depth === 0 ? '#f5f5f5' : 'transparent';
+          html += `<tr style="font-weight:${fw};background:${bg}">
+            <td style="padding-left:${indent}px">${node.name}</td>
+            <td class="num">${fmt(s.budget)}</td>
+            <td class="num">${fmt(s.actual)}</td>
+            <td class="num ${cls}">${variance ? (variance > 0 ? '+' : '') + fmt(variance) : '&mdash;'}</td>
+            <td class="num ${cls}">${pct !== '—' ? pct + ' %' : '&mdash;'}</td>
+          </tr>`;
+          children.sort((a, b) => a.code.localeCompare(b.code));
+          children.forEach(c => { html += renderNode(c.code, depth + 1); });
+        } else {
+          html += `<tr>
+            <td style="padding-left:${indent}px">${code} ${node.name}</td>
+            <td class="num">${fmt(s.budget)}</td>
+            <td class="num">${fmt(s.actual)}</td>
+            <td class="num ${cls}">${variance ? (variance > 0 ? '+' : '') + fmt(variance) : '&mdash;'}</td>
+            <td class="num ${cls}">${pct !== '—' ? pct + ' %' : '&mdash;'}</td>
+          </tr>`;
+        }
+        return html;
+      }
+
+      const root = items.find(i => !i.parent);
+      const body = document.getElementById('overviewBody');
+      if (root) {
+        body.innerHTML = renderNode(root.code, 0) || '<tr><td colspan="5" style="color:#999;text-align:center">No data</td></tr>';
+        const total = sumNode(root.code);
+        const totVar = total.actual - total.budget;
+        const totPct = total.budget ? ((totVar / total.budget) * 100).toFixed(1) : '—';
+        const totCls = totVar > 0 ? 'negative' : totVar < 0 ? 'positive' : 'neutral';
+        document.getElementById('overviewFoot').innerHTML = `<tr style="border-top:2px solid #ddd;font-weight:700">
+          <td>Total</td>
+          <td class="num">${fmt(total.budget)}</td>
+          <td class="num">${fmt(total.actual)}</td>
+          <td class="num ${totCls}">${totVar ? (totVar > 0 ? '+' : '') + fmt(totVar) : '&mdash;'}</td>
+          <td class="num ${totCls}">${totPct !== '—' ? totPct + ' %' : '&mdash;'}</td>
+        </tr>`;
+      } else {
+        renderFlatOverview(rows);
+      }
+    }
+
+    // ── GL Transactions table ──
+    function renderGLTransactions(rows) {
+      const body = document.getElementById('glBody');
+      const foot = document.getElementById('glFoot');
+      let total = 0;
+
+      body.innerHTML = rows.map(r => {
+        const amount = r.amount ?? 0;
+        total += amount;
+        const dim1 = r.dim1 ? `<span class="tag tag-real">${r.dim1}</span>` : '<span style="color:#ccc">&mdash;</span>';
+        const dim2 = r.dim2 ? `<span class="tag tag-real">${r.dim2}</span>` : '<span style="color:#ccc">&mdash;</span>';
+        const dim3 = r.dim3 ? `<span class="tag tag-real">${r.dim3}</span>` : '<span style="color:#ccc">&mdash;</span>';
+        return `<tr>
+          <td>${r.account}${accMap[r.account] ? ' <span style="color:#888">' + accMap[r.account] + '</span>' : ''}</td>
+          <td>${r.org_unit}${orgMap[r.org_unit] ? ' <span style="color:#888">' + orgMap[r.org_unit] + '</span>' : ''}</td>
+          <td>${r.project_name || r.canonical_id}</td>
+          <td>${dim1}</td>
+          <td>${dim2}</td>
+          <td>${dim3}</td>
+          <td>${r.period || '&mdash;'}</td>
+          <td>${r.transaction_date || '&mdash;'}</td>
+          <td class="num" style="font-weight:600">${fmt(amount)}</td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="9" style="color:#999;text-align:center">No data</td></tr>';
+
+      foot.innerHTML = `<tr style="border-top:2px solid #ddd;font-weight:700">
+        <td colspan="8" style="text-align:right;color:#666">Total</td>
+        <td class="num">${fmt(total)}</td>
+      </tr>`;
+    }
+
+    // ── Planning Transactions table ──
+    function renderPlanningTransactions(rows) {
+      const body = document.getElementById('plBody');
+      const foot = document.getElementById('plFoot');
+      let total = 0;
+
+      body.innerHTML = rows.map(r => {
+        const amount = r.amount ?? 0;
+        total += amount;
+        const dim1 = r.dim1 ? `<span class="tag tag-real">${r.dim1}</span>` : '<span style="color:#ccc">&mdash;</span>';
+        const dim2 = r.dim2 ? `<span class="tag tag-real">${r.dim2}</span>` : '<span style="color:#ccc">&mdash;</span>';
+        const dim3 = r.dim3 ? `<span class="tag tag-real">${r.dim3}</span>` : '<span style="color:#ccc">&mdash;</span>';
+        return `<tr>
+          <td>${r.account}${accMap[r.account] ? ' <span style="color:#888">' + accMap[r.account] + '</span>' : ''}</td>
+          <td>${r.org_unit}${orgMap[r.org_unit] ? ' <span style="color:#888">' + orgMap[r.org_unit] + '</span>' : ''}</td>
+          <td>${r.project_name || r.canonical_id}</td>
+          <td>${dim1}</td>
+          <td>${dim2}</td>
+          <td>${dim3}</td>
+          <td>${r.period || '&mdash;'}</td>
+          <td class="num" style="font-weight:600">${fmt(amount)}</td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="8" style="color:#999;text-align:center">No data</td></tr>';
+
+      foot.innerHTML = `<tr style="border-top:2px solid #ddd;font-weight:700">
+        <td colspan="7" style="text-align:right;color:#666">Total</td>
+        <td class="num">${fmt(total)}</td>
+      </tr>`;
+    }
+
+    // ── Fetch actuals from ERP via Platform ──
+    async function fetchActuals() {
+      var btn = document.getElementById('btnFetchActuals');
+      var status = document.getElementById('fetchStatus');
+      btn.disabled = true;
+      btn.style.opacity = '0.5';
+      status.style.display = '';
+      status.textContent = 'Fetching from ERP...';
+      status.style.color = '#888';
+      try {
+        var r = await fetch('http://localhost:3000/api/fetch-actuals', { method: 'POST', credentials: 'include' });
+        var data = await r.json();
+        if (data.ok) {
+          status.textContent = data.entries + ' entries published — loading...';
+          status.style.color = '#2e7d32';
+          // Wait a moment for Kafka pipeline to process, then reload data
+          setTimeout(async function() {
+            await loadData();
+            status.textContent = data.entries + ' entries loaded';
+            setTimeout(function() { status.style.display = 'none'; }, 3000);
+          }, 2000);
+        } else {
+          status.textContent = data.error || 'Failed';
+          status.style.color = '#c62828';
+        }
+      } catch (err) {
+        status.textContent = 'Error: ' + err.message;
+        status.style.color = '#c62828';
+      }
+      btn.disabled = false;
+      btn.style.opacity = '1';
+    }
+
+    // ── Data loading ──
+    async function loadData() {
+      const [analyticsRes, refRes] = await Promise.all([
+        fetch(API + '/api/analytics'),
+        fetch(API + '/api/accounts'),
+      ]);
+      allRows = await analyticsRes.json();
+      const ref = await refRes.json();
+      allAccounts = ref.accounts || [];
+      allOrgUnits = ref.org_units || [];
+      accMap = Object.fromEntries(allAccounts.map(a => [a.code, a.name]));
+      orgMap = Object.fromEntries(allOrgUnits.map(o => [o.code, o.name]));
+
+      try {
+        const dimRes = await fetch(API + '/api/dim-labels');
+        dimLabels = await dimRes.json();
+        document.getElementById('dimBtn1').textContent = dimLabels.dim1 || 'Dim1';
+        document.getElementById('dimBtn2').textContent = dimLabels.dim2 || 'Dim2';
+        document.getElementById('dimBtn3').textContent = dimLabels.dim3 || 'Dim3';
+        document.getElementById('glDimHead1').textContent = dimLabels.dim1 || 'Dim1';
+        document.getElementById('glDimHead2').textContent = dimLabels.dim2 || 'Dim2';
+        document.getElementById('glDimHead3').textContent = dimLabels.dim3 || 'Dim3';
+        document.getElementById('plDimHead1').textContent = dimLabels.dim1 || 'Dim1';
+        document.getElementById('plDimHead2').textContent = dimLabels.dim2 || 'Dim2';
+        document.getElementById('plDimHead3').textContent = dimLabels.dim3 || 'Dim3';
+      } catch {}
+
+      populateFilters();
+      renderAll();
+    }
+
+    // ── Ingestion Rules ──
+    async function loadRules() {
+      try {
+        const res = await fetch(API + '/api/ingestion-rules');
+        const rules = await res.json();
+        renderRules(rules);
+      } catch {}
+    }
+
+    function renderRules(rules) {
+      const body = document.getElementById('rulesBody');
+      body.innerHTML = rules.map(r => {
+        const enabled = r.enabled ? 'checked' : '';
+        const opacity = r.enabled ? '1' : '0.4';
+        const condStr = r.condition_op === 'IS NULL'
+          ? `${r.condition_field || ''} IS NULL`
+          : `${r.condition_field || ''} ${r.condition_op || ''} ${r.condition_value || ''}`;
+        const typeBg = r.rule_type === 'default' ? '#eef2ff' : '#fff3e0';
+        const typeColor = r.rule_type === 'default' ? '#4361ee' : '#e65100';
+        return `<tr style="opacity:${opacity}">
+          <td><input type="checkbox" ${enabled} onchange="toggleRule(${r.id}, this.checked)" title="Enable/disable"></td>
+          <td>${r.rule_name}</td>
+          <td>${r.source_type}</td>
+          <td><span class="tag" style="background:${typeBg};color:${typeColor}">${r.rule_type}</span></td>
+          <td>${r.condition_field || '—'}</td>
+          <td>${r.condition_op || '—'}</td>
+          <td>${r.condition_value || '—'}</td>
+          <td><strong>${r.target_field}</strong></td>
+          <td><code style="background:#f1f3f5;padding:1px 4px;border-radius:2px">${r.target_value}</code></td>
+          <td class="num">${r.priority}</td>
+          <td><button onclick="deleteRule(${r.id})" style="border:none;background:none;cursor:pointer;color:#c62828;font-size:13px" title="Delete">&times;</button></td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="11" style="color:#999;text-align:center">No rules configured</td></tr>';
+    }
+
+    async function toggleRule(id, enabled) {
+      await fetch(API + '/api/ingestion-rules/' + id, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled })
+      });
+      loadRules();
+    }
+
+    async function deleteRule(id) {
+      await fetch(API + '/api/ingestion-rules/' + id, { method: 'DELETE' });
+      loadRules();
+    }
+
+    async function addRule() {
+      const rule = {
+        rule_name: document.getElementById('rName').value,
+        source_type: document.getElementById('rSource').value,
+        rule_type: document.getElementById('rType').value,
+        condition_field: document.getElementById('rCondField').value,
+        condition_op: document.getElementById('rCondOp').value,
+        condition_value: document.getElementById('rCondVal').value || null,
+        target_field: document.getElementById('rTarget').value,
+        target_value: document.getElementById('rTargetVal').value,
+        priority: parseInt(document.getElementById('rPriority').value) || 100
+      };
+      if (!rule.rule_name || !rule.target_value) return;
+      await fetch(API + '/api/ingestion-rules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(rule)
+      });
+      document.getElementById('rName').value = '';
+      document.getElementById('rCondVal').value = '';
+      document.getElementById('rTargetVal').value = '';
+      loadRules();
+    }
+
+    loadData();
+    loadRules();
+    setInterval(loadData, 5000);
+    window.addEventListener('resize', () => renderChart(getFiltered()));
+  </script>
+</body>
+</html>
