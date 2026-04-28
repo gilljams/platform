@@ -985,6 +985,44 @@ När en användare klickar på en budgetuppgift i inboxen öppnas Product A med 
 |---|---|
 | `shared_dimensions` | Registrerade delade dimensioner (name, label, owner_system, taxonomy_type) |
 | `dimension_codes` | Kanonisk kodlista per dimension |
+
+---
+
+## Git & Versionering
+
+**Repo:** `gilljams/platform` på GitHub (privat)
+**Branch:** `main` (enda branch, direkt push)
+**Lokal sökväg:** `Platform POC/`
+
+### Snabbkommandon
+
+```powershell
+# Committa alla ändringar
+git add -A; git commit -m "beskrivning"
+
+# Pusha till GitHub
+git push
+
+# Se status
+git status --short
+
+# Se senaste commits
+git log --oneline -10
+
+# Ångra senaste commit (behåll ändringar)
+git reset --soft HEAD~1
+```
+
+### Workflow
+
+1. Vi jobbar direkt på `main` (POC — ingen branch-strategi behövs)
+2. Committa efter varje avslutad feature/fix
+3. Pusha regelbundet till GitHub som backup
+4. Commit-meddelanden på engelska, kortfattade
+
+### .gitignore
+
+Hanterar: `node_modules/`, `dist/`, `*.db`, `*.sqlite`, `*.log`, `.env`, editor-filer
 | `dimension_participants` | Vilka produkter som producerar/konsumerar varje dimension |
 | `dimension_code_mappings` | Per-produkt kodöversättning (local_code → canonical_code) |
 | `connectors` | Registrerade källsystem (system_name, system_type, display_name, api_base_url) |
