@@ -224,14 +224,19 @@ Plattformens admin-sida erbjuder 10 demo-steg som illustrerar hela flödet:
 | `erik`      | analyst    | prod_b                 | prod_b         |
 | `calle`     | controller | prod_a                 | prod_a         |
 
-Alla har lösenord `demo`.
+Alla har lösenord `demo`. Användare lagras i Platform SQLite (`users`-tabell), seedas vid startup.
 
 ### Auth-flöde
 
-1. `POST /api/login` → JWT-token i cookie `platform_token` (8h TTL)
+1. `POST /api/login` → validerar mot `users`-tabellen → JWT-token i cookie `platform_token` (8h TTL)
 2. JWT innehåller: `user_id`, `name`, `role`, `org_unit`, `products`, `primary_product`
 3. `GET /api/navigation` → returnerar meny-items filtrerade på användarens `products` + anslutna system
 4. Shell-baren (injicerad via `shell.js`) renderar navigationen dynamiskt
+
+**Produktionsmodell (simulerad i POC):**
+- Autentisering via **OIDC/SAML2** → redirect till extern IdP (Zitadel, Azure AD)
+- Användarprovisionering via **SCIM 2.0**: `POST /api/scim/v2/Users` (IdP pushar create/update/deactivate)
+- Auktorisering: produkttillgång + org-tillhörighet i `users`-tabell, produkter frågar via `GET /api/users`
 
 ### Shell-bar (Cross-product)
 

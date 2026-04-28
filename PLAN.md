@@ -263,9 +263,34 @@ Detta konfigureras i grundinställningen (demosteg 1) och kan justeras manuellt 
 
 ## Platform Shell & Autentisering
 
-### Login
-Platform exponerar `POST /api/login` med hårdkodade demo-användare.
-Returnerar en JWT som lagras som cookie (domän = localhost).
+### Login & Identity
+
+Användare lagras i `users`-tabellen i Platform (SQLite). Demo-användare seedas automatiskt vid uppstart.
+I produktion provisioneras användare via **SCIM 2.0** från en extern Identity Provider (IdP).
+
+`POST /api/login` validerar mot `users`-tabellen. Returnerar en JWT som lagras som cookie (domän = localhost).
+I produktion ersätts login med **OIDC/SAML2-redirect** till IdP (Zitadel, Azure AD, Okta).
+
+**Arkitekturmönster (simulerat i POC):**
+```
+┌──────────┐   OIDC/SAML2    ┌──────────┐
+│   IdP    │ ◄──redirect──── │ Platform │
+│(Zitadel) │ ───id_token───► │          │
+└──────────┘                 └──────────┘
+      │                           │
+      │ SCIM 2.0 sync            │ GET /api/users
+      ▼                           ▼
+ ┌──────────┐            ┌────────────┐
+ │  users   │ ◄──read──  │ Product A/B│
+ │ (SQLite) │            └────────────┘
+ └──────────┘
+```
+
+**Vad som simuleras:**
+- Login hanteras direkt (ingen redirect till IdP)
+- SCIM-endpoint finns men triggas manuellt från admin-UI
+- JWT-token speglar vad en OIDC-token skulle innehålla
+- Admin-UI har "SCIM Provisioning"-simulator + Token & Session-vy
 
 | Användare | Lösenord | Roll | Org-enhet | Produkter | Primär produkt |
 |---|---|---|---|---|---|
@@ -514,7 +539,7 @@ platform-poc/
 │   ├── package.json
 │   ├── src/
 │   │   ├── index.ts        # Express + auth + API + demo runner + shared-dimensions + connector endpoints
-│   │   ├── mapper.ts       # SQLite: canonical ID, dimensions, dim_models, shared_dimensions, connectors
+│   │   ├── mapper.ts       # SQLite: canonical ID, dimensions, dim_models, shared_dimensions, connectors, users
 │   │   └── router.ts       # Kafka consumer/producer + event log + enrichment + dim routing (GL + budget)
 │   └── public/
 │       ├── login.html       # Login-sida (centrerad, ihopfällbar info)
@@ -975,14 +1000,22 @@ När en användare klickar på en budgetuppgift i inboxen öppnas Product A med 
 
 | Endpoint | Beskrivning |
 |---|---|
-| `GET /api/users?product=X` | Lista demo-användare filtrerade per produkt |
+| `GET /api/users?product=X` | Lista användare (från DB), filtrerade per produkt |
+| `GET /api/users/:id` | Enskild användare (utan password_hash) |
+| `PUT /api/users/:id` | Uppdatera användarattribut (roll, org, produkter, etc.) |
+| `DELETE /api/users/:id` | Ta bort användare |
+| `POST /api/scim/v2/Users` | SCIM 2.0: Provisionera ny användare (simulerar IdP-push) |
+| `PATCH /api/scim/v2/Users/:id` | SCIM 2.0: Uppdatera användare (via externalId) |
+| `DELETE /api/scim/v2/Users/:id` | SCIM 2.0: Deprovisionera (soft-delete, status→deprovisioned) |
 | `GET /api/inbox` | Inbox med deep links (task_base_url + task_path) |
 | `PATCH /api/inbox/:id` | Markera inbox-item som done |
+| `GET /api/me` | Returnera JWT-payload för inloggad användare |
 
 **Tabeller i Platform (SQLite):**
 
 | Tabell | Syfte |
 |---|---|
+| `users` | Användaridentitet (user_id, external_id, username, email, role, org_unit, products, groups, status, source, password_hash, last_login) |
 | `shared_dimensions` | Registrerade delade dimensioner (name, label, owner_system, taxonomy_type) |
 | `dimension_codes` | Kanonisk kodlista per dimension |
 
@@ -1228,5 +1261,13 @@ Connector Registry kopplas starkare till dim_routing:
 
 ### Framtida (utanför POC)
 - [ ] Multi-tenant / organisationshantering
+
+### ✅ Users & Identity (IMPLEMENTERAD)
+- [x] `users`-tabell i Platform SQLite (user_id, external_id, username, email, role, org_unit, products, groups, status, source, password_hash, last_login, synced_at)
+- [x] Login läser från DB (inte hårdkodad array), demo-användare seedas vid startup/reset
+- [x] SCIM 2.0-endpoints: POST/PATCH/DELETE `/api/scim/v2/Users`
+- [x] REST CRUD: GET/PUT/DELETE `/api/users/:id`
+- [x] Admin-flik "Users & Identity" med User Directory, redigering, SCIM-simulator, Token & Session
+- [x] Info-blocks med produktionsarkitektur (OIDC, SAML2, SCIM) och vad som simuleras
 - [ ] Schema Registry (Avro/Protobuf) för event-validering
 - [ ] RBAC: Finkorning behörighetsstyrning per dimension/entitet
