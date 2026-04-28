@@ -1262,6 +1262,66 @@ Connector Registry kopplas starkare till dim_routing:
 ### Framtida (utanför POC)
 - [ ] Multi-tenant / organisationshantering
 
+---
+
+## Roadmap — Nästa steg
+
+Identifierade förbättringsområden, sorterade i föreslagen prioritetsordning.
+
+### Prio A — ERP Mock → Ekonomidomän (konceptuell refaktor)
+**Insats:** Liten–medel | **Påverkan:** Konceptuell tydlighet
+
+"ERP Mock" ger intrycket att vi mockar ett specifikt system. Det vi egentligen modellerar är ett **kanoniskt domänlager** med tillrättalagd data (kontoplan, org, GL). I verkligheten skulle connectors/adapters per källsystem mappa data till detta format.
+
+- [ ] Rename `erp-mock` → `economy-domain` (eller `finance-domain`)
+- [ ] Topics: `erp.accounts` → `economy.accounts`, `erp.general-ledger` → `economy.gl`
+- [ ] Connectortyp: `erp` → `economy-source` (eller behåll som connector-adapter)
+- [ ] Uppdatera docker-compose, all doku, demo-steg
+- [ ] Info-blocks som förklarar: *"I verkligheten skulle det finnas en connector/adapter som transformerar ERP-data till detta kanoniska format"*
+
+### Prio B — Hårdkodade antaganden → konfiguration
+**Insats:** Medel | **Påverkan:** Mer realistisk arkitektur
+
+Identifiera och ersätta hårdkodade antaganden med konfigurerbar parametersättning.
+
+- [ ] Genomlys alla tjänster efter hårdkodade URL:er, topic-namn, systemnamn
+- [ ] Konfigurerbar topic-mappning (varje connector deklarerar in/ut-topics)
+- [ ] Miljövariabler/config för portar och URL:er (istället för `http://product-a:3002`)
+- [ ] Demo-runner bör använda connectors-registrets URLs (inte hårdkodade)
+
+### Prio C — Utökade datamodeller (planning_source / ledger-partitionering)
+**Insats:** Medel–stor | **Påverkan:** Stor — möjliggör Prio D
+
+Budget-ledgern behöver stöd för **partitionering per källa** så att kontoinmatning, drivare och extern beräkning kan samexistera utan att skriva över varandra.
+
+- [ ] `budget_lines.planning_source` — t.ex. `manual`, `driver`, `excel`, `api`
+- [ ] Replace-semantik per source: ny import av `excel`-rader ersätter alla `excel`-rader, lämnar `manual` orörda
+- [ ] Totaler aggregeras över alla sources (UNION ALL i analytics)
+- [ ] UI: visa source per rad/grupp i Product A, filtrera i Product B
+- [ ] Platform: berika `planning_source` i `platform.budget.out`
+
+### Prio D — Extern beräkning (Excel / custom / API)
+**Insats:** Stor | **Påverkan:** Stor affärsnytta — kräver Prio C
+
+Kunder som vill göra egna beräkningsmodeller i Excel (eller via kod/API) ska kunna:
+1. Läsa ut nödvändig dimensionalitet (kontoplan, org, perioder) via API
+2. Göra sin beräkning (Excel, Python, etc.)
+3. Ladda upp resultatet i ett tillrättalagt format med egen `planning_source`
+4. Ersätta/uppdatera i flera omgångar utan att röra manuell inmatning
+
+- [ ] Export-endpoint: `GET /api/budget-versions/:id/export` (CSV/JSON med full dimensionalitet)
+- [ ] Import-endpoint: `POST /api/budget-versions/:id/import` med `source`-parameter
+- [ ] Valideringsregler: rätt konton, rätt perioder, rätt org-enheter
+- [ ] UI: import/export-knappar i Product A, filval, resultatvisning
+- [ ] Excel-mall som referens
+
+### Prio E — Manuell genomlysning (alla 10 demo-steg utan automation)
+**Insats:** Liten | **Påverkan:** Verifikation
+
+- [ ] Verifiera att alla flöden kan köras manuellt via admin-UI (utan demo-runner)
+- [ ] Dokumentera eventuella gap eller saknade formulär
+- [ ] Säkerställ att reset + omstart ger ett rent tillstånd
+
 ### ✅ Users & Identity (IMPLEMENTERAD)
 - [x] `users`-tabell i Platform SQLite (user_id, external_id, username, email, role, org_unit, products, groups, status, source, password_hash, last_login, synced_at)
 - [x] Login läser från DB (inte hårdkodad array), demo-användare seedas vid startup/reset
