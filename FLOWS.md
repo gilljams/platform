@@ -196,20 +196,21 @@ Klarmarkering:
 
 ## Demo-steg
 
-Plattformens admin-sida erbjuder 10 demo-steg som illustrerar hela flödet:
+Plattformens admin-sida erbjuder 11 demo-steg som illustrerar hela flödet:
 
 | Steg | Namn                           | Vad händer                                                            |
 |------|--------------------------------|-----------------------------------------------------------------------|
 | 1    | Initial Setup                  | ERP publicerar kontoplan + org; Platform konfigurerar dim-modell      |
-| 2    | ERP: Create Project            | ERP skapar projekt "New Office Building"                              |
-| 3    | ERP: Publish Actuals (GL)      | ERP publicerar 312 GL-poster (helår 2025, alla konton & org)         |
-| 4    | Product A: Create Budget       | Product A skapar budgetprojekt                                        |
-| 5    | Product A: Save Budget (draft) | Product A sparar budget lokalt (ingen Kafka)                          |
-| 6    | Planning Dimensions            | Platform skapar planerings-dimensioner (Budget 2025)                  |
-| 7    | Product A: Submit Budget       | Budget skickas → Kafka → Platform berikar → Product B                |
-| 8    | Platform: Link Projects        | ERP-projekt ↔ Budget-projekt kopplas via canonical_id                |
-| 9    | Product B: Show Analytics      | Product B visar budget vs utfall                                      |
-| 10   | Process Management             | Väljer befintlig version, sätter org-rot, tilldelar Anna & Calle, öppnar → inbox-tasks |
+| 2    | SCIM Provisioning              | IdP provisionerar användare via SCIM 2.0 (Anna, Erik, Calle)         |
+| 3    | ERP: Create Project            | ERP skapar projekt "New Office Building"                              |
+| 4    | ERP: Publish Actuals (GL)      | ERP publicerar 312 GL-poster (helår 2025, alla konton & org)         |
+| 5    | Product A: Create Budget       | Product A skapar budgetprojekt                                        |
+| 6    | Product A: Save Budget (draft) | Product A sparar budget lokalt (ingen Kafka)                          |
+| 7    | Planning Dimensions            | Platform skapar planerings-dimensioner (Budget 2025)                  |
+| 8    | Product A: Submit Budget       | Budget skickas → Kafka → Platform berikar → Product B                |
+| 9    | Platform: Link Projects        | ERP-projekt ↔ Budget-projekt kopplas via canonical_id                |
+| 10   | Product B: Show Analytics      | Product B visar budget vs utfall                                      |
+| 11   | Process Management             | Väljer befintlig version, sätter org-rot, tilldelar Anna & Calle, öppnar → inbox-tasks |
 
 ---
 
@@ -252,7 +253,7 @@ Den hanterar:
 Inbox-items lagras i Platform (SQLite). Varje item har:
 - `assigned_to` — filtrerar per inloggad användare
 - `task_path` — relativ sökväg med query-params (t.ex. `/?version=ver-A0001-2025&org=DEPT-A`)
-- `resolved_link` — Platform slår upp `task_base_url` från connector-registret och bygger full URL
+- `resolved_link` — Platform slår upp `task_base_url` från `system_config` och bygger full URL
 
 När användaren klickar på en inbox-uppgift:
 1. Shell.js navigerar till `resolved_link` (t.ex. `http://localhost:3002/?version=ver-A0001-2025&org=DEPT-A`)

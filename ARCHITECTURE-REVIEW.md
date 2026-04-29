@@ -20,8 +20,8 @@ Platform äger identiteten mellan system (`getOrCreateCanonical`). Detta är kä
 ### 3. Typed Event Contracts (`shared/events.ts`)
 Compile-time kontrakt via TypeScript unions (`AccountsPublished | ProjectCreated | ...`). Alla producenter och konsumenter delar definitioner utan runtime-beroende. Pragmatiskt val för POC-nivå.
 
-### 4. Connector Registry / Capabilities API
-Varje produkt exponerar `/api/capabilities` som deklarerar vilka dimensioner den producerar/konsumerar. Plattformen är **ERP-oberoende** — den upptäcker system dynamiskt istället för hårdkodade integrationer. Precis hur moderna iPaaS-plattformar fungerar.
+### 4. Economy Domain + System Config
+Economy Domain (econ_*-tabeller) är ett standardiserat staginglager för all ekonomisk referensdata. `system_config` (nyckel-värde per system) ersätter den tidigare Connector Registry:n. Plattformen är **ERP-oberoende** — nya datakällor behöver bara en adapter som skriver till econ_*-tabellerna. System registreras med `system_type` (erp/budgeting/analytics) och `task_base_url` för deep links.
 
 ### 5. Shell.js — Microfrontend-liknande injection
 Cross-product navigation, SSO-kontroll, inbox-badge — allt injicerat via ett script. Liknar Atlassians "Connect" iframe-modell men enklare. Produkterna behöver inte veta om varandra.
@@ -73,7 +73,7 @@ Bra för POC — men produktionsomöjligt för multi-instans/HA. Ingen replikeri
 |---|---|---|---|---|---|
 | **Event bus** | Redpanda (Kafka) | Platform Events (Kafka) | Atlassian EventBridge | Azure Service Bus | Internal Kafka |
 | **Identity mediation** | Canonical ID | Salesforce ID | Atlassian Account | Visma Connect ID | Hubspot Object ID |
-| **API discovery** | /api/capabilities | Metadata API | Forge manifest | RAET API registry | API catalog |
+| **API discovery** | system_config + econ_* | Metadata API | Forge manifest | RAET API registry | API catalog |
 | **Shell/Chrome** | shell.js injection | Lightning Web | Atlassian Navigation | Visma Frame | HubSpot shell |
 | **Auth** | JWT cookie | OAuth 2.0 + OIDC | Atlassian Connect JWT | Visma Connect OIDC | OAuth 2.0 |
 | **Data coupling** | Shared dimensions | Shared objects | Cross-product GraphQL | Master Data Hub | Shared schemas |
@@ -97,7 +97,7 @@ Bra för POC — men produktionsomöjligt för multi-instans/HA. Ingen replikeri
 | **Idempotens** | ⭐⭐⭐⭐ | ✅ Implementerad dedup via `processed_events`-tabell. |
 | **Audit trail** | ⭐⭐⭐⭐ | ✅ Persistent event log i DB parallellt med in-memory ring buffer. |
 | **API governance** | ⭐⭐⭐⭐ | ✅ Versioned endpoints (`/api/v1/`) med bakåtkompatibilitet. |
-| **DevX** | ⭐⭐⭐⭐⭐ | `docker compose up`, demo-runner med 10 steg, reset-endpoint. |
+| **DevX** | ⭐⭐⭐⭐⭐ | `docker compose up`, demo-runner med 11 steg, reset-endpoint. |
 
 ---
 

@@ -57,7 +57,7 @@ docker compose up -d --build
 
 1. Logga in med `admin` / `demo`
 2. Gå till **Platform Admin** → fliken **Demo**
-3. Kör steg 1–10 i ordning — varje steg publicerar events genom systemet
+3. Kör steg 1–11 i ordning — varje steg publicerar events genom systemet
 4. Växla till Product A och Product B för att se resultaten
 
 ## Dokumentation

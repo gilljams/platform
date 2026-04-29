@@ -412,8 +412,9 @@ Mörk header-banner med **statuschecklista** (6 indikatorer som uppdateras live)
 
 | Indikator | Grön när |
 |---|---|
-| 📚 Dimensioner | ≥1 delad dimension registrerad |
 | 🏦 Economy Domain | ≥1 entitet i Economy Domain |
+| 🖥️ System | ≥1 system aktiverat (via Connected Systems) |
+| 📚 Dimensioner | ≥1 delad dimension registrerad |
 | 👥 Deltagare | Minst en dimension har deltagare |
 | 🏷️ Kodlistor | ≥1 kod i någon dimension |
 | 📐 Ekonomimodell | ≥1 dim-slot konfigurerad |
@@ -424,6 +425,12 @@ Mörk header-banner med **statuschecklista** (6 indikatorer som uppdateras live)
 Visar per-dimension-tabell med entitetsantal och shared/flex-taggar.
 Economy Domain är ett standardiserat lager — adapters (t.ex. `runEconSync`) transformerar källdata till gemensamt format.
 Plattformen är ERP-oberoende: nya datakällor behöver bara en adapter som skriver till econ_*-tabellerna.
+
+**Steg 1b — Connected Systems:**
+Aktivera interna produkter (Product A, Product B) och visa aktiva system.
+Varje system har `task_base_url` (för deep links i inbox) och `system_type` (erp/budgeting/analytics) från `system_config`.
+ERP aktiveras automatiskt vid Economy Domain-staging. Interna produkter aktiveras manuellt via Enable-knappar.
+Tabellen visar: System, Namn, Typ, Task-URL, med redigeringsmöjlighet.
 
 **Steg 2 — Registrera delade dimensioner:**
 Tabell med alla registrerade dimensioner (namn, etikett, ägare, taxonomi-typ, antal koder, deltagare).
@@ -466,7 +473,7 @@ In-memory ring buffer (max 200 events) via `GET /api/events`.
 ### 🎬 Demo
 
 Demo Runner med 11 klickbara steg. Steg 1 utför grundinställningen
-automatiskt (dimensioner + ekonomimodell). Steg 10 demonstrerar process management. Steg 11 demonstrerar resiliens. Alla flikar uppdateras live.
+automatiskt (dimensioner + ekonomimodell). Steg 11 demonstrerar process management. Resiliens demonstreras separat via Docker CLI. Alla flikar uppdateras live.
 
 ## Info-block i UI (Demo Explainer)
 
@@ -511,7 +518,7 @@ platform-poc/
 ├── docker-compose.yml
 ├── package.json
 ├── PLAN.md
-├── test-demo.ps1           # PowerShell: automatiserat 10-stegs demotest
+├── test-demo.ps1           # PowerShell: automatiserat 11-stegs demotest
 ├── shared/
 │   └── events.ts          # Event-scheman (TypeScript types)
 ├── erp-mock/
@@ -549,7 +556,7 @@ platform-poc/
 ## Testcase / Demoflöde (11 steg)
 
 Demon körs via Platform Demo Runner (admin-UI eller `test-demo.ps1`).
-Steg 1–10 via API. Steg 11 (resiliens) kräver Docker CLI.
+Steg 1–11 via API. Resiliens demonstreras separat via Docker CLI.
 
 ### Steg 1 — Grundinställning: Referensdata + ekonomimodell + dimensionskatalog
 ERP → `AccountsPublished` på `erp.accounts`
@@ -570,7 +577,19 @@ org_units: [{ code: "OU-100", name: "IT-avd" }, { code: "OU-200", name: "Ekonomi
 - Registrerar flex-dimensioner i Economy Domain: activity (AKT-100/200/300), cost_center (KB-500/600), counterpart (MP-200/300)
 - Konfigurerar `system_config` med task_base_url per produkt
 
-### Steg 2 — ERP skapar riktigt projekt
+### Steg 2 — SCIM-provisionering av användare
+Identity Provider (IdP) provisionerar användare via SCIM 2.0:
+```
+POST /api/scim/v2/Users  (per användare)
+  Anna Svensson — controller, OU-100, Product A + B
+  Erik Lindberg — analyst, OU-200, Product B
+  Calle Björk — controller, OU-100, Product A
+```
+→ Platform skapar/uppdaterar användare i `users`-tabellen
+→ Användarna kan nu logga in och tilldelas budgetuppgifter
+→ I produktion: SCIM-push från Azure AD, Zitadel eller Okta vid HR-förändringar
+
+### Steg 3 — ERP skapar riktigt projekt
 ERP → `ProjectCreated` på `erp.projects`
 ```
 erp_id: "erp-042", name: "Nytt kontorshus"
@@ -578,7 +597,7 @@ erp_id: "erp-042", name: "Nytt kontorshus"
 → Platform konsumerar → skapar canonical_id, mappar `erp-042 → platform-001`
 → Platform publicerar berikad event på `platform.projects.out`
 
-### Steg 3 — ERP publicerar utfall (med flex-dimensioner)
+### Steg 4 — ERP publicerar utfall (med flex-dimensioner)
 ERP → `GeneralLedgerPublished` på `erp.general-ledger`
 ```
 erp_id: "erp-042"
@@ -592,14 +611,14 @@ entries: [
 → Platform berikar med `canonical_id` + **flex-dim routing** (activity→dim1, cost_bearer→dim2, counterpart→dim3)
 → `platform.gl.out` → Product B konsumerar → **ingestion pipeline** applicerar regler (derive dim2 från kontogrupp, default dim3) → sparar utfall
 
-### Steg 4 — Product A skapar budgetprojekt
+### Steg 5 — Product A skapar budgetprojekt
 Product A → `BudgetProjectCreated` på `product-a.events`
 ```
 prod_a_id: "prod_a-001", name: "Nytt kontorshus — planering"
 ```
 → Platform konsumerar → skapar canonical_id `platform-002`, mappar `prod_a-001 → platform-002`
 
-### Steg 5 — Product A sparar budget (utkast)
+### Steg 6 — Product A sparar budget (utkast)
 Product A → `POST /api/budget` — sparar lokalt, **ingen Kafka-publicering**
 ```
 prod_a_id: "prod_a-001", year: "2025"
@@ -614,7 +633,7 @@ lines: [
 → Sparar `budget_lines` med FK till versionen (inkl. flex-dim-fält)
 → Inget event publiceras — budgeten stannar lokalt tills den skickas in
 
-### Steg 6 — Platform: Konfigurera dimensionsmappning
+### Steg 7 — Platform: Konfigurera dimensionsmappning
 Admin konfigurerar hur Product A:s "Budget 2025" översätts till Product B:s planning-dimensioner.
 
 ```
@@ -629,7 +648,7 @@ POST /api/dimension-mappings/configure
 → Admin kan justera manuellt i admin-UI:t (dropdown för planning_type: Budget/F1/F2/F3)
 → Mappningen finns redo att användas när budget skickas in i nästa steg
 
-### Steg 7 — Product A skickar in budget
+### Steg 8 — Product A skickar in budget
 Product A → `POST /api/budget-versions/:id/submit`
 → Ändrar versionstatus `utkast → inskickad`
 → Publicerar `BudgetSubmitted` på `product-a.events`:
@@ -643,7 +662,7 @@ Product A → `POST /api/budget-versions/:id/submit`
   "lines": [...]
 }
 ```
-→ Platform konsumerar → berikar med `canonical_id` + `planning_dimensions` (från steg 6) + `dim_values_per_line` (flex-dim routing)
+→ Platform konsumerar → berikar med `canonical_id` + `planning_dimensions` (från steg 7) + `dim_values_per_line` (flex-dim routing)
 → Platform publicerar på `platform.budget.out`:
 ```json
 {
@@ -662,13 +681,13 @@ Product A → `POST /api/budget-versions/:id/submit`
 ```
 → Product B konsumerar → **ingestion pipeline** applicerar regler (derive dim2 baserat på kontogrupp, default dim3) → sparar budget_lines med planning_year/type/version + berikade dims
 
-### Steg 8 — Manuell länkning
+### Steg 9 — Manuell länkning
 Plattformen → `linkProjects(prod_a-001, erp-042)`
 → Mergar `platform-001` och `platform-002` till ett canonical ID
 → Publicerar `ProjectLinked` på `platform.links.out`
 → Product B:s budget_lines och gl_lines konsolideras under samma canonical_id
 
-### Steg 9 — Product B visar analys
+### Steg 10 — Product B visar analys
 
 | Konto | Typ | Dim1 (Aktivitet) | Dim2 (KB) | Dim3 (Motpart) | Planning | Belopp |
 |---|---|---|---|---|---|---|
@@ -682,9 +701,9 @@ Analysen visar nu **samma flex-dims för både budget och utfall**:
 - **Planning dimensions** (platform-side enrichment): Platform översätter "Budget 2025" → year/type/version
 - **Economy Domain**: Plattformen har ett standardiserat staginglager med alla kodlistor och hierarkier
 
-### Steg 10 — Process Management: Budgetuppgifter
+### Steg 11 — Process Management: Budgetuppgifter
 
-Använder befintlig budgetversion från steg 5 (Budget 2025):
+Använder befintlig budgetversion från steg 6 (Budget 2025):
 → Sätter org_root till "ACME" (hela organisationen)
 → Tilldelningar: Anna → DEPT-A (Marketing & Sales), Calle → OU-300 (IT)
 → `PUT /api/budget-versions/:id/open` — öppnar versionen
@@ -822,11 +841,11 @@ Product B: { planning_year: "2025", planning_type: "Budget", planning_version: 1
 ```
 
 ### Flöde
-1. **Steg 6 (demo):** Admin skapar/bekräftar dimensionsmappning via `POST /api/dimension-mappings/configure`
+1. **Steg 7 (demo):** Admin skapar/bekräftar dimensionsmappning via `POST /api/dimension-mappings/configure`
 2. Platform auto-parsar versionsnamn via konvention: `"Budget 2025"` → Budget + 2025
 3. Mappningen sparas i `dimension_mappings`-tabell (platform.db)
 4. Admin kan justera manuellt via `PUT /api/dimension-mappings/:id` eller dropdown i admin-UI
-5. **Steg 7:** När `BudgetSubmitted` routas, berikar router med `planning_dimensions` från tabellen
+5. **Steg 8:** När `BudgetSubmitted` routas, berikar router med `planning_dimensions` från tabellen
 6. Product B lagrar dimensionerna i `budget_lines` (planning_year, planning_type, planning_version)
 
 ### Tabell: dimension_mappings
@@ -1273,7 +1292,7 @@ Dessa val i POC:n fungerar direkt i produktion:
 - [x] Dimensionskatalog UI: Klickbar tabell med kodlista, deltagare och kodmappningar
 - [x] Demosteg 1: Registrerar 3 dimensioner (account, org_unit, project) + deltagare + kodlistor
 - [x] Platform Admin: Omstrukturerad till 4 flikar (⚙️ Grundinställning, 🔗 Löpande drift, 📋 Events, 🎬 Demo)
-- [x] Grundinställning-flik: "Ny kund? Börja här." med statuschecklista (6 indikatorer) + Steg 1 (Economy Domain) + Steg 2 (Dimensioner) + Steg 3 (Ekonomimodell & Routing)
+- [x] Grundinställning-flik: "Ny kund? Börja här." med statuschecklista (7 indikatorer) + Economy Domain + Connected Systems + Dimensioner + Ekonomimodell & Routing
 - [x] Löpande drift-flik: Projekt + Länkning + Planning-dimensioner (separerad från engångsinställningar)
 - [x] Demosteg 1 omdöpt: "Grundinställning: Referensdata + ekonomimodell" — tydliggör engångskaraktären
 - [x] Budget dim-routing: Platform applicerar applyDimRouting(”prod_a”,”prod_b”) per budgetrad → dim_values_per_line
@@ -1283,7 +1302,7 @@ Dessa val i POC:n fungerar direkt i produktion:
 - [x] Analytics: Budget OCH utfall visar nu samma dim1/dim2/dim3 (inget dimensionsgap)
 - [x] Economy Domain som enda sanningskälla: Connector Registry (connectors + connector_dimensions) ersatt med Economy Domain (econ_*) + system_config
 - [x] Platform Admin: Economy Domain-översikt i Grundinställning (entity/relation/dimension-count + per-dimension tabell med shared/flex-taggar)
-- [x] Setup-checklista: 6 indikatorer (dimensioner, economy domain, deltagare, kodlistor, ekonomimodell, routing)
+- [x] Setup-checklista: 7 indikatorer (economy domain, system, dimensioner, deltagare, kodlistor, ekonomimodell, routing)
 - [x] Demosteg 1 registrerar flex-dimensioner i Economy Domain (activity, cost_center, counterpart) + system_config
 - [x] Demosteg 1 konfigurerar routing för både ERP och Product A → Product B (6 regler)
 - [x] Grundinställning omordnad: Steg 1=Economy Domain → Steg 2=Dimensioner → Steg 3=Ekonomimodell & Routing (logisk ordning)
@@ -1299,10 +1318,14 @@ Dessa val i POC:n fungerar direkt i produktion:
 - [x] shared/events.ts: GeneralLedgerEntry + BudgetLine utökade med flex-dim-fält, BudgetSubmitted tillagd
 - [x] ERP-mock: Periodformat normaliserat (2024-Q1 → 2025-01), transaction_date tillagd på GL
 - [x] Demo steg 9: Analytics visar transaction_date-kolumn (datum för utfall, — för budget)
+- [x] Connected Systems: Aktiverings-UI för interna produkter, task_base_url-hantering, system_type från system_config
+- [x] Economy Domain entity-dropdown: dynamiskt populerad från faktiska dimensioner (ersätter hårdkodad HTML)
+- [x] SYSTEM_CAPABILITIES: Statisk array i admin.html som definierar routing-fält per system (ersätter borttagen cachedConnectors)
+- [x] SCIM-provisionering: Demosteg 2 provisionerar användare via simulerad IdP-push (POST /api/scim/v2/Users)
 
 ### Kvar
 - [ ] Fas 6: OpenTelemetry tracing (instrumentera alla 4 Node.js-tjänster, verifiera i Jaeger)
-- [ ] README.md med start/stopp/test-instruktioner
+- [x] README.md med start/stopp/test-instruktioner
 
 ### Next — Plattformsförbättringar (identifierade vid genomlysning)
 
