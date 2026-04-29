@@ -987,28 +987,16 @@ app.post("/api/demo/step/1", async (_req, res) => {
     demoState.step = 1;
     console.log("[DEMO] Step 1: Reference data + economic model + dimension catalog");
 
-    // Seed cross-system code mappings
-    // ERP is source-of-truth — register ALL codes with ERP source_key
-    let accIdx = 0;
-    for (const acc of accounts) {
-      accIdx++;
-      const sk = `ERP-ACC-${String(accIdx).padStart(3, "0")}`;
-      upsertCodeMapping("account", "erp", acc.code, acc.code, sk);
-    }
-    let orgIdx = 0;
-    for (const org of orgUnits) {
-      orgIdx++;
-      const sk = `ERP-ORG-${String(orgIdx).padStart(3, "0")}`;
-      upsertCodeMapping("org_unit", "erp", org.code, org.code, sk);
-    }
-    // Product A uses own local codes for leaf accounts used in budgeting
+    // Code mappings for ERP + consumers are auto-registered by the router
+    // when it routes AccountsPublished. Here we only seed Product A's
+    // OWN local codes (BUD-xxx, TEAM-xxx) which differ from canonical codes.
+    // In production, Product A would report these back via an API.
     for (const acc of accounts.filter((a: any) => a.type === "leaf")) {
       upsertCodeMapping("account", "prod_a", `BUD-${acc.code}`, acc.code);
     }
-    // Product A uses own local codes for leaf org_units
     for (const org of orgUnits.filter((o: any) => o.type === "leaf")) {
       upsertCodeMapping("org_unit", "prod_a", `TEAM-${org.code}`, org.code);
-    };
+    }
 
     // Seed inbox task (platform-generated, visible to all admins)
     addInboxItem({

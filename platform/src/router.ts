@@ -1,5 +1,5 @@
 import { Kafka, Consumer, Producer, Partitioners } from "kafkajs";
-import { getOrCreateCanonical, lookupCanonical, getMappings, getOrCreateDimensionMapping, applyDimRouting, addInboxItem, updateInboxItem, upsertDimensionCode, upsertCodeMapping, insertAuditEvent, isEventProcessed, markEventProcessed } from "./mapper";
+import { getOrCreateCanonical, lookupCanonical, getMappings, getOrCreateDimensionMapping, applyDimRouting, addInboxItem, updateInboxItem, upsertDimensionCode, upsertCodeMapping, getParticipants, insertAuditEvent, isEventProcessed, markEventProcessed } from "./mapper";
 
 const INGRESS = {
   ERP_PROJECTS: "erp.projects",
@@ -62,6 +62,30 @@ async function handleMessage(topic: string, rawValue: string) {
     case INGRESS.ERP_ACCOUNTS: {
       // Referensdata — vidarebefordra utan berikning
       await publishEgress(EGRESS.ACCOUNTS_OUT, event);
+
+      // Auto-register code mappings for all dimension participants
+      // When the platform routes reference data, it registers which codes each system now has
+      const accs = event.accounts || [];
+      const orgs = event.org_units || [];
+      for (const dim of ["account", "org_unit"] as const) {
+        const codes = dim === "account" ? accs : orgs;
+        const participants = getParticipants(dim) as Array<{product: string; role: string}>;
+        for (const p of participants) {
+          for (let i = 0; i < codes.length; i++) {
+            const c = codes[i];
+            if (p.product === "erp") {
+              // ERP is source-of-truth — register with source_key reference
+              const prefix = dim === "account" ? "ERP-ACC" : "ERP-ORG";
+              const sk = `${prefix}-${String(i + 1).padStart(3, "0")}`;
+              upsertCodeMapping(dim, "erp", c.code, c.code, sk);
+            } else {
+              // Consumers receive canonical codes directly (local_code = canonical_code)
+              upsertCodeMapping(dim, p.product, c.code, c.code);
+            }
+          }
+        }
+      }
+      console.log(`[ROUTER] Auto-registered code mappings for ${accs.length} accounts + ${orgs.length} org_units`);
       break;
     }
 
