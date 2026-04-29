@@ -1602,6 +1602,30 @@ In production:
     var cachedRouting = [];
     var dimMode = 'view';
 
+    // Known system capabilities for routing configuration
+    // Target products have generic dim slots; source systems have named fields
+    var SYSTEM_CAPABILITIES = [
+      { system_name: 'erp', display_name: 'ERP', dimensions: [
+        { field_name: 'activity', field_label: 'Activity' },
+        { field_name: 'cost_bearer', field_label: 'Cost Center' },
+        { field_name: 'counterpart', field_label: 'Counterpart' },
+      ]},
+      { system_name: 'prod_a', display_name: 'Product A', dimensions: [
+        { field_name: 'dim1', field_label: 'Flex Dim 1' },
+        { field_name: 'dim2', field_label: 'Flex Dim 2' },
+        { field_name: 'dim3', field_label: 'Flex Dim 3' },
+      ]},
+      { system_name: 'prod_b', display_name: 'Product B', dimensions: [
+        { field_name: 'dim1', field_label: 'Flex Dim 1' },
+        { field_name: 'dim2', field_label: 'Flex Dim 2' },
+        { field_name: 'dim3', field_label: 'Flex Dim 3' },
+      ]},
+    ];
+
+    function getSystemCapability(systemName) {
+      return SYSTEM_CAPABILITIES.find(function(s) { return s.system_name === systemName; });
+    }
+
     function switchDimMode(mode) {
       dimMode = mode;
       document.getElementById('dimViewMode').style.display = mode === 'view' ? '' : 'none';
@@ -1616,7 +1640,7 @@ In production:
     function populateDimEditProductDropdown() {
       var sel = document.getElementById('dimEditProduct');
       var prev = sel.value;
-      var opts = cachedConnectors.filter(function(c) {
+      var opts = SYSTEM_CAPABILITIES.filter(function(c) {
         return c.dimensions && c.dimensions.length > 0;
       });
       sel.innerHTML = '<option value="">Select product to configure…</option>' +
@@ -1633,7 +1657,7 @@ In production:
         area.innerHTML = '<p style="color:#999;font-size:13px;">Select a product above to see its available flex-dimension slots.</p>';
         return;
       }
-      var conn = cachedConnectors.find(function(c) { return c.system_name === product; });
+      var conn = getSystemCapability(product);
       if (!conn || !conn.dimensions || !conn.dimensions.length) {
         area.innerHTML = '<p style="color:#999;font-size:13px;">This system has no routing fields.</p>';
         return;
@@ -1641,7 +1665,7 @@ In production:
 
       var productModels = cachedModels.filter(function(m) { return m.product === product; });
       var productRouting = cachedRouting.filter(function(r) { return r.target_product === product; });
-      var sourceSystems = cachedConnectors.filter(function(c) {
+      var sourceSystems = SYSTEM_CAPABILITIES.filter(function(c) {
         return c.system_name !== product && c.dimensions && c.dimensions.length > 0;
       });
 
@@ -1695,9 +1719,9 @@ In production:
       if (!product) return;
       var statusEl = document.getElementById('dimEditStatus');
       statusEl.textContent = 'Saving…';
-      var conn = cachedConnectors.find(function(c) { return c.system_name === product; });
+      var conn = getSystemCapability(product);
       if (!conn) return;
-      var sourceSystems = cachedConnectors.filter(function(c) {
+      var sourceSystems = SYSTEM_CAPABILITIES.filter(function(c) {
         return c.system_name !== product && c.dimensions && c.dimensions.length > 0;
       });
       var errors = [];
@@ -1800,7 +1824,7 @@ In production:
         } else {
           var hhtml = '<tr><th>Slot</th><th>Label</th>';
           products.forEach(function(p) {
-            var c = cachedConnectors.find(function(cc) { return cc.system_name === p; });
+            var c = getSystemCapability(p);
             var name = c ? c.display_name : p;
             hhtml += '<th>' + name + '</th>';
           });
