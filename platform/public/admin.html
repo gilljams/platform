@@ -427,8 +427,8 @@
           These settings are configured <strong>once per customer installation</strong>.
         </p>
         <div class="setup-checklist" id="setupChecklist">
-          <div class="setup-check" id="check-connectors">
-            <span class="setup-check-label">Connectors</span>
+          <div class="setup-check" id="check-economy">
+            <span class="setup-check-label">Economy Domain</span>
             <span class="setup-check-status">not configured</span>
           </div>
           <div class="setup-check" id="check-dims">
@@ -454,120 +454,46 @@
         </div>
       </div>
 
-      <!-- STEP 1: Connectors -->
+      <!-- STEP 1: Economy Domain Overview -->
       <div class="card">
         <div class="card-header">
-          <h2>Connected Systems</h2>
-          <span class="card-step-badge">One-time Setup</span>
+          <h2>Economy Domain</h2>
+          <span class="card-step-badge">Data Foundation</span>
         </div>
-
-        <!-- Internal Products -->
-        <h3 style="font-size:12px;color:#555;margin:0 0 8px;">Internal Products</h3>
-        <p style="font-size:12px;color:#888;margin-bottom:10px;">
-          Internal products are discovered automatically. Enable the ones included in this installation.
+        <p style="font-size:13px;color:#666;margin-bottom:12px;">
+          The Economy Domain contains <strong>standardized reference data</strong> (chart of accounts, org units, projects, flex dimensions)
+          independent of any specific source system. Adapters are responsible for loading data here.
         </p>
-        <div id="internalProducts" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;"></div>
-
-        <!-- Connected Systems Overview -->
-        <h3 style="font-size:12px;color:#555;margin:14px 0 8px;padding-top:14px;border-top:1px solid #e8e9ef;">Connected Systems</h3>
-        <p style="font-size:12px;color:#888;margin-bottom:10px;">
-          Dimensionality overview across all connected systems.
-        </p>
+        <div id="econOverviewPanel" style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px;">
+          <div style="text-align:center;padding:12px 20px;background:#f8f9fa;border-radius:8px;min-width:120px;">
+            <div style="font-size:24px;font-weight:700;color:#1f64a4;" id="econEntityCount">—</div>
+            <div style="font-size:11px;color:#888;">Entities</div>
+          </div>
+          <div style="text-align:center;padding:12px 20px;background:#f8f9fa;border-radius:8px;min-width:120px;">
+            <div style="font-size:24px;font-weight:700;color:#1f64a4;" id="econRelationCount">—</div>
+            <div style="font-size:11px;color:#888;">Relations</div>
+          </div>
+          <div style="text-align:center;padding:12px 20px;background:#f8f9fa;border-radius:8px;min-width:120px;">
+            <div style="font-size:24px;font-weight:700;color:#1f64a4;" id="econDimensionCount">—</div>
+            <div style="font-size:11px;color:#888;">Dimensions</div>
+          </div>
+        </div>
         <table>
           <thead>
-            <tr>
-              <th>System</th>
-              <th>Name</th>
-              <th>Type</th>
-              <th>System-URL</th>
-              <th>Shared Dimensions</th>
-              <th>Routing Fields</th>
-              <th>Task-URL</th>
-              <th>Registered</th>
-              <th style="width:28px"></th>
-            </tr>
+            <tr><th>Dimension</th><th>Entities</th><th>Type</th></tr>
           </thead>
-          <tbody id="connectorsBody">
-            <tr><td colspan="9" style="color:#999;text-align:center;">No systems connected yet</td></tr>
+          <tbody id="econOverviewBody">
+            <tr><td colspan="3" style="color:#999;text-align:center;">No data staged yet</td></tr>
           </tbody>
         </table>
-        <!-- Connector form: auto-discovery -->
-        <div style="margin-top:12px;padding:12px;background:#f8f9fa;border-radius:8px;">
-          <h4 style="font-size:12px;color:#555;margin-bottom:8px;">+ Connect External System</h4>
-          <div class="form-row" style="margin-bottom:0;align-items:flex-end">
-            <div class="form-group">
-              <label>Connector</label>
-              <select id="connType" style="width:220px">
-                <option value="">Loading…</option>
-              </select>
-            </div>
-            <div class="form-group"><label>System-URL</label><input type="text" id="connUrl" placeholder="http://erp-system:3001" style="width:240px"></div>
-            <button class="btn btn-primary btn-sm" onclick="previewSystem()" id="discoverBtn">Preview</button>
-            <span id="discoverStatus" style="font-size:12px;margin-left:8px;"></span>
-          </div>
-          <p id="connTypeDesc" style="font-size:11px;color:#888;margin:6px 0 0 0;min-height:14px;"></p>
-          <div id="discoverPreview" style="display:none;margin-top:10px;padding:10px;background:#fff;border:1px solid #e0e0e0;border-radius:6px;">
-            <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
-              <strong id="prevName" style="font-size:14px;"></strong>
-              <span id="prevType" class="tag" style="font-size:11px;"></span>
-              <span id="prevSysName" style="font-size:12px;color:#999;"></span>
-            </div>
-            <div style="font-size:12px;color:#666;margin-bottom:6px;">Select which dimensions to register:</div>
-            <div id="prevFields" style="margin-bottom:8px;"></div>
-            <div style="display:flex;justify-content:space-between;align-items:center;">
-              <span style="font-size:11px;color:#aaa;" id="prevSelectedCount"></span>
-              <div style="display:flex;gap:8px;">
-                <button class="btn btn-sm" onclick="cancelPreview()" style="background:#eee;color:#555;">Cancel</button>
-                <button class="btn btn-primary btn-sm" onclick="confirmDiscover()" id="confirmBtn">Confirm Connection</button>
-              </div>
-            </div>
-          </div>
-        </div>
         <div class="info-block" style="margin-top:12px">
           <div class="info-trigger" onclick="toggleInfo(this)">Show details ▸</div>
           <div class="info-content">
-            <div class="info-title">How does it work?</div>
-            <strong>1.</strong> Select which connector (adapter) type to use.<br>
-            <strong>2.</strong> Enter the system URL and click <em>Preview</em>.<br>
-            <strong>3.</strong> Review the dimensions — check/uncheck the fields you want — and click <em>Confirm Connection</em>.<br>
-            Fields matching a shared dimension (account, org unit, project) are registered as participants.
-            Other fields become <em>routing fields</em> that are mapped between systems in step 6.
-          </div>
-          <div class="info-content">
-            <div class="info-title">Auto-discovery (technical)</div>
-            <pre>POST /api/connectors/discover  { "url": "http://erp:3001" }
-
-Plattformen anropar:  GET http://erp:3001/api/capabilities
-Systemet svarar:
-{
-  "system_name": "erp",
-  "system_type": "erp",
-  "display_name": "ERP Mock",
-  "shared_dimensions": [
-    { "name": "account", "label": "Account", "role": "producer" }
-  ],
-  "routing_fields": [
-    { "field_name": "activity", "field_label": "Activity" }
-  ]
-}
-
-→ connector + routing_fields + participants registered automatically</pre>
-          </div>
-          <div class="info-content">
-            <div class="info-title">Demo Environment Systems</div>
-            <table style="width:100%;font-size:12px;border-collapse:collapse;">
-              <thead><tr style="color:#666;text-align:left;border-bottom:1px solid #e0e0e0;">
-                <th style="padding:3px 8px;">System</th>
-                <th style="padding:3px 8px;">System URL (for discover)</th>
-                <th style="padding:3px 8px;">Task URL (for deep-linking)</th>
-              </tr></thead>
-              <tbody>
-                <tr><td style="padding:3px 8px;">ERP Mock</td><td style="padding:3px 8px;font-family:monospace;color:#1a73e8;">http://erp-mock:3001</td><td style="padding:3px 8px;color:#999;">— (no UI)</td></tr>
-                <tr><td style="padding:3px 8px;">Product A (Budget)</td><td style="padding:3px 8px;font-family:monospace;color:#1a73e8;">http://product-a:3002</td><td style="padding:3px 8px;font-family:monospace;">http://localhost:3002</td></tr>
-                <tr><td style="padding:3px 8px;">Product B (Analytics)</td><td style="padding:3px 8px;font-family:monospace;color:#1a73e8;">http://product-b:3003</td><td style="padding:3px 8px;font-family:monospace;">http://localhost:3003</td></tr>
-              </tbody>
-            </table>
-            <p style="margin:6px 0 0;color:#888;font-size:11px;">System URL points to the Docker network's internal name. Task URL is the external address the end user reaches.</p>
+            <div class="info-title">Architecture</div>
+            The Economy Domain is a <strong>standardized staging layer</strong> — same schema regardless of whether data comes from SAP, IFS, or our demo ERP mock.<br><br>
+            <strong>Shared dimensions</strong> (account, org_unit, project) are activated below and used across all products with the same code list.<br>
+            <strong>Flex dimensions</strong> (activity, cost_center, counterpart) are ERP-specific and mapped to products' generic dim1/dim2/dim3 slots via routing rules.<br><br>
+            The adapter (<code>runEconSync</code>) is responsible for filling this layer. The platform reads from it — never from source systems directly.
           </div>
         </div>
       </div>
@@ -1004,13 +930,13 @@ In-memory ring buffer (max 200) → GET /api/events</pre>
           <div class="info-trigger" onclick="toggleInfo(this)">Show details ▸</div>
           <div class="info-content">
             <div class="info-title">What is Demo Runner?</div>
-            Simulates a full customer flow step by step. Step 1 performs the initial setup
-            automatically (dimensions + economic model). Then come operational flows
+            Simulates a full customer flow step by step. Step 1 stages reference data in the Economy Domain
+            and configures dimensions + routing. Then come operational flows
             (projects, budgets, actuals). All tabs update live as steps progress.
           </div>
           <div class="info-content">
             <div class="info-title">Demo Runner API (technical)</div>
-            <pre>POST /api/demo/step/1  → Initial Setup: reference data + economic model + dimension catalog
+            <pre>POST /api/demo/step/1  → Initial Setup: Economy Domain + shared dimensions + routing
 POST /api/demo/step/2  → IdP: provision users via SCIM (3 users from Entra)
 POST /api/demo/step/3  → ERP: create project
 POST /api/demo/step/4  → ERP: publish GL (with flex-dims)
@@ -1389,13 +1315,13 @@ In production:
     }
 
     // Setup checklist — update status indicators
-    function updateSetupChecklist(dims, models, routing, connectors) {
+    function updateSetupChecklist(dims, models, routing) {
       var dimCheck = document.getElementById('check-dims');
       var partCheck = document.getElementById('check-participants');
       var ecoCheck = document.getElementById('check-ecomodel');
       var routeCheck = document.getElementById('check-routing');
       var codeCheck = document.getElementById('check-codes');
-      var connCheck = document.getElementById('check-connectors');
+      var econCheck = document.getElementById('check-economy');
 
       var hasDims = dims && dims.length > 0;
       var hasParticipants = hasDims && dims.some(function(d) { return d.participants && d.participants.length > 0; });
@@ -1403,7 +1329,7 @@ In production:
       var hasRouting = routing && routing.length > 0;
       var totalCodes = hasDims ? dims.reduce(function(sum, d) { return sum + (d.code_count || 0); }, 0) : 0;
       var hasCodes = totalCodes > 0;
-      var hasConnectors = connectors && connectors.length > 0;
+      var econEntityCount = parseInt(document.getElementById('econEntityCount').textContent) || 0;
 
       function setCheck(el, done, text) {
         if (done) { el.classList.add('done'); } else { el.classList.remove('done'); }
@@ -1415,7 +1341,7 @@ In production:
       setCheck(ecoCheck, hasModels, hasModels ? models.length + ' slots' : 'not configured');
       setCheck(routeCheck, hasRouting, hasRouting ? routing.length + ' rules' : 'not configured');
       setCheck(codeCheck, hasCodes, hasCodes ? totalCodes + ' codes' : 'not configured');
-      setCheck(connCheck, hasConnectors, hasConnectors ? connectors.length + ' systems' : 'not configured');
+      setCheck(econCheck, econEntityCount > 0, econEntityCount > 0 ? econEntityCount + ' entities' : 'no data');
     }
 
     // Projects
@@ -1487,7 +1413,7 @@ In production:
 
     // Demo Runner
     var DEMO_STEPS = [
-      { step: 1, name: 'Initial Setup: Reference data + economic model', desc: 'Chart of accounts + org units → dimension catalog + flex-dim routing (one-time setup)', icon: '1' },
+      { step: 1, name: 'Initial Setup: Economy Domain + dimensions + routing', desc: 'Stage reference data (accounts, org units, flex dims) + activate shared dimensions + configure routing', icon: '1' },
       { step: 2, name: 'IdP: Provision Users via SCIM', desc: '3 users pushed from Entra ID — Lisa, Omar, Maria (source: scim)', icon: '2' },
       { step: 3, name: 'ERP: Create Project', desc: 'ERP project "New Office Building"', icon: '3' },
       { step: 4, name: 'ERP: Publish Actuals (GL)', desc: 'Full year 2025, all accounts/org units, 312 entries with flex dims', icon: '4' },
@@ -1919,19 +1845,6 @@ In production:
       refreshAll();
     }
 
-    async function confirmDeleteConnector(systemName, displayName) {
-      var ok = await showConfirm({
-        title: 'Disconnect system?',
-        body: 'System <strong>' + displayName + '</strong> (' + systemName + ') will be disconnected from the platform.',
-        impact: 'All related routing rules, dimension model entries, and participant registrations for this system will also be removed. Existing data already ingested is not affected.',
-        action: 'Disconnect'
-      });
-      if (!ok) return;
-      await fetch(API + '/api/connectors/' + systemName, { method: 'DELETE' });
-      showToast('Disconnected: ' + displayName);
-      refreshAll();
-    }
-
     async function confirmDeleteParticipant(dimName, product) {
       var ok = await showConfirm({
         title: 'Remove participant?',
@@ -1943,27 +1856,6 @@ In production:
       await fetch(API + '/api/shared-dimensions/' + dimName + '/participants/' + product, { method: 'DELETE' });
       showToast('Removed: ' + product + ' from ' + dimName);
       refreshAll();
-    }
-
-    async function connectInternalProduct(systemName) {
-      var ip = INTERNAL_PRODUCTS.find(function(p) { return p.system_name === systemName; });
-      if (!ip) return;
-      try {
-        var res = await fetch(API + '/api/connectors/discover', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: ip.url, connector_type: 'hypergene-' + ip.system_type })
-        });
-        var data = await res.json();
-        if (data.ok) {
-          // Set task_base_url automatically
-          await fetch(API + '/api/connectors/' + systemName, {
-            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ task_base_url: ip.task_url })
-          });
-          showToast('Connected: ' + ip.display_name);
-          refreshAll();
-        } else { showToast('Error: ' + (data.error || 'Could not connect'), 'error'); }
-      } catch(e) { showToast('Could not reach ' + ip.display_name, 'error'); }
     }
 
     // Shared Dimension Catalog
@@ -1993,7 +1885,7 @@ In production:
         }).join('');
         if (selectedDimension) showDimDetail(selectedDimension, true);
         // Update setup checklist + form dropdowns
-        updateSetupChecklist(cachedDims, cachedModels, cachedRouting, cachedConnectors);
+        updateSetupChecklist(cachedDims, cachedModels, cachedRouting);
         populateFormSelects();
       } catch(e) {}
     }
@@ -2179,151 +2071,6 @@ In production:
       } catch(e) { showToast('Network error', 'error'); }
     }
 
-    // -- Connector catalog --
-
-    var connectorCatalog = [];
-
-    async function loadConnectorCatalog() {
-      try {
-        connectorCatalog = await (await fetch(API + '/api/connector-catalog')).json();
-        var sel = document.getElementById('connType');
-        sel.innerHTML = '<option value="">Select connector…</option>' + connectorCatalog.map(function(c) {
-          return '<option value="' + c.id + '">' + c.label + '</option>';
-        }).join('');
-      } catch(e) {}
-    }
-
-    document.addEventListener('change', function(e) {
-      if (e.target && e.target.id === 'connType') {
-        var desc = document.getElementById('connTypeDesc');
-        var c = connectorCatalog.find(function(x) { return x.id === e.target.value; });
-        desc.textContent = c ? c.description : '';
-      }
-    });
-
-    // -- Form functions for setup steps --
-
-    var pendingPreview = null; // holds preview state for confirm step
-
-    function updateSelectedCount() {
-      var checks = document.querySelectorAll('#prevFields input[type=checkbox]');
-      var total = checks.length;
-      var selected = 0;
-      checks.forEach(function(cb) { if (cb.checked) selected++; });
-      document.getElementById('prevSelectedCount').textContent = selected + ' of ' + total + ' fields selected';
-      document.getElementById('confirmBtn').disabled = selected === 0;
-    }
-
-    function cancelPreview() {
-      document.getElementById('discoverPreview').style.display = 'none';
-      pendingPreview = null;
-    }
-
-    async function previewSystem() {
-      var connType = document.getElementById('connType').value;
-      var url = document.getElementById('connUrl').value.trim();
-      if (!connType) { showToast('Select a connector type', 'error'); return; }
-      if (!url) { showToast('Enter the system URL', 'error'); return; }
-      var btn = document.getElementById('discoverBtn');
-      var status = document.getElementById('discoverStatus');
-      var preview = document.getElementById('discoverPreview');
-      btn.disabled = true;
-      status.textContent = 'Fetching…';
-      status.style.color = '#888';
-      preview.style.display = 'none';
-      try {
-        var r = await fetch(API + '/api/connectors/preview', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: url, connector_type: connType })
-        });
-        var data = await r.json();
-        if (!r.ok || !data.ok) {
-          status.textContent = '❌ ' + (data.error || 'Unknown error');
-          status.style.color = '#c62828';
-          showToast(data.error || 'Could not connect', 'error');
-          return;
-        }
-        pendingPreview = { url: url, connType: connType, data: data };
-        document.getElementById('prevName').textContent = data.display_name;
-        var typeEl = document.getElementById('prevType');
-        typeEl.textContent = data.system_type;
-        typeEl.className = 'tag ' + (data.system_type === 'erp' ? 'tag-erp' : data.system_type === 'budgeting' ? 'tag-prod_a' : 'tag-prod_b');
-        document.getElementById('prevSysName').textContent = data.system_name;
-
-        var fieldsHtml = '';
-        var shared = data.fields.filter(function(f) { return f.category === 'shared'; });
-        var routing = data.fields.filter(function(f) { return f.category === 'routing'; });
-
-        if (shared.length) {
-          fieldsHtml += '<div style="margin-bottom:6px;"><span style="font-size:11px;font-weight:600;color:#666;">Shared Dimensions</span></div>';
-          shared.forEach(function(f) {
-            var roleIcon = f.role === 'producer' ? '⬆' : f.role === 'consumer' ? '⬇' : '⬍';
-            fieldsHtml += '<label style="display:inline-flex;align-items:center;gap:5px;margin:2px 10px 2px 0;font-size:12px;cursor:pointer;">' +
-              '<input type="checkbox" checked data-field="' + f.field_name + '" onchange="updateSelectedCount()">' +
-              '<span class="tag tag-linked" style="margin:0">' + roleIcon + ' ' + (f.field_label || f.shared_dimension) + '</span>' +
-              '</label>';
-          });
-        }
-        if (routing.length) {
-          fieldsHtml += '<div style="margin:' + (shared.length ? '8px' : '0') + ' 0 6px;"><span style="font-size:11px;font-weight:600;color:#666;">Routing Fields</span></div>';
-          routing.forEach(function(f) {
-            fieldsHtml += '<label style="display:inline-flex;align-items:center;gap:5px;margin:2px 10px 2px 0;font-size:12px;cursor:pointer;">' +
-              '<input type="checkbox" checked data-field="' + f.field_name + '" onchange="updateSelectedCount()">' +
-              '<span class="tag" style="margin:0;background:#e8f0fe;color:#1a73e8">' + f.field_name + ' <span style="opacity:.6;font-size:11px">(' + (f.field_label || f.field_name) + ')</span></span>' +
-              '</label>';
-          });
-        }
-        document.getElementById('prevFields').innerHTML = fieldsHtml;
-        updateSelectedCount();
-        preview.style.display = 'block';
-        status.textContent = '';
-      } catch(e) {
-        status.textContent = '❌ Network error';
-        status.style.color = '#c62828';
-        showToast('Could not connect to ' + url, 'error');
-      } finally {
-        btn.disabled = false;
-      }
-    }
-
-    async function confirmDiscover() {
-      if (!pendingPreview) return;
-      var btn = document.getElementById('confirmBtn');
-      btn.disabled = true;
-      btn.textContent = 'Connecting…';
-      var selected = [];
-      document.querySelectorAll('#prevFields input[type=checkbox]:checked').forEach(function(cb) {
-        selected.push(cb.getAttribute('data-field'));
-      });
-      try {
-        var r = await fetch(API + '/api/connectors/discover', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            url: pendingPreview.url,
-            connector_type: pendingPreview.connType,
-            selected_fields: selected
-          })
-        });
-        var data = await r.json();
-        if (!r.ok || !data.ok) {
-          showToast(data.error || 'Could not register', 'error');
-          return;
-        }
-        showToast('System connected: ' + data.display_name + ' (' + selected.length + ' fields)');
-        document.getElementById('discoverPreview').style.display = 'none';
-        document.getElementById('connUrl').value = '';
-        document.getElementById('connType').value = '';
-        document.getElementById('connTypeDesc').textContent = '';
-        pendingPreview = null;
-        refreshAll();
-      } catch(e) {
-        showToast('Could not register system', 'error');
-      } finally {
-        btn.disabled = false;
-        btn.textContent = 'Confirm connection';
-      }
-    }
-
     async function addDimension() {
       var name = document.getElementById('dimName').value.trim();
       var label = document.getElementById('dimLabel').value.trim();
@@ -2362,16 +2109,22 @@ In production:
     }
 
     // Populate form dropdowns from cached data
+    var KNOWN_SYSTEMS = [
+      { system_name: 'erp', label: 'ERP' },
+      { system_name: 'prod_a', label: 'Product A' },
+      { system_name: 'prod_b', label: 'Product B' },
+    ];
+
     function populateFormSelects() {
-      var connOpts = cachedConnectors.map(function(c) {
-        return '<option value="' + c.system_name + '">' + c.system_name + ' (' + c.display_name + ')</option>';
+      var sysOpts = KNOWN_SYSTEMS.map(function(s) {
+        return '<option value="' + s.system_name + '">' + s.system_name + ' (' + s.label + ')</option>';
       }).join('');
       var dimOpts = cachedDims.map(function(d) {
         return '<option value="' + d.name + '">' + d.name + ' (' + d.label + ')</option>';
       }).join('');
 
       var sets = {
-        dimOwner: connOpts, partProduct: connOpts, partDimName: dimOpts
+        dimOwner: sysOpts, partProduct: sysOpts, partDimName: dimOpts
       };
       for (var id in sets) {
         var el = document.getElementById(id);
@@ -2382,108 +2135,33 @@ In production:
       }
     }
 
-    // Unified refresh
-    var cachedConnectors = [];
-
-    // Internal product definitions (known by the platform)
-    var INTERNAL_PRODUCTS = [
-      { system_name: 'prod_a', display_name: 'Product A', system_type: 'budgeting', url: 'http://product-a:3002', task_url: 'http://localhost:3002' },
-      { system_name: 'prod_b', display_name: 'Product B', system_type: 'analytics', url: 'http://product-b:3003', task_url: 'http://localhost:3003' },
-    ];
-
-    async function loadConnectors() {
+    // Economy Domain overview for setup tab
+    async function loadEconOverview() {
       try {
-        cachedConnectors = await (await fetch(API + '/api/connectors')).json();
-
-        // Render internal product cards
-        var intPanel = document.getElementById('internalProducts');
-        intPanel.innerHTML = INTERNAL_PRODUCTS.map(function(ip) {
-          var isConnected = cachedConnectors.some(function(c) { return c.system_name === ip.system_name; });
-          var border = isConnected ? '2px solid #2e7d32' : '1px solid #ced4da';
-          var bg = isConnected ? '#f1f8e9' : '#fff';
-          var statusHtml = isConnected
-            ? '<span style="color:#2e7d32;font-weight:600;font-size:11px;">\u2713 Connected</span>'
-            : '<button class="btn btn-primary btn-sm" onclick="connectInternalProduct(\'' + ip.system_name + '\')">Enable</button>';
-          return '<div style="border:' + border + ';border-radius:6px;padding:12px 16px;background:' + bg + ';min-width:180px;display:flex;flex-direction:column;gap:6px;">' +
-            '<div style="font-weight:700;font-size:13px;color:#0d1822;">' + ip.display_name + '</div>' +
-            '<div style="font-size:11px;color:#888;">' + ip.system_type + '</div>' +
-            '<div>' + statusHtml + '</div>' +
-          '</div>';
-        }).join('');
-
-        // Build unified table rows: internal products first, then external
-        var body = document.getElementById('connectorsBody');
-        var rows = [];
-
-        // Internal products (only show connected ones in table)
-        INTERNAL_PRODUCTS.forEach(function(ip) {
-          var c = cachedConnectors.find(function(cc) { return cc.system_name === ip.system_name; });
-          if (!c) return;
-          var sharedDims = (c.shared_dims || []).map(function(sd) {
-            var roleIcon = sd.role === 'producer' ? '\u2b06' : sd.role === 'consumer' ? '\u2b07' : '\u2b0d';
-            return '<span class="tag tag-linked" style="margin:1px" title="' + sd.label + ' (' + sd.role + ')">' + roleIcon + ' ' + sd.label + '</span>';
-          }).join(' ');
-          var routingFields = (c.dimensions || []).map(function(d) {
-            return '<span class="tag" style="margin:1px;background:#e8f0fe;color:#1a73e8">' + d.field_name + ' <span style="opacity:.6;font-size:11px">(' + d.field_label + ')</span></span>';
-          }).join(' ');
-          var taskUrl = '<input type="text" class="task-url-input" data-system="' + c.system_name + '" value="' + (c.task_base_url || '') + '" placeholder="No UI" style="width:150px;font-size:12px;padding:3px 6px;border:1px solid ' + (c.task_base_url ? '#ddd' : '#eee') + ';border-radius:4px;color:' + (c.task_base_url ? '#333' : '#aaa') + '" />';
-          rows.push('<tr style="background:#f8fdf6">' +
-            '<td><strong>' + ip.system_name + '</strong></td>' +
-            '<td>' + ip.display_name + '</td>' +
-            '<td><span class="tag" style="margin:1px;background:#e3edfb;color:#1f64a4;font-size:11px;">internal</span></td>' +
-            '<td style="font-size:12px;color:#666;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + (c.api_base_url || '') + '">' + (c.api_base_url || '<span style="color:#ccc">\u2014</span>') + '</td>' +
-            '<td>' + (sharedDims || '<span style="color:#ccc">\u2014</span>') + '</td>' +
-            '<td>' + (routingFields || '<span style="color:#ccc">\u2014</span>') + '</td>' +
-            '<td>' + taskUrl + '</td>' +
-            '<td style="font-size:12px;color:#999">' + new Date(c.registered_at).toLocaleString('en-US') + '</td>' +
-            '<td style="width:28px"><button class="delete-btn" onclick="confirmDeleteConnector(\'' + ip.system_name + '\',\'' + ip.display_name.replace(/'/g, "\\'") + '\')" title="Disconnect">&times;</button></td>' +
-          '</tr>');
+        var entities = await (await fetch(API + '/api/economy/entities')).json();
+        // Group by dimension
+        var byDim = {};
+        entities.forEach(function(e) {
+          if (!byDim[e.dimension]) byDim[e.dimension] = 0;
+          byDim[e.dimension]++;
         });
-
-        // External systems (only connected ones)
-        var external = cachedConnectors.filter(function(c) {
-          return !INTERNAL_PRODUCTS.some(function(ip) { return ip.system_name === c.system_name; });
-        });
-        external.forEach(function(c) {
-          var sharedDims = (c.shared_dims || []).map(function(sd) {
-            var roleIcon = sd.role === 'producer' ? '\u2b06' : sd.role === 'consumer' ? '\u2b07' : '\u2b0d';
-            return '<span class="tag tag-linked" style="margin:1px" title="' + sd.label + ' (' + sd.role + ')">' + roleIcon + ' ' + sd.label + '</span>';
-          }).join(' ');
-          var routingFields = (c.dimensions || []).map(function(d) {
-            return '<span class="tag" style="margin:1px;background:#e8f0fe;color:#1a73e8">' + d.field_name + ' <span style="opacity:.6;font-size:11px">(' + d.field_label + ')</span></span>';
-          }).join(' ');
-          rows.push('<tr>' +
-            '<td><strong>' + c.system_name + '</strong></td>' +
-            '<td>' + c.display_name + '</td>' +
-            '<td><span class="tag" style="margin:1px;background:#f0f0f0;color:#555;font-size:11px;">external</span></td>' +
-            '<td style="font-size:12px;color:#666;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + (c.api_base_url || '') + '">' + (c.api_base_url || '<span style="color:#ccc">\u2014</span>') + '</td>' +
-            '<td>' + (sharedDims || '<span style="color:#ccc">\u2014</span>') + '</td>' +
-            '<td>' + (routingFields || '<span style="color:#ccc">\u2014</span>') + '</td>' +
-            '<td><input type="text" class="task-url-input" data-system="' + c.system_name + '" value="' + (c.task_base_url || '') + '" placeholder="No UI" style="width:150px;font-size:12px;padding:3px 6px;border:1px solid ' + (c.task_base_url ? '#ddd' : '#eee') + ';border-radius:4px;color:' + (c.task_base_url ? '#333' : '#aaa') + '" /></td>' +
-            '<td style="font-size:12px;color:#999">' + new Date(c.registered_at).toLocaleString('en-US') + '</td>' +
-            '<td style="width:28px"><button class="delete-btn" onclick="confirmDeleteConnector(\'' + c.system_name + '\',\'' + c.display_name.replace(/'/g, "\\'") + '\')" title="Disconnect">&times;</button></td>' +
-          '</tr>');
-        });
-
-        if (!rows.length) { body.innerHTML = '<tr><td colspan="9" style="color:#999;text-align:center;">No systems connected yet</td></tr>'; }
-        else { body.innerHTML = rows.join(''); }
-
-        // Save task_base_url on blur
-        body.querySelectorAll('.task-url-input').forEach(function(inp) {
-          inp.addEventListener('change', async function() {
-            var sys = inp.getAttribute('data-system');
-            var val = inp.value.trim();
-            try {
-              await fetch(API + '/api/connectors/' + sys, {
-                method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ task_base_url: val || null })
-              });
-              inp.style.borderColor = '#4caf50';
-              setTimeout(function() { inp.style.borderColor = '#ddd'; }, 1500);
-            } catch(e) { inp.style.borderColor = '#f44336'; }
-          });
-        });
-        populateFormSelects();
+        var dims = Object.keys(byDim);
+        document.getElementById('econEntityCount').textContent = entities.length;
+        document.getElementById('econDimensionCount').textContent = dims.length;
+        var relations = await (await fetch(API + '/api/economy/relations')).json();
+        document.getElementById('econRelationCount').textContent = relations.length;
+        var body = document.getElementById('econOverviewBody');
+        if (!dims.length) {
+          body.innerHTML = '<tr><td colspan="3" style="color:#999;text-align:center;">No data staged yet</td></tr>';
+        } else {
+          // Determine shared dims to label type
+          var sharedSet = {};
+          cachedDims.forEach(function(d) { sharedSet[d.name] = true; });
+          body.innerHTML = dims.sort().map(function(d) {
+            var typeLabel = sharedSet[d] ? '<span class="tag tag-linked" style="margin:0">shared</span>' : '<span class="tag" style="margin:0;background:#e8f0fe;color:#1a73e8">flex</span>';
+            return '<tr><td><strong>' + d + '</strong></td><td>' + byDim[d] + '</td><td>' + typeLabel + '</td></tr>';
+          }).join('');
+        }
       } catch(e) {}
     }
 
@@ -2773,12 +2451,11 @@ In production:
     }
 
     function refreshAll() {
-      loadProjects(); loadEventLog(); loadDimensionMappings(); loadDimModel(); loadSharedDimensions(); loadConnectors(); loadUsers(); loadTokenPayload(); loadEconomyDomain();
+      loadProjects(); loadEventLog(); loadDimensionMappings(); loadDimModel(); loadSharedDimensions(); loadEconOverview(); loadUsers(); loadTokenPayload(); loadEconomyDomain();
       if (typeof window.__platformShellReloadNav === 'function') window.__platformShellReloadNav();
     }
 
     // Init
-    loadConnectorCatalog();
     refreshAll(); initDemo();
     setInterval(refreshAll, 3000);
   </script>

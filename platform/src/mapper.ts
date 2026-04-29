@@ -91,23 +91,12 @@ db.exec(`
     UNIQUE(dimension_name, product, local_code)
   );
 
-  -- ── Connector Registry ──
-  CREATE TABLE IF NOT EXISTS connectors (
-    system_name    TEXT PRIMARY KEY,
-    system_type    TEXT NOT NULL,       -- 'erp', 'budgeting', 'analytics'
-    display_name   TEXT NOT NULL,
-    api_base_url   TEXT,
-    task_base_url  TEXT,
-    registered_at  TEXT NOT NULL DEFAULT (datetime('now'))
-  );
-
-  CREATE TABLE IF NOT EXISTS connector_dimensions (
-    id             INTEGER PRIMARY KEY AUTOINCREMENT,
-    system_name    TEXT NOT NULL REFERENCES connectors(system_name),
-    field_name     TEXT NOT NULL,
-    field_label    TEXT NOT NULL,
-    data_type      TEXT NOT NULL DEFAULT 'string',
-    UNIQUE(system_name, field_name)
+  -- ── System Config (key-value per system, e.g. task_base_url for deep links) ──
+  CREATE TABLE IF NOT EXISTS system_config (
+    system_name  TEXT NOT NULL,
+    config_key   TEXT NOT NULL,
+    config_value TEXT,
+    PRIMARY KEY (system_name, config_key)
   );
 
   CREATE TABLE IF NOT EXISTS inbox_items (
@@ -266,7 +255,6 @@ function addColumnIfNotExists(table: string, column: string, type: string) {
     console.log(`[MAPPER] Migration: added ${table}.${column}`);
   }
 }
-addColumnIfNotExists("connectors", "task_base_url", "TEXT");
 addColumnIfNotExists("inbox_items", "assigned_to", "TEXT");
 addColumnIfNotExists("inbox_items", "task_path", "TEXT");
 addColumnIfNotExists("inbox_items", "due_date", "TEXT");
@@ -326,13 +314,12 @@ export function deleteDimRouting(sourceSystem: string, sourceField: string, targ
   console.log(`[MAPPER] Deleted routing: ${sourceSystem}.${sourceField} → ${targetProduct}`);
 }
 
-export function deleteConnector(systemName: string) {
-  db.prepare("DELETE FROM connector_dimensions WHERE system_name = ?").run(systemName);
+export function deleteSystem(systemName: string) {
   db.prepare("DELETE FROM dim_routing WHERE source_system = ? OR target_product = ?").run(systemName, systemName);
   db.prepare("DELETE FROM dim_models WHERE product = ?").run(systemName);
   db.prepare("DELETE FROM dimension_participants WHERE product = ?").run(systemName);
-  db.prepare("DELETE FROM connectors WHERE system_name = ?").run(systemName);
-  console.log(`[MAPPER] Deleted connector: ${systemName} (cascaded)`);
+  db.prepare("DELETE FROM system_config WHERE system_name = ?").run(systemName);
+  console.log(`[MAPPER] Deleted system: ${systemName} (cascaded)`);
 }
 
 export function deleteParticipant(dimensionName: string, product: string) {
@@ -345,7 +332,7 @@ export function resetAllData() {
     'processed_events', 'audit_events',
     'inbox_items', 'users',
     'sync_state', 'econ_facts', 'econ_relations', 'econ_entity_attributes', 'econ_attribute_defs', 'econ_entities',
-    'connector_dimensions', 'connectors', 'dimension_code_mappings',
+    'system_config', 'dimension_code_mappings',
     'dimension_participants', 'shared_dimensions',
     'dim_routing', 'dim_models', 'dimension_mappings',
     'id_mappings', 'canonical_projects',
@@ -711,9 +698,19 @@ export function updateInboxItem(id: string, updates: { status?: string; title?: 
   }
 }
 
-export function getConnectorTaskBaseUrl(systemName: string): string | null {
-  const row = db.prepare("SELECT task_base_url FROM connectors WHERE system_name = ?").get(systemName) as { task_base_url: string | null } | undefined;
-  return row?.task_base_url || null;
+// ── System Config (key-value per system) ──
+
+export function setSystemConfig(systemName: string, key: string, value: string | null) {
+  db.prepare("INSERT OR REPLACE INTO system_config (system_name, config_key, config_value) VALUES (?, ?, ?)").run(systemName, key, value);
+}
+
+export function getSystemConfig(systemName: string, key: string): string | null {
+  const row = db.prepare("SELECT config_value FROM system_config WHERE system_name = ? AND config_key = ?").get(systemName, key) as { config_value: string | null } | undefined;
+  return row?.config_value || null;
+}
+
+export function getAllSystemConfigs(): any[] {
+  return db.prepare("SELECT * FROM system_config ORDER BY system_name, config_key").all();
 }
 
 export function getCodeMappings(dimensionName: string, product?: string) {
@@ -723,42 +720,7 @@ export function getCodeMappings(dimensionName: string, product?: string) {
   return db.prepare("SELECT * FROM dimension_code_mappings WHERE dimension_name = ? ORDER BY product, local_code").all(dimensionName);
 }
 
-// ── Connector Registry ──
 
-export function registerConnector(systemName: string, systemType: string, displayName: string, apiBaseUrl?: string, taskBaseUrl?: string) {
-  db.prepare(
-    "INSERT OR REPLACE INTO connectors (system_name, system_type, display_name, api_base_url, task_base_url) VALUES (?, ?, ?, ?, ?)"
-  ).run(systemName, systemType, displayName, apiBaseUrl || null, taskBaseUrl || null);
-  console.log(`[MAPPER] Connector registered: ${systemName} (${systemType}) "${displayName}"`);
-}
-
-export function registerConnectorDimension(systemName: string, fieldName: string, fieldLabel: string, dataType: string = "string") {
-  db.prepare(
-    "INSERT OR REPLACE INTO connector_dimensions (system_name, field_name, field_label, data_type) VALUES (?, ?, ?, ?)"
-  ).run(systemName, fieldName, fieldLabel, dataType);
-  console.log(`[MAPPER] Connector dimension: ${systemName}.${fieldName} (${fieldLabel})`);
-}
-
-export function getAllConnectors() {
-  const connectors = db.prepare("SELECT * FROM connectors ORDER BY system_name").all() as any[];
-  return connectors.map(c => {
-    const dimensions = db.prepare("SELECT field_name, field_label, data_type FROM connector_dimensions WHERE system_name = ? ORDER BY field_name").all(c.system_name);
-    const shared_dims = db.prepare(
-      "SELECT dp.dimension_name, dp.role, sd.label FROM dimension_participants dp JOIN shared_dimensions sd ON sd.name = dp.dimension_name WHERE dp.product = ? ORDER BY dp.dimension_name"
-    ).all(c.system_name);
-    return { ...c, dimensions, shared_dims };
-  });
-}
-
-export function updateConnectorField(systemName: string, field: string, value: string | null) {
-  const allowed = ["task_base_url", "display_name"];
-  if (!allowed.includes(field)) throw new Error(`Field not updatable: ${field}`);
-  db.prepare(`UPDATE connectors SET ${field} = ? WHERE system_name = ?`).run(value, systemName);
-}
-
-export function getConnectorDimensions(systemName: string) {
-  return db.prepare("SELECT * FROM connector_dimensions WHERE system_name = ? ORDER BY field_name").all(systemName);
-}
 
 // ── Users & Identity ──
 

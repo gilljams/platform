@@ -5,7 +5,7 @@ import jwt from "jsonwebtoken";
 import { Kafka } from "kafkajs";
 import path from "path";
 
-import { linkProjects, getAllProjects, getMappings, getOrCreateDimensionMapping, getAllDimensionMappings, updateDimensionMapping, lookupCanonical, configureDimModel, getDimModel, getAllDimModels, configureDimRouting, getAllDimRouting, registerSharedDimension, getAllSharedDimensions, upsertDimensionCode, getDimensionCodes, deleteDimensionCode, registerParticipant, getParticipants, upsertCodeMapping, getCodeMappings, registerConnector, registerConnectorDimension, getAllConnectors, getConnectorDimensions, updateConnectorField, registerDimensionAttribute, getDimensionAttributes, setCodeAttribute, getCodeAttributes, getAllCodeAttributes, setHierarchy, getHierarchy, resetAllData, getInboxItems, addInboxItem, updateInboxItem, getConnectorTaskBaseUrl, deleteDimModel, deleteDimRouting, deleteConnector, deleteParticipant, getAllUsers, getUser, getUserByUsername, getUserByExternalId, upsertUser, updateUser, deleteUser, updateLastLogin, getUserCount, getAuditEvents, getAuditEventCount, upsertEconEntity, getEconEntities, deleteEconEntity, upsertEconEntityAttribute, getEconEntityAttributes, upsertEconAttributeDef, getEconAttributeDefs, upsertEconRelation, getEconRelations, insertEconFacts, validateEconFacts, getEconFacts, getEconFactsSummary, publishEconFacts, getEconFactsForPublish, upsertSyncState, getSyncStates, getSyncState } from "./mapper";
+import { linkProjects, getAllProjects, getMappings, getOrCreateDimensionMapping, getAllDimensionMappings, updateDimensionMapping, lookupCanonical, configureDimModel, getDimModel, getAllDimModels, configureDimRouting, getAllDimRouting, registerSharedDimension, getAllSharedDimensions, upsertDimensionCode, getDimensionCodes, deleteDimensionCode, registerParticipant, getParticipants, upsertCodeMapping, getCodeMappings, registerDimensionAttribute, getDimensionAttributes, setCodeAttribute, getCodeAttributes, getAllCodeAttributes, setHierarchy, getHierarchy, resetAllData, getInboxItems, addInboxItem, updateInboxItem, setSystemConfig, getSystemConfig, deleteDimModel, deleteDimRouting, deleteSystem, deleteParticipant, getAllUsers, getUser, getUserByUsername, getUserByExternalId, upsertUser, updateUser, deleteUser, updateLastLogin, getUserCount, getAuditEvents, getAuditEventCount, upsertEconEntity, getEconEntities, deleteEconEntity, upsertEconEntityAttribute, getEconEntityAttributes, upsertEconAttributeDef, getEconAttributeDefs, upsertEconRelation, getEconRelations, insertEconFacts, validateEconFacts, getEconFacts, getEconFactsSummary, publishEconFacts, getEconFactsForPublish, upsertSyncState, getSyncStates, getSyncState } from "./mapper";
 import { startRouter, publishLink, getEventLog } from "./router";
 import cron from "node-cron";
 
@@ -92,7 +92,7 @@ function requireAuth(req: AuthenticatedRequest, res: express.Response, next: exp
 
 // Apply auth to all /api/* except public endpoints
 // Public paths: auth endpoints, SCIM (IdP service account), health, and system-to-system discovery
-const PUBLIC_PATHS = ["/api/login", "/api/logout", "/api/scim/v2", "/health", "/api/connectors/discover", "/api/connectors/register-capabilities", "/api/connectors/preview"];
+const PUBLIC_PATHS = ["/api/login", "/api/logout", "/api/scim/v2", "/health"];
 
 app.use((req: AuthenticatedRequest, res, next) => {
   // Only protect /api/ routes (static files, HTML pages pass through)
@@ -228,7 +228,7 @@ app.delete("/api/scim/v2/Users/:id", (req, res) => {
   res.status(204).end();
 });
 
-// Navigation: dynamic product list based on connected systems + user entitlements
+// Navigation: dynamic product list based on system config + user entitlements
 app.get("/api/navigation", (req, res) => {
   const token = req.cookies?.platform_token;
   if (!token) { res.status(401).json({ error: "Not logged in" }); return; }
@@ -237,7 +237,6 @@ app.get("/api/navigation", (req, res) => {
   try { user = jwt.verify(token, JWT_SECRET); } catch { res.status(401).json({ error: "Invalid token" }); return; }
 
   const allowedProducts = user.products || [];
-  const connectors = getAllConnectors();
 
   // Platform Admin is always available for users who have "platform" in their products
   const items: Array<{ key: string; label: string; url: string }> = [];
@@ -245,13 +244,16 @@ app.get("/api/navigation", (req, res) => {
     items.push({ key: "platform", label: "Platform Admin", url: "/admin.html" });
   }
 
-  // Internal connected products — use task_base_url for user-facing navigation
-  const INTERNAL_TYPES = ["budgeting", "analytics", "planning"];
-  for (const c of connectors) {
-    if (!INTERNAL_TYPES.includes(c.system_type)) continue;
-    if (!allowedProducts.includes(c.system_name)) continue;
-    if (!c.task_base_url) continue;
-    items.push({ key: c.system_name, label: c.display_name, url: c.task_base_url });
+  // Known internal products — use system_config task_base_url for navigation
+  const PRODUCTS: Array<{ system_name: string; label: string }> = [
+    { system_name: "prod_a", label: "Product A" },
+    { system_name: "prod_b", label: "Product B" },
+  ];
+  for (const p of PRODUCTS) {
+    if (!allowedProducts.includes(p.system_name)) continue;
+    const taskUrl = getSystemConfig(p.system_name, "task_base_url");
+    if (!taskUrl) continue;
+    items.push({ key: p.system_name, label: p.label, url: taskUrl });
   }
 
   res.json(items);
@@ -380,207 +382,12 @@ app.delete("/api/dim-routing/:source/:field/:target", (req, res) => {
   res.json({ ok: true });
 });
 
-app.delete("/api/connectors/:system", (req, res) => {
-  deleteConnector(req.params.system);
-  res.json({ ok: true });
-});
-
 app.delete("/api/shared-dimensions/:name/participants/:product", (req, res) => {
   deleteParticipant(req.params.name, req.params.product);
   res.json({ ok: true });
 });
 
 // ── Shared Dimension Catalog API ──
-
-// ── Connector Registry API ──
-
-// Connector catalog — available adapter types that can be used to connect systems
-const CONNECTOR_CATALOG = [
-  { id: "hypergene-erp", label: "ERP Adapter", description: "For systems handling accounting, general ledger and reference data (chart of accounts, org units)", protocol: "rest", capabilities_path: "/api/capabilities" },
-  { id: "hypergene-budget", label: "Budget Adapter", description: "For budget tools that create and submit budgets", protocol: "rest", capabilities_path: "/api/capabilities" },
-  { id: "hypergene-analytics", label: "Analytics Adapter", description: "For analytics and reporting systems that consume data", protocol: "rest", capabilities_path: "/api/capabilities" },
-];
-
-app.get("/api/connector-catalog", (_req, res) => {
-  res.json(CONNECTOR_CATALOG);
-});
-
-app.get("/api/connectors", (_req, res) => {
-  res.json(getAllConnectors());
-});
-
-app.post("/api/connectors/register-capabilities", (req, res) => {
-  const { system_name, system_type, display_name, api_base_url, dimensions } = req.body;
-  if (!system_name || !system_type || !display_name) {
-    res.status(400).json({ error: "system_name, system_type and display_name required" });
-    return;
-  }
-  registerConnector(system_name, system_type, display_name, api_base_url);
-  if (Array.isArray(dimensions)) {
-    for (const dim of dimensions) {
-      if (dim.field_name && dim.field_label) {
-        registerConnectorDimension(system_name, dim.field_name, dim.field_label, dim.data_type || "string");
-      }
-    }
-  }
-  res.json({ ok: true, system_name, dimensions_registered: Array.isArray(dimensions) ? dimensions.length : 0 });
-});
-
-app.patch("/api/connectors/:system", (req, res) => {
-  const { task_base_url } = req.body;
-  if (task_base_url === undefined) { res.status(400).json({ error: "task_base_url required" }); return; }
-  updateConnectorField(req.params.system, "task_base_url", task_base_url || null);
-  res.json({ ok: true, system_name: req.params.system });
-});
-
-app.get("/api/connectors/:system/dimensions", (req, res) => {
-  res.json(getConnectorDimensions(req.params.system));
-});
-
-// Preview a system's capabilities without registering anything
-app.post("/api/connectors/preview", async (req, res) => {
-  const { url, connector_type } = req.body;
-  if (!url) { res.status(400).json({ error: "url required" }); return; }
-
-  const adapter = connector_type ? CONNECTOR_CATALOG.find(c => c.id === connector_type) : null;
-  const capPath = adapter?.capabilities_path || "/api/capabilities";
-
-  try {
-    const capUrl = url.replace(/\/+$/, "") + capPath;
-    const r = await fetch(capUrl, { signal: AbortSignal.timeout(5000) });
-    if (!r.ok) { res.status(502).json({ error: `System svarade med ${r.status}` }); return; }
-    const caps = await r.json() as any;
-
-    if (!caps.system_name || !caps.system_type || !caps.display_name) {
-      res.status(502).json({ error: "Systemet saknar system_name, system_type eller display_name" }); return;
-    }
-
-    // Classify fields without registering
-    const sharedDims = getAllSharedDimensions();
-    const fields: any[] = [];
-    if (Array.isArray(caps.data_fields)) {
-      for (const field of caps.data_fields) {
-        if (!field.field_name) continue;
-        if (field.shared_dimension) {
-          fields.push({ ...field, category: "shared", selected: true });
-        } else {
-          fields.push({ ...field, category: "routing", selected: true });
-        }
-      }
-    }
-
-    res.json({
-      ok: true,
-      system_name: caps.system_name,
-      system_type: caps.system_type,
-      display_name: caps.display_name,
-      task_base_url: caps.task_base_url || null,
-      fields,
-    });
-  } catch (e: any) {
-    res.status(502).json({ error: `Could not connect: ${e.message || e}` });
-  }
-});
-
-// Auto-discover a system by calling its /api/capabilities endpoint
-app.post("/api/connectors/discover", async (req, res) => {
-  const { url, connector_type, selected_fields } = req.body;
-  if (!url) { res.status(400).json({ error: "url required" }); return; }
-
-  // Look up adapter from catalog (optional but informative)
-  const adapter = connector_type ? CONNECTOR_CATALOG.find(c => c.id === connector_type) : null;
-  const capPath = adapter?.capabilities_path || "/api/capabilities";
-
-  try {
-    const capUrl = url.replace(/\/+$/, "") + capPath;
-    const r = await fetch(capUrl, { signal: AbortSignal.timeout(5000) });
-    if (!r.ok) { res.status(502).json({ error: `System svarade med ${r.status}` }); return; }
-    const caps = await r.json() as any;
-
-    if (!caps.system_name || !caps.system_type || !caps.display_name) {
-      res.status(502).json({ error: "Systemet saknar system_name, system_type eller display_name" }); return;
-    }
-
-    // Register connector (store adapter type if provided, including task_base_url for deep linking)
-    const taskBaseUrl = caps.task_base_url || null;
-    registerConnector(caps.system_name, caps.system_type, caps.display_name, url, taskBaseUrl);
-
-    // Filter fields if user made a selection in preview
-    const selectedSet = Array.isArray(selected_fields) ? new Set(selected_fields as string[]) : null;
-
-    // Process data_fields: match against existing shared dimensions, rest become routing fields
-    const sharedDims = getAllSharedDimensions();
-    const sharedNames = new Set(sharedDims.map((d: any) => d.name));
-    const matchedShared: any[] = [];
-    const routingFields: any[] = [];
-
-    // Is this an internal Hypergene product? Internal products never own shared dimensions.
-    const INTERNAL_TYPES = ['budgeting', 'analytics', 'planning'];
-    const isInternal = INTERNAL_TYPES.includes(caps.system_type);
-
-    if (Array.isArray(caps.data_fields)) {
-      for (const field of caps.data_fields) {
-        if (!field.field_name) continue;
-        if (selectedSet && !selectedSet.has(field.field_name)) continue;
-        if (field.shared_dimension) {
-          // Field explicitly declares which shared dimension it maps to
-          const dimLabel = field.label || field.field_label || field.shared_dimension;
-          if (!sharedNames.has(field.shared_dimension)) {
-            // Create dimension — only external producers become owner
-            const owner = (!isInternal && field.role === 'producer') ? caps.system_name : '';
-            registerSharedDimension(field.shared_dimension, dimLabel, owner, "shared", field.taxonomy_type || 'shared');
-            sharedNames.add(field.shared_dimension);
-          } else if (!isInternal && field.role === 'producer') {
-            // External producer claims ownership of existing unclaimed dimension
-            const existing = sharedDims.find((d: any) => d.name === field.shared_dimension);
-            if (existing && (!existing.owner_system || existing.owner_system === 'pending')) {
-              registerSharedDimension(field.shared_dimension, existing.label, caps.system_name, existing.taxonomy_type || 'shared', existing.dimension_type || 'shared');
-            }
-          }
-          matchedShared.push(field);
-          registerParticipant(field.shared_dimension, caps.system_name, field.role || 'consumer');
-        } else {
-          // No shared dimension declared — it's a routing field
-          routingFields.push(field);
-          registerConnectorDimension(caps.system_name, field.field_name, field.field_label || field.field_name, field.data_type || "string");
-        }
-      }
-    }
-
-    // Legacy support: also handle old shared_dimensions + routing_fields arrays
-    if (Array.isArray(caps.routing_fields)) {
-      for (const rf of caps.routing_fields) {
-        if (rf.field_name && rf.field_label) {
-          registerConnectorDimension(caps.system_name, rf.field_name, rf.field_label, rf.data_type || "string");
-          routingFields.push(rf);
-        }
-      }
-    }
-    if (Array.isArray(caps.shared_dimensions)) {
-      for (const sd of caps.shared_dimensions) {
-        if (sd.name && sd.role) {
-          if (!sharedNames.has(sd.name)) {
-            const owner = (!isInternal && sd.role === 'producer') ? caps.system_name : '';
-            registerSharedDimension(sd.name, sd.label || sd.name, owner, "shared", sd.taxonomy_type || 'shared');
-            sharedNames.add(sd.name);
-          } else if (!isInternal && sd.role === 'producer') {
-            const existing = sharedDims.find((d: any) => d.name === sd.name);
-            if (existing && (!existing.owner_system || existing.owner_system === 'pending')) {
-              registerSharedDimension(sd.name, existing.label, caps.system_name, existing.taxonomy_type || 'shared', existing.dimension_type || 'shared');
-            }
-          }
-          registerParticipant(sd.name, caps.system_name, sd.role);
-          matchedShared.push(sd);
-        }
-      }
-    }
-
-    console.log(`[DISCOVER] Auto-registered ${caps.system_name} from ${url} (adapter: ${connector_type || 'auto'}, shared: ${matchedShared.length}, routing: ${routingFields.length})`);
-    res.json({ ok: true, connector_type: connector_type || null, matched_shared: matchedShared, routing_fields: routingFields, ...caps });
-  } catch (e: any) {
-    res.status(502).json({ error: `Could not connect: ${e.message || e}` });
-  }
-});
 
 app.get("/api/shared-dimensions", (_req, res) => {
   res.json(getAllSharedDimensions());
@@ -751,7 +558,7 @@ app.get("/api/inbox", (req, res) => {
   const enriched = items.map((item: any) => {
     let resolved_link = item.link;
     if (!resolved_link && item.task_path && item.source) {
-      const baseUrl = item.source === "platform" ? `http://localhost:${PORT}` : (getConnectorTaskBaseUrl(item.source) || FALLBACK_URLS[item.source]);
+      const baseUrl = item.source === "platform" ? `http://localhost:${PORT}` : (getSystemConfig(item.source, "task_base_url") || FALLBACK_URLS[item.source]);
       if (baseUrl) resolved_link = baseUrl + item.task_path;
     }
     return { ...item, resolved_link };
@@ -1060,15 +867,25 @@ app.post("/api/demo/step/1", async (_req, res) => {
     configureDimRouting("prod_a", "dim2", "prod_b", "dim2");
     configureDimRouting("prod_a", "dim3", "prod_b", "dim3");
 
-    // Auto-discover all three systems (calls their /api/capabilities endpoints)
-    // ERP is discovered first since it's the owner of shared dimensions
-    const discoverUrl = `http://localhost:${PORT}/api/connectors/discover`;
-    for (const sysUrl of [ERP_URL, PRODUCT_A_URL, PRODUCT_B_URL]) {
-      try {
-        const dr = await fetch(discoverUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: sysUrl }) });
-        if (!dr.ok) { const t = await dr.text(); console.error(`[DEMO] Discover ${sysUrl} failed ${dr.status}: ${t}`); }
-      } catch (de: any) { console.error(`[DEMO] Discover ${sysUrl} error: ${de.message}`); }
-    }
+    // ── Register shared dimensions (customer activation from Economy Domain) ──
+    registerSharedDimension("account", "Account", "erp", "shared", "account");
+    registerSharedDimension("org_unit", "Org Unit", "erp", "shared", "hierarchy");
+    registerSharedDimension("project", "Project", "erp", "shared", "flat");
+
+    // Register which products participate in each dimension
+    registerParticipant("account", "erp", "producer");
+    registerParticipant("account", "prod_a", "both");
+    registerParticipant("account", "prod_b", "consumer");
+    registerParticipant("org_unit", "erp", "producer");
+    registerParticipant("org_unit", "prod_a", "both");
+    registerParticipant("org_unit", "prod_b", "consumer");
+    registerParticipant("project", "erp", "producer");
+    registerParticipant("project", "prod_a", "producer");
+    registerParticipant("project", "prod_b", "consumer");
+
+    // Task URL config for deep links (inbox → product UI)
+    setSystemConfig("prod_a", "task_base_url", "http://localhost:3002");
+    setSystemConfig("prod_b", "task_base_url", "http://localhost:3003");
 
     // ── Economy Domain: stage entities + relations from ERP data ──
     // Economy domain is now single source of truth for dimension codes/hierarchy
@@ -1109,6 +926,29 @@ app.post("/api/demo/step/1", async (_req, res) => {
     upsertEconEntityAttribute({ dimension: "org_unit", code: "DIV-01", attribute_name: "region", attribute_value: "Stockholm", source_system: "erp" });
     upsertEconEntityAttribute({ dimension: "org_unit", code: "DIV-01", attribute_name: "level", attribute_value: "division", source_system: "erp" });
 
+    // ── ERP flex dimensions (not shared — mapped to products' dim1/dim2/dim3 via routing) ──
+    const flexDims = [
+      { dim: "activity", codes: [
+        { code: "AKT-100", name: "Design" },
+        { code: "AKT-200", name: "Construction" },
+        { code: "AKT-300", name: "Inspection" },
+      ]},
+      { dim: "cost_center", codes: [
+        { code: "KB-500", name: "Internal" },
+        { code: "KB-600", name: "External" },
+      ]},
+      { dim: "counterpart", codes: [
+        { code: "MP-200", name: "Supplier Alpha" },
+        { code: "MP-300", name: "Supplier Beta" },
+      ]},
+    ];
+    for (const fd of flexDims) {
+      for (const c of fd.codes) {
+        upsertEconEntity({ source_system: "erp", dimension: fd.dim, code: c.code, name: c.name, type: "leaf" });
+        econEntities++;
+      }
+    }
+
     upsertSyncState("erp", "entities", { last_sync_at: new Date().toISOString(), rows_received: econEntities + 1, rows_validated: econEntities + 1, status: "idle" });
     upsertSyncState("erp", "relations", { last_sync_at: new Date().toISOString(), rows_received: econRelations + 2, rows_validated: econRelations + 2, status: "idle" });
     console.log(`[DEMO] Economy Domain: staged ${econEntities + 1} entities, ${econRelations + 2} relations from ERP`);
@@ -1137,13 +977,13 @@ app.post("/api/demo/step/1", async (_req, res) => {
       type: "review",
       category: "review",
       title: "Review initial setup",
-      description: "Verify that connectors, dimensions and economic model are correctly configured.",
+      description: "Verify that dimensions, economic model and routing are correctly configured.",
       priority: "normal",
       assigned_to: "user-000", // Platform Admin
       task_path: "/admin.html",
     });
 
-    res.json({ ok: true, step: 1, description: `ERP published reference data + Platform configured economic model + dimension catalog (3 dimensions, code lists). Economy Domain: ${econEntities} entities, ${econRelations} relations staged.`, data, economy: { entities: econEntities, relations: econRelations } });
+    res.json({ ok: true, step: 1, description: `Economy Domain staged: ${econEntities + 1} entities (incl. flex dims), ${econRelations + 2} relations. Activated 3 shared dimensions + configured routing.`, economy: { entities: econEntities + 1, relations: econRelations + 2 } });
   } catch (err) {
     res.status(500).json({ error: `Could not reach ERP: ${err}` });
   }

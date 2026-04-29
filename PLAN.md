@@ -1,4 +1,4 @@
-# Platform POC — Projektplan
+﻿# Platform POC — Projektplan
 
 ## Mål
 Demonstrera en event-driven arkitektur med:
@@ -26,7 +26,7 @@ Demonstrera en event-driven arkitektur med:
 | Dimension Mapping | Shared Taxonomy: plattformen äger kanonisk kodlista, per-produkt mappning |
 | Admin UI-struktur | 4 flikar: ⚙️ Grundinställning → 🔗 Löpande drift → 📋 Events → 🎬 Demo |
 | Budget dim-routing | Budget berikas med flex-dims via samma applyDimRouting-mekanism som GL |
-| Connector Registry | System registrerar capabilities (dimensionsfält) → plattformen är ERP-oberoende |
+| Economy Domain | Standardiserat staginglager (econ_*) — adapters transformerar källdata till gemensamt format. Ersätter Connector Registry. |
 
 ## ID-standard
 
@@ -402,47 +402,46 @@ UI:t är organiserat i **fyra flikar** som speglar arbetsflödet vid kundinstall
 | **⚙️ Grundinställning** | Engångskonfiguration per kund | Dimensioner, ekonomimodell, routing |
 | **🔗 Löpande drift** | Daglig administration | Projekt, länkning, planning-dims |
 | **📋 Events** | Övervakning | Realtids event-logg |
-| **🎬 Demo** | Testverktyg | 10-stegs demoflöde |
+| **🎬 Demo** | Testverktyg | 11-stegs demoflöde |
 
 Aktiv flik sparas i `localStorage` och behålls vid sidladdning.
 
 ### ⚙️ Grundinställning — "Ny kund? Börja här."
 
-Mörk header-banner med **statuschecklista** (5 indikatorer som uppdateras live):
+Mörk header-banner med **statuschecklista** (6 indikatorer som uppdateras live):
 
 | Indikator | Grön när |
 |---|---|
 | 📚 Dimensioner | ≥1 delad dimension registrerad |
-| � Connectors | ≥1 anslutet system registrerat |
-| 📚 Dimensioner | ≥1 delad dimension registrerad |
+| 🏦 Economy Domain | ≥1 entitet i Economy Domain |
 | 👥 Deltagare | Minst en dimension har deltagare |
 | 🏷️ Kodlistor | ≥1 kod i någon dimension |
 | 📐 Ekonomimodell | ≥1 dim-slot konfigurerad |
 | 🔀 Routing | ≥1 routing-regel |
 
-**Steg 1 — Anslutna system (Connectors):**
-Tabell med alla registrerade connectors (system, typ, namn, dimensionsfält, registreringsdatum).
-Varje connector deklarerar sina **capabilities** — vilka dimensionsfält den skickar/tar emot.
-Formulär: system-ID, typ (ERP/Budgeting/Analytics), visningsnamn, dimensionsfält (field:Etikett, komma-separerade).
-Plattformen är ERP-oberoende: en ny ERP-typ behöver bara registrera sina capabilities — ingen kodändring.
+**Steg 1 — Economy Domain (staginglager):**
+Översikt av Economy Domain med antal entiteter, relationer och dimensioner.
+Visar per-dimension-tabell med entitetsantal och shared/flex-taggar.
+Economy Domain är ett standardiserat lager — adapters (t.ex. `runEconSync`) transformerar källdata till gemensamt format.
+Plattformen är ERP-oberoende: nya datakällor behöver bara en adapter som skriver till econ_*-tabellerna.
 
 **Steg 2 — Registrera delade dimensioner:**
 Tabell med alla registrerade dimensioner (namn, etikett, ägare, taxonomi-typ, antal koder, deltagare).
 Klicka på en rad → expanderbar panel med kanonisk kodlista + kodmappningar per produkt.
 Två formulär sida vid sida:
-- Registrera ny dimension (namn, etikett, ägare från connectors-dropdown, taxonomi shared/mapped)
-- Lägg till deltagare (dimension-dropdown, produkt från connectors-dropdown, roll producer/consumer/owner)
+- Registrera ny dimension (namn, etikett, ägare från kända system, taxonomi shared/mapped)
+- Lägg till deltagare (dimension-dropdown, produkt från kända system, roll producer/consumer/owner)
 
 **Steg 3 — Ekonomimodell & Routing:**
 Två tabeller sida vid sida:
 - Dimensionsmodell — vad dim1-dim3 betyder (slot → etikett → produkt)
 - Routing — hur källfält mappas till dim-slots (källa → slot → etikett)
 Två formulär sida vid sida:
-- Dimensionsmodell (produkt från connectors-dropdown, slot dim1/dim2/dim3, etikett)
-- Routing-regel (källa från connectors-dropdown, fält dynamiskt från connectors capabilities, mål-produkt, → slot)
+- Dimensionsmodell (produkt från kända system, slot dim1/dim2/dim3, etikett)
+- Routing-regel (källa från kända system, fält, mål-produkt, → slot)
 
 Alla steg markerade med "Engångsinställning"-badge.
-Formulär-dropdowns populeras dynamiskt från registrerade connectors och dimensioner.
+Formulär-dropdowns populeras dynamiskt från kända system och dimensioner.
 
 ### 🔗 Löpande drift
 
@@ -466,8 +465,8 @@ In-memory ring buffer (max 200 events) via `GET /api/events`.
 
 ### 🎬 Demo
 
-Demo Runner med 10 klickbara steg. Steg 1 utför grundinställningen
-automatiskt (dimensioner + ekonomimodell). Steg 10 demonstrerar process management. Alla flikar uppdateras live.
+Demo Runner med 11 klickbara steg. Steg 1 utför grundinställningen
+automatiskt (dimensioner + ekonomimodell). Steg 10 demonstrerar process management. Steg 11 demonstrerar resiliens. Alla flikar uppdateras live.
 
 ## Info-block i UI (Demo Explainer)
 
@@ -538,8 +537,8 @@ platform-poc/
 │   ├── Dockerfile
 │   ├── package.json
 │   ├── src/
-│   │   ├── index.ts        # Express + auth + API + demo runner + shared-dimensions + connector endpoints
-│   │   ├── mapper.ts       # SQLite: canonical ID, dimensions, dim_models, shared_dimensions, connectors, users
+│   │   ├── index.ts        # Express + auth + API + demo runner + shared-dimensions + economy domain
+│   │   ├── mapper.ts       # SQLite: canonical ID, dimensions, dim_models, shared_dimensions, system_config, users
 │   │   └── router.ts       # Kafka consumer/producer + event log + enrichment + dim routing (GL + budget)
 │   └── public/
 │       ├── login.html       # Login-sida (centrerad, ihopfällbar info)
@@ -547,10 +546,10 @@ platform-poc/
 │       └── shell.js         # Gemensam header (full/minimal beroende på entitlements)
 ```
 
-## Testcase / Demoflöde (10 steg)
+## Testcase / Demoflöde (11 steg)
 
 Demon körs via Platform Demo Runner (admin-UI eller `test-demo.ps1`).
-Steg 1–9 via API. Steg 10 (resiliens) kräver Docker CLI.
+Steg 1–10 via API. Steg 11 (resiliens) kräver Docker CLI.
 
 ### Steg 1 — Grundinställning: Referensdata + ekonomimodell + dimensionskatalog
 ERP → `AccountsPublished` på `erp.accounts`
@@ -568,7 +567,8 @@ org_units: [{ code: "OU-100", name: "IT-avd" }, { code: "OU-200", name: "Ekonomi
 - Konfigurerar flex-dimensionsmodell: dim1=Aktivitet, dim2=Kostnadsbärare, dim3=Motpart
 - Konfigurerar routing: ERP.activity→dim1, ERP.cost_bearer→dim2, ERP.counterpart→dim3
 - Konfigurerar routing för budgetverktyg: prod_a.activity→dim1, prod_a.cost_bearer→dim2, prod_a.counterpart→dim3
-- Registrerar 3 connectors (ERP, Product A, Product B) med deras dimension-capabilities
+- Registrerar flex-dimensioner i Economy Domain: activity (AKT-100/200/300), cost_center (KB-500/600), counterpart (MP-200/300)
+- Konfigurerar `system_config` med task_base_url per produkt
 
 ### Steg 2 — ERP skapar riktigt projekt
 ERP → `ProjectCreated` på `erp.projects`
@@ -680,7 +680,7 @@ Plattformen → `linkProjects(prod_a-001, erp-042)`
 Analysen visar nu **samma flex-dims för både budget och utfall**:
 - **Flex-dims** (platform-side routing): Både ERP och Product A:s källfält routas till dim1/dim2/dim3
 - **Planning dimensions** (platform-side enrichment): Platform översätter "Budget 2025" → year/type/version
-- **Connector capabilities**: Plattformen vet vilka fält varje anslutet system exponerar
+- **Economy Domain**: Plattformen har ett standardiserat staginglager med alla kodlistor och hierarkier
 
 ### Steg 10 — Process Management: Budgetuppgifter
 
@@ -1019,8 +1019,7 @@ När en användare klickar på en budgetuppgift i inboxen öppnas Product A med 
 | `shared_dimensions` | Registrerade delade dimensioner (name, label, owner_system, taxonomy_type) |
 | `dimension_participants` | Vilka produkter som producerar/konsumerar en dimension |
 | `dimension_code_mappings` | Kodöversättning per produkt (local_code ↔ canonical_code) |
-| `connectors` | Registrerade externa system (URL, schedule, capabilities) |
-| `connector_dimensions` | Vilka dimensioner en connector levererar |
+| `system_config` | Nyckel-värde-konfiguration per system (t.ex. task_base_url) |
 | `econ_entities` | **Economy Domain** — referensdata (konton, org-enheter, projekt) |
 | `econ_relations` | **Economy Domain** — hierarkier (parent-child) |
 | `econ_attribute_defs` | **Economy Domain** — attributdefinitioner per dimension |
@@ -1069,8 +1068,7 @@ git reset --soft HEAD~1
 Hanterar: `node_modules/`, `dist/`, `*.db`, `*.sqlite`, `*.log`, `.env`, editor-filer
 | `dimension_participants` | Vilka produkter som producerar/konsumerar varje dimension |
 | `dimension_code_mappings` | Per-produkt kodöversättning (local_code → canonical_code) |
-| `connectors` | Registrerade källsystem (system_name, system_type, display_name, api_base_url) |
-| `connector_dimensions` | Capabilities per connector (field_name, field_label, data_type) |
+| `system_config` | Nyckel-värde-konfiguration per system (system_name, config_key, config_value) |
 
 **API-endpoints:**
 - `GET /api/shared-dimensions` — alla dimensioner med deltagare + antal koder
@@ -1081,12 +1079,7 @@ Hanterar: `node_modules/`, `dist/`, `*.db`, `*.sqlite`, `*.log`, `.env`, editor-
 - `GET /api/shared-dimensions/:name/mappings` — kodmappningar
 - `POST /api/shared-dimensions/:name/mappings` — lägg till mappning
 
-**Connector Registry API-endpoints:**
-- `GET /api/connectors` — alla connectors med capabilities
-- `POST /api/connectors/register-capabilities` — registrera system + dimensionsfält
-- `GET /api/connectors/:system/dimensions` — dimensionsfält för ett system
-
-> Demosteg 1 registrerar automatiskt 3 dimensioner (account, org_unit, project) med deltagare, populerar kodlistor från ERP:s referensdata, och registrerar 3 connectors (ERP, Product A, Product B) med deras dimension-capabilities.
+> Demosteg 1 registrerar automatiskt 3 dimensioner (account, org_unit, project) med deltagare, populerar kodlistor från ERP:s referensdata, registrerar flex-dimensioner i Economy Domain, och konfigurerar system_config.
 
 ### Ekonomimodell & dimensionsdjup
 
@@ -1280,7 +1273,7 @@ Dessa val i POC:n fungerar direkt i produktion:
 - [x] Dimensionskatalog UI: Klickbar tabell med kodlista, deltagare och kodmappningar
 - [x] Demosteg 1: Registrerar 3 dimensioner (account, org_unit, project) + deltagare + kodlistor
 - [x] Platform Admin: Omstrukturerad till 4 flikar (⚙️ Grundinställning, 🔗 Löpande drift, 📋 Events, 🎬 Demo)
-- [x] Grundinställning-flik: "Ny kund? Börja här." med statuschecklista (6 indikatorer) + Steg 1 (Connectors) + Steg 2 (Dimensioner) + Steg 3 (Ekonomimodell & Routing)
+- [x] Grundinställning-flik: "Ny kund? Börja här." med statuschecklista (6 indikatorer) + Steg 1 (Economy Domain) + Steg 2 (Dimensioner) + Steg 3 (Ekonomimodell & Routing)
 - [x] Löpande drift-flik: Projekt + Länkning + Planning-dimensioner (separerad från engångsinställningar)
 - [x] Demosteg 1 omdöpt: "Grundinställning: Referensdata + ekonomimodell" — tydliggör engångskaraktären
 - [x] Budget dim-routing: Platform applicerar applyDimRouting(”prod_a”,”prod_b”) per budgetrad → dim_values_per_line
@@ -1288,17 +1281,15 @@ Dessa val i POC:n fungerar direkt i produktion:
 - [x] Product A: BudgetSubmitted-event inkluderar flex-dim-fält per rad
 - [x] Product B: budget consumer läser dim_values_per_line → lagrar dim1/dim2/dim3 för budget
 - [x] Analytics: Budget OCH utfall visar nu samma dim1/dim2/dim3 (inget dimensionsgap)
-- [x] Connector Registry: connectors + connector_dimensions-tabeller i platform.db
-- [x] Connector API: POST /api/connectors/register-capabilities, GET /api/connectors, GET /api/connectors/:system/dimensions
-- [x] Platform Admin: Connectors-sektion i Grundinställning (Steg 3) med capabilities-tabell
-- [x] Setup-checklista: 6 indikatorer (dimensioner, deltagare, ekonomimodell, routing, kodlistor, connectors)
-- [x] Demosteg 1 registrerar 3 connectors (ERP, Product A, Product B) med dimension-capabilities
+- [x] Economy Domain som enda sanningskälla: Connector Registry (connectors + connector_dimensions) ersatt med Economy Domain (econ_*) + system_config
+- [x] Platform Admin: Economy Domain-översikt i Grundinställning (entity/relation/dimension-count + per-dimension tabell med shared/flex-taggar)
+- [x] Setup-checklista: 6 indikatorer (dimensioner, economy domain, deltagare, kodlistor, ekonomimodell, routing)
+- [x] Demosteg 1 registrerar flex-dimensioner i Economy Domain (activity, cost_center, counterpart) + system_config
 - [x] Demosteg 1 konfigurerar routing för både ERP och Product A → Product B (6 regler)
-- [x] Grundinställning omordnad: Steg 1=Connectors → Steg 2=Dimensioner → Steg 3=Ekonomimodell & Routing (logisk ordning)
-- [x] Setup-checklista numrerad i logisk ordning: 1.Connectors → 2.Dimensioner → 3.Deltagare → 4.Kodlistor → 5.Ekonomimodell → 6.Routing
-- [x] Formulär i varje setup-steg: Connector-registrering, dimension-registrering, deltagare, dim-modell, routing-regler
-- [x] Dynamiska dropdowns: ägare/produkt populeras från registrerade connectors, dimension-listor från katalogen
-- [x] Routing-fält dynamiskt: välj källa → fält-dropdown fylls med connectorns registrerade dimensionsfält
+- [x] Grundinställning omordnad: Steg 1=Economy Domain → Steg 2=Dimensioner → Steg 3=Ekonomimodell & Routing (logisk ordning)
+- [x] Setup-checklista numrerad i logisk ordning: 1.Economy Domain → 2.Dimensioner → 3.Deltagare → 4.Kodlistor → 5.Ekonomimodell → 6.Routing
+- [x] Formulär i varje setup-steg: dimension-registrering, deltagare, dim-modell, routing-regler
+- [x] Dropdowns populeras från kända system (statisk lista) + dimension-katalogen
 - [x] Transaktionsdatum: GL-poster har transaction_date TEXT, Product B lagrar + visar i analytics
 - [x] Kodmappning i routing: applyDimRouting() översätter lokala koder → kanoniska via dimension_code_mappings
 - [x] Dimensionsattribut: dimension_attributes + dimension_code_attributes-tabeller, 4 API-endpoints, admin-UI visar attribut i kodtabell
@@ -1343,11 +1334,11 @@ Demo: *"ERP skickar dagstransaktioner, plattformen aggregerar till månader."*
 **✅ Prio 6 — Periodformat-validering** (IMPLEMENTERAD)
 ERP-mocken normaliserad: "2024-Q1" → "2025-01" i fallback-data.
 
-**Prio 7 — Connector → routing-förslag** (medel insats, medel demoeffekt)
-Connector Registry kopplas starkare till dim_routing:
-- Auto-föreslå routing-regler utifrån connectors capabilities
-- Validera att routing-regler matchar deklarerade capabilities
-- Visa varningar: *"prod_a deklarerar 'counterpart' men saknar routing-regel"*
+**Prio 7 — Economy Domain → routing-förslag** (medel insats, medel demoeffekt)
+Economy Domain kopplas starkare till dim_routing:
+- Auto-föreslå routing-regler utifrån registrerade flex-dimensioner
+- Validera att routing-regler matchar dimensioner i Economy Domain
+- Visa varningar: *"prod_a har 'counterpart' i Economy Domain men saknar routing-regel"*
 
 ### Framtida (utanför POC)
 - [ ] Multi-tenant / organisationshantering
@@ -1365,9 +1356,9 @@ Identifierade förbättringsområden, sorterade i föreslagen prioritetsordning.
 
 - [ ] Rename `erp-mock` → `economy-domain` (eller `finance-domain`)
 - [ ] Topics: `erp.accounts` → `economy.accounts`, `erp.general-ledger` → `economy.gl`
-- [ ] Connectortyp: `erp` → `economy-source` (eller behåll som connector-adapter)
+- [ ] Adaptertyp: `erp` → `economy-source` (eller behåll som adapter)
 - [ ] Uppdatera docker-compose, all doku, demo-steg
-- [ ] Info-blocks som förklarar: *"I verkligheten skulle det finnas en connector/adapter som transformerar ERP-data till detta kanoniska format"*
+- [ ] Info-blocks som förklarar: *"I verkligheten skulle det finnas en adapter som transformerar ERP-data till detta kanoniska format"*
 
 ### Prio B — Hårdkodade antaganden → konfiguration
 **Insats:** Medel | **Påverkan:** Mer realistisk arkitektur
@@ -1375,9 +1366,9 @@ Identifierade förbättringsområden, sorterade i föreslagen prioritetsordning.
 Identifiera och ersätta hårdkodade antaganden med konfigurerbar parametersättning.
 
 - [ ] Genomlys alla tjänster efter hårdkodade URL:er, topic-namn, systemnamn
-- [ ] Konfigurerbar topic-mappning (varje connector deklarerar in/ut-topics)
+- [ ] Konfigurerbar topic-mappning (varje system deklarerar in/ut-topics)
 - [ ] Miljövariabler/config för portar och URL:er (istället för `http://product-a:3002`)
-- [ ] Demo-runner bör använda connectors-registrets URLs (inte hårdkodade)
+- [ ] Demo-runner bör använda system_config URLs (inte hårdkodade)
 
 ### Prio C — Utökade datamodeller (planning_source / ledger-partitionering)
 **Insats:** Medel–stor | **Påverkan:** Stor — möjliggör Prio D
