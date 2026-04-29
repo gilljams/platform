@@ -1070,42 +1070,8 @@ app.post("/api/demo/step/1", async (_req, res) => {
       } catch (de: any) { console.error(`[DEMO] Discover ${sysUrl} error: ${de.message}`); }
     }
 
-    // Populate canonical code lists from ERP event data
-    for (const acc of data.event?.accounts || data.accounts || []) {
-      upsertDimensionCode("account", acc.code, acc.name);
-      if (acc.parent) setHierarchy("account", acc.code, acc.parent, 0);
-    }
-    for (const org of data.event?.org_units || data.org_units || []) {
-      upsertDimensionCode("org_unit", org.code, org.name);
-      if (org.parent) setHierarchy("org_unit", org.code, org.parent, 0);
-    }
-
-    // Dimension attributes — enrich codes with metadata
-    registerDimensionAttribute("account", "account_type", "Account Type", "string");
-    registerDimensionAttribute("account", "account_group", "Account Group", "string");
-    registerDimensionAttribute("org_unit", "region", "Region", "string");
-    registerDimensionAttribute("org_unit", "level", "Level", "string");
-
-    // Code attributes — sample data
-    setCodeAttribute("account", "4010", "account_type", "expense");
-    setCodeAttribute("account", "4010", "account_group", "personnel");
-    setCodeAttribute("account", "4020", "account_type", "expense");
-    setCodeAttribute("account", "4020", "account_group", "external services");
-    setCodeAttribute("account", "5010", "account_type", "expense");
-    setCodeAttribute("account", "5010", "account_group", "travel");
-    setCodeAttribute("org_unit", "OU-100", "region", "Stockholm");
-    setCodeAttribute("org_unit", "OU-100", "level", "department");
-    setCodeAttribute("org_unit", "OU-200", "region", "Stockholm");
-    setCodeAttribute("org_unit", "OU-200", "level", "department");
-
-    // Hierarchy — org_unit tree
-    setHierarchy("org_unit", "OU-100", "DIV-01", 1);
-    setHierarchy("org_unit", "OU-200", "DIV-01", 1);
-    upsertDimensionCode("org_unit", "DIV-01", "Division South");
-    setCodeAttribute("org_unit", "DIV-01", "region", "Stockholm");
-    setCodeAttribute("org_unit", "DIV-01", "level", "division");
-
     // ── Economy Domain: stage entities + relations from ERP data ──
+    // Economy domain is now single source of truth for dimension codes/hierarchy
     const accounts = data.event?.accounts || data.accounts || [];
     const orgUnits = data.event?.org_units || data.org_units || [];
     let econEntities = 0, econRelations = 0;
@@ -1119,9 +1085,33 @@ app.post("/api/demo/step/1", async (_req, res) => {
       econEntities++;
       if (org.parent) { upsertEconRelation({ source_system: "erp", dimension: "org_unit", child_code: org.code, parent_code: org.parent, hierarchy_name: "standard" }); econRelations++; }
     }
-    upsertSyncState("erp", "entities", { last_sync_at: new Date().toISOString(), rows_received: econEntities, rows_validated: econEntities, status: "idle" });
-    upsertSyncState("erp", "relations", { last_sync_at: new Date().toISOString(), rows_received: econRelations, rows_validated: econRelations, status: "idle" });
-    console.log(`[DEMO] Economy Domain: staged ${econEntities} entities, ${econRelations} relations from ERP`);
+    // Extra hierarchy node + entity not in ERP source data
+    upsertEconEntity({ source_system: "erp", dimension: "org_unit", code: "DIV-01", name: "Division South", type: "group" });
+    upsertEconRelation({ source_system: "erp", dimension: "org_unit", child_code: "OU-100", parent_code: "DIV-01", hierarchy_name: "standard", level: 1 });
+    upsertEconRelation({ source_system: "erp", dimension: "org_unit", child_code: "OU-200", parent_code: "DIV-01", hierarchy_name: "standard", level: 1 });
+
+    // Attribute definitions + sample values (via economy domain)
+    upsertEconAttributeDef({ dimension: "account", attribute_name: "account_type", attribute_label: "Account Type", source_system: "erp" });
+    upsertEconAttributeDef({ dimension: "account", attribute_name: "account_group", attribute_label: "Account Group", source_system: "erp" });
+    upsertEconAttributeDef({ dimension: "org_unit", attribute_name: "region", attribute_label: "Region", source_system: "erp" });
+    upsertEconAttributeDef({ dimension: "org_unit", attribute_name: "level", attribute_label: "Level", source_system: "erp" });
+
+    upsertEconEntityAttribute({ dimension: "account", code: "4010", attribute_name: "account_type", attribute_value: "expense", source_system: "erp" });
+    upsertEconEntityAttribute({ dimension: "account", code: "4010", attribute_name: "account_group", attribute_value: "personnel", source_system: "erp" });
+    upsertEconEntityAttribute({ dimension: "account", code: "4020", attribute_name: "account_type", attribute_value: "expense", source_system: "erp" });
+    upsertEconEntityAttribute({ dimension: "account", code: "4020", attribute_name: "account_group", attribute_value: "external services", source_system: "erp" });
+    upsertEconEntityAttribute({ dimension: "account", code: "5010", attribute_name: "account_type", attribute_value: "expense", source_system: "erp" });
+    upsertEconEntityAttribute({ dimension: "account", code: "5010", attribute_name: "account_group", attribute_value: "travel", source_system: "erp" });
+    upsertEconEntityAttribute({ dimension: "org_unit", code: "OU-100", attribute_name: "region", attribute_value: "Stockholm", source_system: "erp" });
+    upsertEconEntityAttribute({ dimension: "org_unit", code: "OU-100", attribute_name: "level", attribute_value: "department", source_system: "erp" });
+    upsertEconEntityAttribute({ dimension: "org_unit", code: "OU-200", attribute_name: "region", attribute_value: "Stockholm", source_system: "erp" });
+    upsertEconEntityAttribute({ dimension: "org_unit", code: "OU-200", attribute_name: "level", attribute_value: "department", source_system: "erp" });
+    upsertEconEntityAttribute({ dimension: "org_unit", code: "DIV-01", attribute_name: "region", attribute_value: "Stockholm", source_system: "erp" });
+    upsertEconEntityAttribute({ dimension: "org_unit", code: "DIV-01", attribute_name: "level", attribute_value: "division", source_system: "erp" });
+
+    upsertSyncState("erp", "entities", { last_sync_at: new Date().toISOString(), rows_received: econEntities + 1, rows_validated: econEntities + 1, status: "idle" });
+    upsertSyncState("erp", "relations", { last_sync_at: new Date().toISOString(), rows_received: econRelations + 2, rows_validated: econRelations + 2, status: "idle" });
+    console.log(`[DEMO] Economy Domain: staged ${econEntities + 1} entities, ${econRelations + 2} relations from ERP`);
 
     demoState.step = 1;
     console.log("[DEMO] Step 1: Reference data + economic model + dimension catalog");

@@ -1017,7 +1017,18 @@ När en användare klickar på en budgetuppgift i inboxen öppnas Product A med 
 |---|---|
 | `users` | Användaridentitet (user_id, external_id, username, email, role, org_unit, products, groups, status, source, password_hash, last_login) |
 | `shared_dimensions` | Registrerade delade dimensioner (name, label, owner_system, taxonomy_type) |
-| `dimension_codes` | Kanonisk kodlista per dimension |
+| `dimension_participants` | Vilka produkter som producerar/konsumerar en dimension |
+| `dimension_code_mappings` | Kodöversättning per produkt (local_code ↔ canonical_code) |
+| `connectors` | Registrerade externa system (URL, schedule, capabilities) |
+| `connector_dimensions` | Vilka dimensioner en connector levererar |
+| `econ_entities` | **Economy Domain** — referensdata (konton, org-enheter, projekt) |
+| `econ_relations` | **Economy Domain** — hierarkier (parent-child) |
+| `econ_attribute_defs` | **Economy Domain** — attributdefinitioner per dimension |
+| `econ_entity_attributes` | **Economy Domain** — attributvärden per entitet |
+| `econ_facts` | **Economy Domain** — transaktionsdata (GL, budget) i staging |
+| `econ_sync_state` | **Economy Domain** — synkstatus per källa |
+
+> **Arkitekturbeslut:** Economy Domain (econ_*) är enda sanningskälla för kodlistor, hierarkier och attribut. De gamla tabellerna `dimension_codes`, `dimension_attributes`, `dimension_code_attributes` och `dimension_hierarchy` har tagits bort. Befintliga API-funktioner (`getDimensionCodes`, `getHierarchy` etc.) delegerar nu till econ_*-tabellerna via tunna wrappers.
 
 ---
 
@@ -1264,7 +1275,7 @@ Dessa val i POC:n fungerar direkt i produktion:
 - [x] Demosteg 1 konfigurerar: flex-dim model (dim1=Aktivitet, dim2=KB, dim3=Motpart) + routing (ERP→Product B)
 - [x] Product B: gl_lines med dim1/dim2/dim3-kolumner, analytics med dim-labels från Platform API
 - [x] Platform Admin: Tab-baserad navigation (⚙️ Grundinställning, 🔗 Löpande drift, 📋 Events, 🎬 Demo)
-- [x] Shared Dimension Catalog: Backend-tabeller (shared_dimensions, dimension_codes, dimension_participants, dimension_code_mappings)
+- [x] Shared Dimension Catalog: Backend-tabeller (shared_dimensions, dimension_participants, dimension_code_mappings) + Economy Domain (econ_entities, econ_relations, econ_attribute_defs, econ_entity_attributes) som enda sanningskälla
 - [x] Shared Dimension Catalog: 7 CRUD-funktioner i mapper.ts + 7 API-endpoints i index.ts
 - [x] Dimensionskatalog UI: Klickbar tabell med kodlista, deltagare och kodmappningar
 - [x] Demosteg 1: Registrerar 3 dimensioner (account, org_unit, project) + deltagare + kodlistor

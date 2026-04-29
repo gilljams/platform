@@ -67,14 +67,10 @@ db.exec(`
     created_at     TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
-  CREATE TABLE IF NOT EXISTS dimension_codes (
-    id             INTEGER PRIMARY KEY AUTOINCREMENT,
-    dimension_name TEXT NOT NULL REFERENCES shared_dimensions(name),
-    code           TEXT NOT NULL,
-    label          TEXT NOT NULL,
-    created_at     TEXT NOT NULL DEFAULT (datetime('now')),
-    UNIQUE(dimension_name, code)
-  );
+  -- dimension_codes: REMOVED — replaced by econ_entities (Economy Domain)
+  -- dimension_attributes: REMOVED — replaced by econ_attribute_defs
+  -- dimension_code_attributes: REMOVED — replaced by econ_entity_attributes
+  -- dimension_hierarchy: REMOVED — replaced by econ_relations
 
   CREATE TABLE IF NOT EXISTS dimension_participants (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -112,31 +108,6 @@ db.exec(`
     field_label    TEXT NOT NULL,
     data_type      TEXT NOT NULL DEFAULT 'string',
     UNIQUE(system_name, field_name)
-  );
-
-  -- ── Dimension Attributes & Hierarchy ──
-  CREATE TABLE IF NOT EXISTS dimension_attributes (
-    dimension_name TEXT NOT NULL REFERENCES shared_dimensions(name),
-    attribute_name TEXT NOT NULL,
-    attribute_label TEXT NOT NULL,
-    data_type      TEXT NOT NULL DEFAULT 'string',
-    PRIMARY KEY (dimension_name, attribute_name)
-  );
-
-  CREATE TABLE IF NOT EXISTS dimension_code_attributes (
-    dimension_name TEXT NOT NULL,
-    code           TEXT NOT NULL,
-    attribute_name TEXT NOT NULL,
-    value          TEXT NOT NULL,
-    PRIMARY KEY (dimension_name, code, attribute_name)
-  );
-
-  CREATE TABLE IF NOT EXISTS dimension_hierarchy (
-    dimension_name TEXT NOT NULL,
-    child_code     TEXT NOT NULL,
-    parent_code    TEXT NOT NULL,
-    level          INTEGER NOT NULL DEFAULT 0,
-    PRIMARY KEY (dimension_name, child_code)
   );
 
   CREATE TABLE IF NOT EXISTS inbox_items (
@@ -374,9 +345,8 @@ export function resetAllData() {
     'processed_events', 'audit_events',
     'inbox_items', 'users',
     'sync_state', 'econ_facts', 'econ_relations', 'econ_entity_attributes', 'econ_attribute_defs', 'econ_entities',
-    'dimension_hierarchy', 'dimension_code_attributes', 'dimension_attributes',
     'connector_dimensions', 'connectors', 'dimension_code_mappings',
-    'dimension_participants', 'dimension_codes', 'shared_dimensions',
+    'dimension_participants', 'shared_dimensions',
     'dim_routing', 'dim_models', 'dimension_mappings',
     'id_mappings', 'canonical_projects',
   ];
@@ -439,17 +409,17 @@ export function linkProjects(sourceId: string, targetId: string): {
     // Merge dimension codes: update cross-references pointing at old canonical
     db.prepare("UPDATE dimension_code_mappings SET canonical_code = ? WHERE dimension_name = 'project' AND canonical_code = ?").run(keepId, mergeId);
     // Determine authoritative label: prefer the dimension owner's name
-    const keepRow = db.prepare("SELECT label FROM dimension_codes WHERE dimension_name = 'project' AND code = ?").get(keepId) as { label: string } | undefined;
-    const mergeRow = db.prepare("SELECT label FROM dimension_codes WHERE dimension_name = 'project' AND code = ?").get(mergeId) as { label: string } | undefined;
+    const keepRow = db.prepare("SELECT name FROM econ_entities WHERE dimension = 'project' AND code = ?").get(keepId) as { name: string } | undefined;
+    const mergeRow = db.prepare("SELECT name FROM econ_entities WHERE dimension = 'project' AND code = ?").get(mergeId) as { name: string } | undefined;
     if (mergeRow) {
       if (!keepRow) {
-        db.prepare("UPDATE dimension_codes SET code = ? WHERE dimension_name = 'project' AND code = ?").run(keepId, mergeId);
+        db.prepare("UPDATE econ_entities SET code = ? WHERE dimension = 'project' AND code = ?").run(keepId, mergeId);
       } else {
-        db.prepare("DELETE FROM dimension_codes WHERE dimension_name = 'project' AND code = ?").run(mergeId);
+        db.prepare("DELETE FROM econ_entities WHERE dimension = 'project' AND code = ?").run(mergeId);
       }
       // If the merged canonical came from the dimension owner, use its label
       if (mergeIsOwner) {
-        db.prepare("UPDATE dimension_codes SET label = ? WHERE dimension_name = 'project' AND code = ?").run(mergeRow.label, keepId);
+        db.prepare("UPDATE econ_entities SET name = ? WHERE dimension = 'project' AND code = ?").run(mergeRow.name, keepId);
       }
     }
     console.log(`[MAPPER] Merged ${mergeId} into ${keepId}`);
@@ -641,28 +611,64 @@ export function getAllSharedDimensions() {
   const dims = db.prepare("SELECT * FROM shared_dimensions ORDER BY name").all() as any[];
   return dims.map(d => {
     const participants = db.prepare("SELECT product, role, uses_canonical FROM dimension_participants WHERE dimension_name = ?").all(d.name);
-    const codeCount = (db.prepare("SELECT COUNT(*) as c FROM dimension_codes WHERE dimension_name = ?").get(d.name) as { c: number }).c;
-    const attributes = db.prepare("SELECT attribute_name, attribute_label, data_type FROM dimension_attributes WHERE dimension_name = ?").all(d.name);
-    const hierarchyCount = (db.prepare("SELECT COUNT(*) as c FROM dimension_hierarchy WHERE dimension_name = ?").get(d.name) as { c: number }).c;
+    const codeCount = (db.prepare("SELECT COUNT(*) as c FROM econ_entities WHERE dimension = ?").get(d.name) as { c: number }).c;
+    const attributes = db.prepare("SELECT DISTINCT attribute_name, attribute_label, data_type FROM econ_attribute_defs WHERE dimension = ?").all(d.name);
+    const hierarchyCount = (db.prepare("SELECT COUNT(*) as c FROM econ_relations WHERE dimension = ?").get(d.name) as { c: number }).c;
     return { ...d, participants, code_count: codeCount, attributes, hierarchy_count: hierarchyCount };
   });
 }
 
+// ── Shared Dimension Codes — delegate to Economy Domain ──
+
 export function upsertDimensionCode(dimensionName: string, code: string, label: string) {
-  db.prepare(
-    "INSERT OR REPLACE INTO dimension_codes (dimension_name, code, label) VALUES (?, ?, ?)"
-  ).run(dimensionName, code, label);
+  // Delegate to econ_entities — the economy domain is now source of truth
+  upsertEconEntity({ source_system: "platform", dimension: dimensionName, code, name: label });
 }
 
 export function deleteDimensionCode(dimensionName: string, code: string) {
-  db.prepare("DELETE FROM dimension_codes WHERE dimension_name = ? AND code = ?").run(dimensionName, code);
-  db.prepare("DELETE FROM dimension_code_attributes WHERE dimension_name = ? AND code = ?").run(dimensionName, code);
-  db.prepare("DELETE FROM dimension_hierarchy WHERE dimension_name = ? AND (child_code = ? OR parent_code = ?)").run(dimensionName, code, code);
+  deleteEconEntity(dimensionName, code);
   db.prepare("DELETE FROM dimension_code_mappings WHERE dimension_name = ? AND canonical_code = ?").run(dimensionName, code);
 }
 
 export function getDimensionCodes(dimensionName: string) {
-  return db.prepare("SELECT * FROM dimension_codes WHERE dimension_name = ? ORDER BY code").all(dimensionName);
+  // Return in old format: { id, dimension_name, code, label, created_at }
+  return db.prepare("SELECT id, dimension as dimension_name, code, name as label, received_at as created_at FROM econ_entities WHERE dimension = ? ORDER BY code").all(dimensionName);
+}
+
+// ── Dimension Attributes & Hierarchy — delegate to Economy Domain ──
+
+export function registerDimensionAttribute(dimensionName: string, attributeName: string, attributeLabel: string, dataType: string = "string") {
+  upsertEconAttributeDef({ dimension: dimensionName, attribute_name: attributeName, attribute_label: attributeLabel, data_type: dataType, source_system: "platform" });
+}
+
+export function getDimensionAttributes(dimensionName: string) {
+  return db.prepare("SELECT dimension as dimension_name, attribute_name, attribute_label, data_type FROM econ_attribute_defs WHERE dimension = ? ORDER BY attribute_name").all(dimensionName);
+}
+
+export function setCodeAttribute(dimensionName: string, code: string, attributeName: string, value: string) {
+  upsertEconEntityAttribute({ dimension: dimensionName, code, attribute_name: attributeName, attribute_value: value, source_system: "platform" });
+}
+
+export function getCodeAttributes(dimensionName: string, code: string) {
+  return db.prepare(
+    "SELECT attribute_name, attribute_value as value FROM econ_entity_attributes WHERE dimension = ? AND code = ?"
+  ).all(dimensionName, code) as Array<{ attribute_name: string; value: string }>;
+}
+
+export function getAllCodeAttributes(dimensionName: string) {
+  return db.prepare(
+    "SELECT code, attribute_name, attribute_value as value FROM econ_entity_attributes WHERE dimension = ? ORDER BY code, attribute_name"
+  ).all(dimensionName);
+}
+
+export function setHierarchy(dimensionName: string, childCode: string, parentCode: string, level: number = 0) {
+  upsertEconRelation({ source_system: "platform", dimension: dimensionName, child_code: childCode, parent_code: parentCode, hierarchy_name: "standard", level });
+}
+
+export function getHierarchy(dimensionName: string) {
+  return db.prepare(
+    "SELECT child_code, parent_code, level FROM econ_relations WHERE dimension = ? ORDER BY level, parent_code, child_code"
+  ).all(dimensionName);
 }
 
 export function registerParticipant(dimensionName: string, product: string, role: string, usesCanonical: boolean = true) {
@@ -752,48 +758,6 @@ export function updateConnectorField(systemName: string, field: string, value: s
 
 export function getConnectorDimensions(systemName: string) {
   return db.prepare("SELECT * FROM connector_dimensions WHERE system_name = ? ORDER BY field_name").all(systemName);
-}
-
-// ── Dimension Attributes & Hierarchy ──
-
-export function registerDimensionAttribute(dimensionName: string, attributeName: string, attributeLabel: string, dataType: string = "string") {
-  db.prepare(
-    "INSERT OR REPLACE INTO dimension_attributes (dimension_name, attribute_name, attribute_label, data_type) VALUES (?, ?, ?, ?)"
-  ).run(dimensionName, attributeName, attributeLabel, dataType);
-}
-
-export function getDimensionAttributes(dimensionName: string) {
-  return db.prepare("SELECT * FROM dimension_attributes WHERE dimension_name = ? ORDER BY attribute_name").all(dimensionName);
-}
-
-export function setCodeAttribute(dimensionName: string, code: string, attributeName: string, value: string) {
-  db.prepare(
-    "INSERT OR REPLACE INTO dimension_code_attributes (dimension_name, code, attribute_name, value) VALUES (?, ?, ?, ?)"
-  ).run(dimensionName, code, attributeName, value);
-}
-
-export function getCodeAttributes(dimensionName: string, code: string) {
-  return db.prepare(
-    "SELECT attribute_name, value FROM dimension_code_attributes WHERE dimension_name = ? AND code = ?"
-  ).all(dimensionName, code) as Array<{ attribute_name: string; value: string }>;
-}
-
-export function getAllCodeAttributes(dimensionName: string) {
-  return db.prepare(
-    "SELECT code, attribute_name, value FROM dimension_code_attributes WHERE dimension_name = ? ORDER BY code, attribute_name"
-  ).all(dimensionName);
-}
-
-export function setHierarchy(dimensionName: string, childCode: string, parentCode: string, level: number = 0) {
-  db.prepare(
-    "INSERT OR REPLACE INTO dimension_hierarchy (dimension_name, child_code, parent_code, level) VALUES (?, ?, ?, ?)"
-  ).run(dimensionName, childCode, parentCode, level);
-}
-
-export function getHierarchy(dimensionName: string) {
-  return db.prepare(
-    "SELECT child_code, parent_code, level FROM dimension_hierarchy WHERE dimension_name = ? ORDER BY level, parent_code, child_code"
-  ).all(dimensionName);
 }
 
 // ── Users & Identity ──
