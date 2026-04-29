@@ -5,7 +5,7 @@ import jwt from "jsonwebtoken";
 import { Kafka } from "kafkajs";
 import path from "path";
 
-import { linkProjects, getAllProjects, getMappings, getOrCreateDimensionMapping, getAllDimensionMappings, updateDimensionMapping, lookupCanonical, configureDimModel, getDimModel, getAllDimModels, configureDimRouting, getAllDimRouting, registerSharedDimension, getAllSharedDimensions, upsertDimensionCode, getDimensionCodes, deleteDimensionCode, registerParticipant, getParticipants, upsertCodeMapping, getCodeMappings, registerDimensionAttribute, getDimensionAttributes, setCodeAttribute, getCodeAttributes, getAllCodeAttributes, setHierarchy, getHierarchy, resetAllData, getInboxItems, addInboxItem, updateInboxItem, setSystemConfig, getSystemConfig, deleteDimModel, deleteDimRouting, deleteSystem, deleteParticipant, getAllUsers, getUser, getUserByUsername, getUserByExternalId, upsertUser, updateUser, deleteUser, updateLastLogin, getUserCount, getAuditEvents, getAuditEventCount, upsertEconEntity, getEconEntities, deleteEconEntity, upsertEconEntityAttribute, getEconEntityAttributes, upsertEconAttributeDef, getEconAttributeDefs, upsertEconRelation, getEconRelations, insertEconFacts, validateEconFacts, getEconFacts, getEconFactsSummary, publishEconFacts, getEconFactsForPublish, upsertSyncState, getSyncStates, getSyncState } from "./mapper";
+import { linkProjects, getAllProjects, getMappings, getOrCreateDimensionMapping, getAllDimensionMappings, updateDimensionMapping, lookupCanonical, configureDimModel, getDimModel, getAllDimModels, configureDimRouting, getAllDimRouting, registerSharedDimension, getAllSharedDimensions, upsertDimensionCode, getDimensionCodes, deleteDimensionCode, registerParticipant, getParticipants, upsertCodeMapping, getCodeMappings, registerDimensionAttribute, getDimensionAttributes, setCodeAttribute, getCodeAttributes, getAllCodeAttributes, setHierarchy, getHierarchy, resetAllData, getInboxItems, addInboxItem, updateInboxItem, setSystemConfig, getSystemConfig, getAllSystemConfigs, deleteDimModel, deleteDimRouting, deleteSystem, deleteParticipant, getAllUsers, getUser, getUserByUsername, getUserByExternalId, upsertUser, updateUser, deleteUser, updateLastLogin, getUserCount, getAuditEvents, getAuditEventCount, upsertEconEntity, getEconEntities, deleteEconEntity, upsertEconEntityAttribute, getEconEntityAttributes, upsertEconAttributeDef, getEconAttributeDefs, upsertEconRelation, getEconRelations, insertEconFacts, validateEconFacts, getEconFacts, getEconFactsSummary, publishEconFacts, getEconFactsForPublish, upsertSyncState, getSyncStates, getSyncState } from "./mapper";
 import { startRouter, publishLink, getEventLog } from "./router";
 import cron from "node-cron";
 
@@ -574,6 +574,34 @@ app.patch("/api/inbox/:id", (req, res) => {
   res.json({ ok: true });
 });
 
+// ── System Config API ──
+
+app.get("/api/system-config", (_req, res) => {
+  // Group by system_name for easier consumption
+  const rows = getAllSystemConfigs();
+  const grouped: Record<string, Record<string, string>> = {};
+  for (const r of rows) {
+    if (!grouped[r.system_name]) grouped[r.system_name] = {};
+    grouped[r.system_name][r.config_key] = r.config_value;
+  }
+  res.json(grouped);
+});
+
+app.put("/api/system-config/:system", (req, res) => {
+  const system = req.params.system;
+  const entries = req.body;
+  if (!entries || typeof entries !== "object") { res.status(400).json({ error: "body must be key-value object" }); return; }
+  for (const [key, value] of Object.entries(entries)) {
+    setSystemConfig(system, key, value as string);
+  }
+  res.json({ ok: true });
+});
+
+app.delete("/api/systems/:system", (req, res) => {
+  deleteSystem(req.params.system);
+  res.json({ ok: true });
+});
+
 // ── Economy Domain API ──
 
 // Entities (dimension members)
@@ -883,9 +911,12 @@ app.post("/api/demo/step/1", async (_req, res) => {
     registerParticipant("project", "prod_a", "producer");
     registerParticipant("project", "prod_b", "consumer");
 
-    // Task URL config for deep links (inbox → product UI)
+    // System config for deep links (inbox → product UI) and system registry
+    setSystemConfig("erp", "system_type", "erp");
     setSystemConfig("prod_a", "task_base_url", "http://localhost:3002");
+    setSystemConfig("prod_a", "system_type", "budgeting");
     setSystemConfig("prod_b", "task_base_url", "http://localhost:3003");
+    setSystemConfig("prod_b", "system_type", "analytics");
 
     // ── Economy Domain: stage entities + relations from ERP data ──
     // Economy domain is now single source of truth for dimension codes/hierarchy
