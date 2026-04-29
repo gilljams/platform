@@ -166,7 +166,20 @@ async function startConsumer() {
   });
 }
 
-// ── Dim member auto-registration ──\nconst upsertDimMember = db.prepare(\"INSERT OR IGNORE INTO dim_members (dimension, code, name) VALUES (?, ?, '')\");\nfunction registerDimMembers(lines: Record<string, unknown>[]) {\n  for (const line of lines) {\n    for (const dim of [\"dim1\", \"dim2\", \"dim3\"]) {\n      const val = line[dim];\n      if (val && typeof val === \"string\" && val.trim()) {\n        upsertDimMember.run(dim, val.trim());\n      }\n    }\n  }\n}\n\n// ── Express ──
+// ── Dim member auto-registration ──
+const upsertDimMember = db.prepare("INSERT OR IGNORE INTO dim_members (dimension, code, name) VALUES (?, ?, '')");
+function registerDimMembers(lines: Record<string, unknown>[]) {
+  for (const line of lines) {
+    for (const dim of ["dim1", "dim2", "dim3"]) {
+      const val = line[dim];
+      if (val && typeof val === "string" && val.trim()) {
+        upsertDimMember.run(dim, val.trim());
+      }
+    }
+  }
+}
+
+// ── Express ──
 
 const app = express();
 app.use(cors({ origin: true, credentials: true }));
