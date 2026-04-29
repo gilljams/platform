@@ -3,9 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/fonts/inter.css">
   <title>Platform Admin — Master Data Hub</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -906,7 +904,8 @@ In-memory ring buffer (max 200) → GET /api/events</pre>
         <div class="demo-header">
           <h2>Demo Runner</h2>
           <div style="display:flex;gap:8px;align-items:center;">
-            <span id="demoProgress" style="font-size:12px;color:#888;">Step 0 / 10</span>
+            <span id="demoProgress" style="font-size:12px;color:#888;">Step 0 / 11</span>
+            <button class="btn btn-step" id="btnRunAll" onclick="runAllDemo()" title="Reset + run steps 1–11 sequentially">&#x25b6; Run All</button>
             <button class="btn btn-reset" onclick="resetDemo()">↻ Reset</button>
           </div>
         </div>
@@ -925,14 +924,16 @@ In-memory ring buffer (max 200) → GET /api/events</pre>
           <div class="info-content">
             <div class="info-title">Demo Runner API (technical)</div>
             <pre>POST /api/demo/step/1  → Initial Setup: reference data + economic model + dimension catalog
-POST /api/demo/step/2  → ERP: create project
-POST /api/demo/step/3  → ERP: publish GL (with flex-dims)
-POST /api/demo/step/4  → Product A: create budget project
-POST /api/demo/step/5  → Product A: save budget (draft)
-POST /api/demo/step/6  → Platform: planning dimension mapping
-POST /api/demo/step/7  → Product A: submit budget
-POST /api/demo/step/8  → Platform: link projects
-POST /api/demo/step/9  → Product B: show analytics</pre>
+POST /api/demo/step/2  → IdP: provision users via SCIM (3 users from Entra)
+POST /api/demo/step/3  → ERP: create project
+POST /api/demo/step/4  → ERP: publish GL (with flex-dims)
+POST /api/demo/step/5  → Product A: create budget project
+POST /api/demo/step/6  → Product A: save budget (draft)
+POST /api/demo/step/7  → Platform: planning dimension mapping
+POST /api/demo/step/8  → Product A: submit budget
+POST /api/demo/step/9  → Platform: link projects
+POST /api/demo/step/10 → Product B: show analytics
+POST /api/demo/step/11 → Process: open budget + assign users</pre>
           </div>
         </div>
       </div>
@@ -1027,14 +1028,21 @@ POST /api/demo/step/9  → Product B: show analytics</pre>
         <div class="info-block" style="margin-top:12px">
           <div class="info-trigger" onclick="toggleInfo(this)">Show details ▸</div>
           <div class="info-content">
-            <div class="info-title">How user management works</div>
-            Users are stored in the platform's <code>users</code> table with a shared identity across all products.
-            When a product (e.g., Product A) needs to show user lists for assignments, it calls
-            <code>GET /api/users?product=prod_a</code>. The platform returns users entitled to that product.
+            <div class="info-title">User Directory — manual user management</div>
+            This section lets you <strong>create and manage users directly</strong> in the platform.
+            Use it when you need to add users manually — for example during development, for service accounts,
+            or for customers without a SCIM-compatible Identity Provider.
+            <br><br>
+            Users created here get <code>source: "local"</code> and a password you choose.
+            They can log in immediately with the username/password you set.
+            <br><br>
+            <strong>In production</strong>, most users would <em>not</em> be created here — they'd be pushed
+            automatically from an IdP via SCIM (see the section below). But the User Directory always
+            serves as the <strong>central read/write view</strong> of all users regardless of source.
             <br><br>
             <strong>Source field</strong> indicates where the user came from:<br>
             • <code>local</code> — created manually in this admin UI<br>
-            • <code>scim</code> — provisioned via SCIM 2.0 from an Identity Provider
+            • <code>scim</code> — provisioned automatically from an Identity Provider
           </div>
           <div class="info-content">
             <div class="info-title">Identity architecture (production)</div>
@@ -1128,7 +1136,23 @@ Fördelar:
         <div class="info-block" style="margin-top:12px">
           <div class="info-trigger" onclick="toggleInfo(this)">Show details ▸</div>
           <div class="info-content">
-            <div class="info-title">SCIM 2.0 Protocol (what this simulates)</div>
+            <div class="info-title">SCIM 2.0 Protocol — what this section simulates</div>
+            <p style="margin:0 0 8px;font-size:13px;color:#555;line-height:1.5">
+              This form is a <strong>simulator</strong>. It lets you manually trigger SCIM API calls
+              to test the provisioning endpoint — exactly the same calls that an Identity Provider
+              (Microsoft Entra ID, Okta, Zitadel) would make <em>automatically</em> in production.
+            </p>
+            <p style="margin:0 0 8px;font-size:13px;color:#555;line-height:1.5">
+              <strong>In production, this form does not exist.</strong> Instead, the IdP is configured
+              with the SCIM endpoint URL (<code>POST /api/scim/v2/Users</code>) and a bearer token.
+              Whenever a user is created, updated, or deactivated in the IdP, it automatically pushes
+              the change to the platform — no human interaction needed.
+            </p>
+            <p style="margin:0 0 8px;font-size:13px;color:#555;line-height:1.5">
+              Users provisioned via SCIM get <code>source: "scim"</code> and an <code>external_id</code>
+              matching the IdP's object ID. They do <em>not</em> get a password here — in production
+              they authenticate at the IdP via OIDC/SAML, not with a local password.
+            </p>
             <pre>Provisioning (IdP → Platform):
   POST /api/scim/v2/Users
   {
@@ -1377,15 +1401,16 @@ In production:
     // Demo Runner
     var DEMO_STEPS = [
       { step: 1, name: 'Initial Setup: Reference data + economic model', desc: 'Chart of accounts + org units → dimension catalog + flex-dim routing (one-time setup)', icon: '1' },
-      { step: 2, name: 'ERP: Create Project', desc: 'ERP project "New Office Building"', icon: '2' },
-      { step: 3, name: 'ERP: Publish Actuals (GL)', desc: 'Full year 2025, all accounts/org units, 312 entries with flex dims', icon: '3' },
-      { step: 4, name: 'Product A: Create Budget Project', desc: '"New Office Building — Planning"', icon: '4' },
-      { step: 5, name: 'Product A: Save Budget (draft)', desc: '500k (4010) + 200k (4020) with flex dims — local, no Kafka', icon: '5' },
-      { step: 6, name: 'Platform: Planning Dimensions', desc: '"Budget 2025" → year/type/version', icon: '6' },
-      { step: 7, name: 'Product A: Submit Budget', desc: 'draft→submitted, Platform enriches with planning dims + flex dims', icon: '7' },
-      { step: 8, name: 'Platform: Link Projects', desc: 'Budget project → ERP project → canonical ID', icon: '8' },
-      { step: 9, name: 'Product B: Show Analytics', desc: 'Budget (planning dims) + actuals (flex dims)', icon: '9' },
-      { step: 10, name: 'Resilience: Product B Down', desc: 'Stop → change → start → catch-up (Docker CLI)', icon: '10' },
+      { step: 2, name: 'IdP: Provision Users via SCIM', desc: '3 users pushed from Entra ID — Lisa, Omar, Maria (source: scim)', icon: '2' },
+      { step: 3, name: 'ERP: Create Project', desc: 'ERP project "New Office Building"', icon: '3' },
+      { step: 4, name: 'ERP: Publish Actuals (GL)', desc: 'Full year 2025, all accounts/org units, 312 entries with flex dims', icon: '4' },
+      { step: 5, name: 'Product A: Create Budget Project', desc: '"New Office Building — Planning"', icon: '5' },
+      { step: 6, name: 'Product A: Save Budget (draft)', desc: '500k (4010) + 200k (4020) with flex dims — local, no Kafka', icon: '6' },
+      { step: 7, name: 'Platform: Planning Dimensions', desc: '"Budget 2025" → year/type/version', icon: '7' },
+      { step: 8, name: 'Product A: Submit Budget', desc: 'draft→submitted, Platform enriches with planning dims + flex dims', icon: '8' },
+      { step: 9, name: 'Platform: Link Projects', desc: 'Budget project → ERP project → canonical ID', icon: '9' },
+      { step: 10, name: 'Product B: Show Analytics', desc: 'Budget (planning dims) + actuals (flex dims)', icon: '10' },
+      { step: 11, name: 'Process: Open Budget + Assign', desc: 'Budget version opened, tasks created in inbox', icon: '11' },
     ];
     var demoResults = {};
 
@@ -1436,7 +1461,7 @@ In production:
       if (state.erp_id) parts.push('<strong>ERP:</strong> ' + state.erp_id);
       if (state.canonical_id) parts.push('<strong>Canonical:</strong> ' + state.canonical_id);
       el.innerHTML = parts.length ? parts.join(' <span style="color:#ddd">|</span> ') : '<span>No active IDs yet — run step 1 to begin</span>';
-      document.getElementById('demoProgress').textContent = 'Step ' + state.step + ' / 10';
+      document.getElementById('demoProgress').textContent = 'Step ' + state.step + ' / 11';
     }
 
     async function runDemoStep(step) {
@@ -1457,6 +1482,28 @@ In production:
 
     async function resetDemo() {
       try { await fetch(API + '/api/demo/reset', { method: 'POST', credentials: 'include' }); demoResults = {}; updateDemoIds({ step: 0 }); renderDemoSteps(0); showToast('Reset'); } catch(e) { showToast('Error', 'error'); }
+    }
+
+    async function runAllDemo() {
+      var btn = document.getElementById('btnRunAll');
+      btn.disabled = true; btn.textContent = 'Running...';
+      try {
+        await fetch(API + '/api/demo/reset', { method: 'POST', credentials: 'include' });
+        demoResults = {}; updateDemoIds({ step: 0 }); renderDemoSteps(0);
+        for (var step = 1; step <= 11; step++) {
+          demoResults[step] = { running: true }; renderDemoSteps(step - 1);
+          var res = await fetch(API + '/api/demo/step/' + step, { method: 'POST', credentials: 'include' });
+          var data = await res.json();
+          if (!data.ok) { demoResults[step] = { error: data.error || 'Failed' }; renderDemoSteps(step - 1); showToast('Step ' + step + ' failed', 'error'); break; }
+          demoResults[step] = data;
+          var state = await (await fetch(API + '/api/demo/state')).json();
+          updateDemoIds(state); renderDemoSteps(state.step);
+          if (step < 11) await new Promise(function(r) { setTimeout(r, 500); });
+        }
+        refreshAll();
+        showToast('All steps done!');
+      } catch(e) { showToast('Error: ' + e.message, 'error'); }
+      btn.disabled = false; btn.textContent = '\u25b6 Run All';
     }
 
     async function initDemo() {
@@ -1886,15 +1933,14 @@ In production:
         var systemHeaders = systems.map(function(s) {
           return '<th><span class="tag tag-' + (s.startsWith('prod') ? s : 'erp') + '" style="font-size:0.85em">' + s + '</span><br><span style="font-size:10px;color:#999;">lokal kod / source key</span></th>';
         }).join('');
+        var totalCols = 3 + attrDefs.length + systems.length; // code + name + actions + attrs + systems
 
         var membersHtml = members.map(function(m) {
-          // Attribute cells
           var attrCells = attrDefs.map(function(a) {
             var val = m.attributes[a.attribute_name];
             return '<td>' + (val ? '<span class="tag tag-linked" style="font-size:0.85em">' + val + '</span>' : '<span style="color:#ddd">\u2014</span>') + '</td>';
           }).join('');
 
-          // System cross-reference cells
           var sysCells = systems.map(function(s) {
             var xref = m.xrefs.find(function(x) { return x.product === s; });
             if (!xref) return '<td style="color:#ccc;font-size:11px;">\u2014 (kanonisk)</td>';
@@ -1902,23 +1948,63 @@ In production:
             return '<td><code style="font-size:12px;">' + xref.local_code + '</code>' + srcKey + '</td>';
           }).join('');
 
+          var esc = function(s) { return s.replace(/'/g, "\\'").replace(/"/g, '&quot;'); };
           return '<tr>' +
             '<td><code style="font-weight:700;">' + m.code + '</code></td>' +
             '<td>' + m.label + '</td>' +
             attrCells +
             sysCells +
+            '<td style="white-space:nowrap">' +
+              '<button class="btn btn-sm" style="font-size:10px;padding:2px 6px;background:#eef2ff;color:#4361ee;border:1px solid #c7d2fe;margin-right:3px" onclick="editDimCode(\'' + name + '\',\'' + esc(m.code) + '\',\'' + esc(m.label) + '\')" title="Edit">&#x270e;</button>' +
+              '<button class="btn btn-sm" style="font-size:10px;padding:2px 6px;background:#fff5f5;color:#c62828;border:1px solid #ffcdd2" onclick="deleteDimCode(\'' + name + '\',\'' + esc(m.code) + '\')" title="Delete">&#x2715;</button>' +
+            '</td>' +
           '</tr>';
         }).join('');
-        if (!membersHtml) membersHtml = '<tr><td colspan="' + (2 + attrDefs.length + systems.length) + '" style="color:#999">No members</td></tr>';
+        if (!membersHtml) membersHtml = '<tr><td colspan="' + totalCols + '" style="color:#999">No members</td></tr>';
 
-        // === Hierarchy section ===
+        // === Hierarchy section (tree view) ===
         var hierarchyHtml = '';
         if (hierarchy.length > 0) {
-          hierarchyHtml = '<div style="margin-top:12px;"><h4 style="font-size:12px;color:#666;margin-bottom:6px;">Hierarki</h4>' +
-            '<table><thead><tr><th>Barn</th><th>\u2192</th><th>F\u00f6r\u00e4lder</th><th>Niv\u00e5</th></tr></thead><tbody>' +
-            hierarchy.map(function(h) { return '<tr><td><code>' + h.child_code + '</code></td><td style="color:#888">\u2192</td><td><code>' + h.parent_code + '</code></td><td>' + h.level + '</td></tr>'; }).join('') +
-            '</tbody></table></div>';
+          // Build a map: parent → children
+          var childMap = {};
+          var allCodes = {};
+          members.forEach(function(m) { allCodes[m.code] = m.label; });
+          hierarchy.forEach(function(h) {
+            allCodes[h.child_code] = allCodes[h.child_code] || h.child_code;
+            allCodes[h.parent_code] = allCodes[h.parent_code] || h.parent_code;
+            if (!childMap[h.parent_code]) childMap[h.parent_code] = [];
+            childMap[h.parent_code].push(h.child_code);
+          });
+          // Find roots: codes that are parents but not children
+          var childSet = {};
+          hierarchy.forEach(function(h) { childSet[h.child_code] = true; });
+          var roots = Object.keys(childMap).filter(function(c) { return !childSet[c]; });
+          if (roots.length === 0) roots = Object.keys(childMap).slice(0, 1);
+
+          function renderTree(code, depth) {
+            var indent = '<span style="color:#ccc">' + '\u2502\u00a0'.repeat(Math.max(0, depth - 1)) + (depth > 0 ? '\u251c\u2500\u00a0' : '') + '</span>';
+            var isGroup = !!childMap[code];
+            var icon = isGroup ? '\uD83D\uDCC1' : '';
+            var label = allCodes[code] || code;
+            var line = '<div style="font-size:12px;padding:1px 0;font-family:monospace;white-space:nowrap">' + indent + icon + ' <strong>' + code + '</strong> <span style="color:#888;font-weight:normal">' + label + '</span></div>';
+            var children = childMap[code] || [];
+            return line + children.map(function(c) { return renderTree(c, depth + 1); }).join('');
+          }
+          hierarchyHtml = '<div style="margin-top:12px;"><h4 style="font-size:12px;color:#666;margin-bottom:6px;">Hierarchy</h4>' +
+            '<div style="background:#fff;border:1px solid #eee;border-radius:3px;padding:8px 12px;max-height:300px;overflow:auto">' +
+            roots.map(function(r) { return renderTree(r, 0); }).join('') +
+            '</div></div>';
         }
+
+        // === Add Code form ===
+        var addCodeForm = '<div style="margin-top:12px;border-top:1px solid #eee;padding-top:12px;">' +
+          '<h4 style="font-size:12px;color:#666;margin-bottom:6px;">+ Add Code</h4>' +
+          '<div class="form-row" style="margin-bottom:0">' +
+            '<div class="form-group"><label>Code</label><input type="text" id="newDimCode" placeholder="5040" style="width:100px"></div>' +
+            '<div class="form-group"><label>Name</label><input type="text" id="newDimLabel" placeholder="Insurance" style="width:160px"></div>' +
+            '<button class="btn btn-primary btn-sm" onclick="addDimCode(\'' + name + '\')">Add</button>' +
+          '</div>' +
+        '</div>';
 
         // === Mapping form ===
         var mapForm = '<div style="margin-top:12px;border-top:1px solid #eee;padding-top:12px;">' +
@@ -1933,12 +2019,13 @@ In production:
         '</div>';
 
         panel.innerHTML = '<div class="dim-detail">' +
-          '<h3>' + name + ' \u2014 Members <button class="btn btn-sm" style="float:right;background:#eee;color:#555" onclick="closeDimDetail()">Close</button></h3>' +
+          '<h3>' + name + ' \u2014 Members <span style="font-weight:normal;font-size:12px;color:#888">(' + members.length + ' codes)</span> <button class="btn btn-sm" style="float:right;background:#eee;color:#555" onclick="closeDimDetail()">Close</button></h3>' +
           '<p style="font-size:12px;color:#888;margin:0 0 8px;">Canonical codes with attributes and cross-references per connected system.</p>' +
           '<div style="overflow-x:auto;">' +
-            '<table><thead><tr><th>Canonical Code</th><th>Name</th>' + attrHeaders + systemHeaders + '</tr></thead><tbody>' + membersHtml + '</tbody></table>' +
+            '<table><thead><tr><th>Canonical Code</th><th>Name</th>' + attrHeaders + systemHeaders + '<th></th></tr></thead><tbody>' + membersHtml + '</tbody></table>' +
           '</div>' +
           hierarchyHtml +
+          addCodeForm +
           mapForm +
         '</div>';
       } catch(e) { panel.innerHTML = '<div class="dim-detail"><p style="color:#999">Could not load details</p></div>'; }
@@ -1948,6 +2035,45 @@ In production:
       selectedDimension = null;
       document.getElementById('dimDetailPanel').innerHTML = '';
       loadSharedDimensions();
+    }
+
+    async function addDimCode(dimName) {
+      var code = document.getElementById('newDimCode').value.trim();
+      var label = document.getElementById('newDimLabel').value.trim();
+      if (!code || !label) { showToast('Fill in both code and name', 'error'); return; }
+      try {
+        var res = await fetch(API + '/api/shared-dimensions/' + dimName + '/codes', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: code, label: label })
+        });
+        var data = await res.json();
+        if (data.ok) { showToast('Added ' + code); showDimDetail(dimName, true); }
+        else showToast('Error: ' + (data.error || 'unknown'), 'error');
+      } catch(e) { showToast('Network error', 'error'); }
+    }
+
+    async function deleteDimCode(dimName, code) {
+      if (!confirm('Delete code ' + code + ' from ' + dimName + '?')) return;
+      try {
+        var res = await fetch(API + '/api/shared-dimensions/' + encodeURIComponent(dimName) + '/codes/' + encodeURIComponent(code), { method: 'DELETE' });
+        var data = await res.json();
+        if (data.ok) { showToast('Deleted ' + code); showDimDetail(dimName, true); }
+        else showToast('Error: ' + (data.error || 'unknown'), 'error');
+      } catch(e) { showToast('Network error', 'error'); }
+    }
+
+    async function editDimCode(dimName, code, currentLabel) {
+      var newLabel = prompt('Rename "' + code + '":', currentLabel);
+      if (newLabel === null || newLabel.trim() === '' || newLabel === currentLabel) return;
+      try {
+        var res = await fetch(API + '/api/shared-dimensions/' + encodeURIComponent(dimName) + '/codes/' + encodeURIComponent(code), {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ label: newLabel.trim() })
+        });
+        var data = await res.json();
+        if (data.ok) { showToast('Renamed ' + code); showDimDetail(dimName, true); }
+        else showToast('Error: ' + (data.error || 'unknown'), 'error');
+      } catch(e) { showToast('Network error', 'error'); }
     }
 
     async function addCodeMapping(dimName) {
@@ -2364,6 +2490,7 @@ In production:
       if (editingUserId) {
         // Update existing
         var updates = { name: name, email: email || undefined, role: role, org_unit: orgUnit || undefined, products: products, primary_product: products[0] || undefined };
+        if (password) updates.password_hash = password;
         var res = await fetch(API + '/api/users/' + editingUserId, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updates) });
         var data = await res.json();
         if (data.ok) { showToast('Updated: ' + name); cancelEditUser(); loadUsers(); }
@@ -2371,14 +2498,15 @@ In production:
       } else {
         // Create new via SCIM-like endpoint (internal)
         var userId = 'user-' + String(Date.now()).slice(-6);
-        var body = { externalId: userId, userName: username, displayName: name, emails: email ? [{ value: email, primary: true }] : [], groups: [], active: true };
+        var body = { externalId: userId, userName: username, displayName: name, emails: email ? [{ value: email, primary: true }] : [], groups: [], active: true, password: password || 'demo' };
         var res = await fetch(API + '/api/scim/v2/Users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
         var data = await res.json();
         if (data.user_id) {
           // Set role, products, org via platform update
+          var updateBody = { role: role, org_unit: orgUnit || undefined, products: products, primary_product: products[0] || undefined };
           await fetch(API + '/api/users/' + data.user_id, { method: 'PUT', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ role: role, org_unit: orgUnit || undefined, products: products, primary_product: products[0] || undefined }) });
-          showToast('Created: ' + name); cancelEditUser(); loadUsers();
+            body: JSON.stringify(updateBody) });
+          showToast('Created: ' + name + ' (password: ' + (password || 'demo') + ')'); cancelEditUser(); loadUsers();
         } else { statusEl.textContent = 'Error: ' + (data.error || 'failed'); statusEl.style.color = '#c62828'; }
       }
     }

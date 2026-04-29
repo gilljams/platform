@@ -3,9 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="http://localhost:3000/fonts/inter.css">
   <title>Product A — Budgeting & Forecasting</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -135,26 +133,45 @@
     .budget-grid .cell-select {
       width: 100%; border: 1px solid #ced4da; border-radius: 3px;
       background: #E8F5FE;
-      padding: 0px 6px; font-size: 12px; color: #000;
+      padding: 0px 6px; font-size: 12px; color: #333;
       cursor: pointer; appearance: none; -webkit-appearance: none;
       font-family: inherit;
-      background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%23999' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-image: none;
       background-repeat: no-repeat; background-position: right 6px center;
-      padding-right: 20px; height: 24px; line-height: 24px;
+      padding-right: 6px; height: 24px; line-height: 24px;
       box-shadow: none;
     }
-    .budget-grid .cell-select:focus {
+    .budget-grid .cell-select:focus,
+    .budget-grid .cell-select:active {
       outline: none;
       border-color: #1f64a4;
       box-shadow: 0 0 0 2px rgba(31,100,164,0.12);
+      background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%23999' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      padding-right: 20px;
     }
+
+    /* Tab bar (Entry / Details) — matches Product B */
+    .budget-tab-bar {
+      display: flex; gap: 0; padding: 0 20px;
+      background: #fff; border-bottom: 2px solid #e8e9ef;
+    }
+    .budget-tab-btn {
+      padding: 10px 16px; border: none; background: none;
+      font-size: 12px; font-weight: 600; color: #888; cursor: pointer;
+      border-bottom: 2px solid transparent; margin-bottom: -2px;
+      transition: all 0.15s;
+    }
+    .budget-tab-btn:hover { color: #1f64a4; }
+    .budget-tab-btn.active { color: #1f64a4; border-bottom-color: #1f64a4; }
+    .budget-tab-panel { display: none; }
+    .budget-tab-panel.active { display: block; }
 
     /* Spreadsheet cells: number input */
     .budget-grid .cell-num {
       width: 100%; border: none;
       background: #E8F5FE;
       padding: 4px; font-size: 12px; text-align: right;
-      color: #000; font-variant-numeric: tabular-nums;
+      color: #333; font-variant-numeric: tabular-nums;
       height: 23px; line-height: 14px;
       font-family: inherit;
       -moz-appearance: textfield;
@@ -199,10 +216,16 @@
     .grid-toolbar-actions { display: flex; gap: 8px; align-items: center; }
     .grid-toolbar .year-select {
       padding: 0px 6px; border: 1px solid #ced4da; border-radius: 3px;
-      font-size: 12px; background: #fff; color: #333; font-weight: 600;
-      cursor: pointer; height: 24px;
+      font-size: 12px; background: #fff; color: #000;
+      cursor: pointer; height: 24px; font-family: inherit; box-shadow: none;
     }
     .grid-toolbar .year-select:focus { outline: none; border-color: #1f64a4; box-shadow: 0 0 0 2px rgba(31,100,164,0.12); }
+    .year-select {
+      padding: 0px 6px; border: 1px solid #ced4da; border-radius: 3px;
+      font-size: 12px; background: #fff; color: #000;
+      cursor: pointer; height: 24px; font-family: inherit; box-shadow: none;
+    }
+    .year-select:focus { outline: none; border-color: #1f64a4; box-shadow: 0 0 0 2px rgba(31,100,164,0.12); }
 
     /* ── Summary tiles ── */
     .tile-row {
@@ -714,7 +737,7 @@ Redpanda retention: default 7 days &#x2192; events persist for a long time</pre>
       <div class="status-bar" id="statusBarBudget"></div>
 
       <!-- Year / Org / Task context toolbar -->
-      <div class="card" style="padding:8px 20px; margin-top:8px; display:flex; align-items:center; gap:14px; flex-wrap:wrap">
+      <div class="card" style="padding:8px 20px; margin-top:8px; margin-bottom:0; display:flex; align-items:center; gap:14px; flex-wrap:wrap; border-bottom:1px solid #e8e9ef; border-radius:0">
         <div id="taskContextLabel" style="display:none;font-size:13px;font-weight:600;color:#0d1822"></div>
         <div style="display:flex;align-items:center;gap:5px">
           <label style="font-size:10px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.3px;white-space:nowrap">Year</label>
@@ -730,12 +753,20 @@ Redpanda retention: default 7 days &#x2192; events persist for a long time</pre>
         <span id="versionBadge" style="display:none;padding:3px 10px;border-radius:3px;font-size:11px;font-weight:600;letter-spacing:0.2px"></span>
         <span id="taskContextStatus" style="display:none;font-size:12px"></span>
         <div style="flex:1"></div>
-        <button id="btnCompleteTask" class="btn btn-success" style="display:none;font-size:11px;padding:5px 14px" onclick="completeTask()">&#x2714; Mark complete</button>
-        <button id="btnDismissTask" class="btn btn-ghost" style="display:none;font-size:11px;padding:5px 10px" onclick="dismissTaskContext()" title="Clear task context">&#x2715;</button>
+        <button id="btnCompleteTask" class="btn btn-primary" style="display:none;font-size:11px;padding:5px 14px" onclick="completeTask()">&#x2714; Mark complete</button>
       </div>
 
-      <!-- Panel 1: Summary tiles -->
-      <div class="card" style="padding:16px 20px">
+      <!-- Tab bar (under toolbar, like Product B) -->
+      <div class="budget-tab-bar">
+        <button class="budget-tab-btn active" id="subTabEntry" onclick="switchBudgetTab('entry')">Entry</button>
+        <button class="budget-tab-btn" id="subTabDetails" onclick="switchBudgetTab('details')">Details</button>
+      </div>
+
+      <!-- ═══ Entry tab panel ═══ -->
+      <div class="budget-tab-panel active" id="budgetTabEntry">
+
+      <!-- Summary tiles -->
+      <div class="card" style="padding:16px 20px; margin-top:8px">
         <div class="tile-row" id="budgetTiles">
           <div class="tile">
             <div class="tile-label">Budget Year</div>
@@ -757,24 +788,20 @@ Redpanda retention: default 7 days &#x2192; events persist for a long time</pre>
         </div>
       </div>
 
-      <!-- Panel 2: Budget grid -->
+      <!-- Budget grid -->
       <div class="card" style="padding:16px 20px">
         <div style="display:flex; align-items:center; margin-bottom:10px; gap:10px;">
-          <h2 style="margin:0;font-size:14px;color:#0d1822">Budget Entry</h2>
+          <h2 style="margin:0;font-size:14px;color:#0d1822">Entry</h2>
           <div id="versionContext" style="display:none; padding:6px 0; font-size:12px; color:#666; display:flex; align-items:center; gap:10px;">
             <span style="font-weight:600">Version:</span>
             <span id="versionIdLabel" style="font-family:monospace; color:#666"></span>
-            <span style="color:#ced4da">|</span>
-            <span id="versionStatusLabel"></span>
-            <span style="color:#ced4da">|</span>
-            <span>Year: <strong id="versionYearLabel"></strong></span>
           </div>
+          <div id="orgScopeContext" style="display:none;font-size:12px;color:#495057;font-weight:600"></div>
           <div style="flex:1"></div>
           <button class="btn-fill-right" onclick="fillRight()" id="btnFillRight" disabled title="Select an amount cell, then click to fill its value to all months to the right"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg> Fill right</button>
           <button class="btn btn-ghost" onclick="addBudgetRow()" id="btnAddRow">Add</button>
           <button class="btn btn-primary" onclick="saveBudget()" id="btnSave">Save</button>
         </div>
-
         <div class="budget-grid-wrapper">
           <div class="budget-grid-scroll">
             <table class="budget-grid">
@@ -809,6 +836,29 @@ Submit:
   5. Product B consumes &#x2192; stores in its read model &#x2192; shows budget vs actuals</pre>
         </div>
       </div>
+
+      </div><!-- end Entry tab panel -->
+
+      <!-- ═══ Details tab panel ═══ -->
+      <div class="budget-tab-panel" id="budgetTabDetails">
+      <div class="card" style="padding:16px 20px">
+        <h2 style="margin:0 0 12px;font-size:14px;color:#0d1822">Budget Details</h2>
+        <div style="overflow-x:auto">
+          <table class="budget-grid" style="min-width:auto">
+            <thead><tr>
+              <th style="text-align:left">Account</th>
+              <th style="text-align:left">Org Unit</th>
+              <th style="text-align:left">Project</th>
+              <th style="text-align:left">Period</th>
+              <th style="text-align:right">Amount</th>
+            </tr></thead>
+            <tbody id="budgetDetailsBody"></tbody>
+            <tfoot id="budgetDetailsFoot"></tfoot>
+          </table>
+        </div>
+      </div>
+      </div><!-- end Details tab panel -->
+
     </div>
   </div>
   </div><!-- end view-report -->
@@ -1058,6 +1108,7 @@ Submit:
         } else {
           badge.textContent = 'Draft';
           badge.style.background = '#fff3e0'; badge.style.color = '#e65100';
+          badge.style.display = 'none';
         }
       } else {
         badge.style.display = 'none';
@@ -1068,15 +1119,6 @@ Submit:
       if (currentVersion) {
         vc.style.display = 'flex';
         document.getElementById('versionIdLabel').textContent = currentVersion.id;
-        document.getElementById('versionYearLabel').textContent = year;
-        const sl = document.getElementById('versionStatusLabel');
-        if (published) {
-          sl.innerHTML = '<span style="color:#1565c0;font-weight:600">Published (locked)</span>';
-        } else if (status === 'submitted') {
-          sl.innerHTML = '<span style="color:#2e7d32;font-weight:600">Submitted</span>';
-        } else {
-          sl.innerHTML = '<span style="color:#e65100;font-weight:600">Draft</span>';
-        }
       } else {
         vc.style.display = 'none';
       }
@@ -1089,29 +1131,40 @@ Submit:
       const accounts = (window._accounts || []).filter(a => a.type !== 'group');
       const orgUnits = getScopedOrgUnits();
       const orgCodes = new Set(orgUnits.map(o => o.code));
-      // Filter rows to only show those matching the org scope (if active)
       const scope = getOrgScope();
       const visibleRows = scope
         ? budgetRows.filter(r => orgCodes.has(r.org_unit))
         : budgetRows;
 
+      // Leaf detection: if exactly one org unit in scope, hide org column and show as context
+      const isLeafOrg = scope && orgUnits.length === 1;
+      const dimCols = isLeafOrg ? 2 : 3;
+      const totalCols = dimCols + 14; // dims + 12 months + total + delete
+      const orgCtx = document.getElementById('orgScopeContext');
+      if (isLeafOrg) {
+        orgCtx.textContent = orgUnits[0].code + ' ' + orgUnits[0].name;
+        orgCtx.style.display = '';
+      } else {
+        orgCtx.style.display = 'none';
+        orgCtx.textContent = '';
+      }
+      const nf = { maximumFractionDigits: 0 };
+
       // Header
       const head = document.getElementById('budgetGridHead');
       head.innerHTML = `<tr>
-        <th style="min-width:150px;text-align:left">Project</th>
+        ${isLeafOrg ? '' : '<th style="min-width:120px;text-align:left">Org Unit</th>'}
         <th style="min-width:120px;text-align:left">Account</th>
-        <th style="min-width:120px;text-align:left">Org Unit</th>
+        <th style="min-width:150px;text-align:left">Project</th>
         ${MONTH_LABELS.map(l => `<th style="text-align:right;width:58px">${l}</th>`).join('')}
         <th style="text-align:right;width:72px">Total</th>
         <th style="width:32px"></th>
       </tr>`;
 
-      // Body
+      // Body — only leaf rows, editable
       const body = document.getElementById('budgetGridBody');
       if (visibleRows.length === 0) {
-        body.innerHTML = `<tr><td colspan="16" class="grid-empty">
-          ${scope ? 'No budget rows for this org unit — click <strong>Add</strong> to start' : 'Click <strong>Add</strong> to start budgeting'}
-        </td></tr>`;
+        body.innerHTML = `<tr><td colspan="${totalCols}" class="grid-empty">No data</td></tr>`;
       } else {
         const locked = isTaskDone() || (currentVersion && currentVersion.status === 'published');
         body.innerHTML = visibleRows.map((row) => {
@@ -1132,11 +1185,11 @@ Submit:
             `<td><input type="number" class="cell-num" data-row="${i}" data-month="${mi}" value="${row.amounts[m] || ''}" placeholder="0" onclick="selectCell(this)" onchange="onGridChange(${i},'m_${m}',this.value)" ${dis}></td>`
           ).join('');
           return `<tr>
-            <td><select class="cell-select" onchange="onGridChange(${i},'project',this.value)" ${selDis}>${projOpts}</select></td>
+            ${isLeafOrg ? '' : `<td><select class="cell-select" onchange="onGridChange(${i},'org_unit',this.value)" ${selDis}>${orgOpts}</select></td>`}
             <td><select class="cell-select" onchange="onGridChange(${i},'account',this.value)" ${selDis}>${accOpts}</select></td>
-            <td><select class="cell-select" onchange="onGridChange(${i},'org_unit',this.value)" ${selDis}>${orgOpts}</select></td>
+            <td><select class="cell-select" onchange="onGridChange(${i},'project',this.value)" ${selDis}>${projOpts}</select></td>
             ${monthCells}
-            <td class="cell-sum">${rowSum ? rowSum.toLocaleString('en-US') : '&#x2014;'}</td>
+            <td class="cell-sum">${rowSum ? rowSum.toLocaleString('en-US', nf) : '&#x2014;'}</td>
             <td style="text-align:center">${locked ? '' : `<button class="btn-icon" onclick="removeBudgetRow(${i})" title="Remove row">&#x2715;</button>`}</td>
           </tr>`;
         }).join('');
@@ -1148,9 +1201,9 @@ Submit:
         const totals = MONTHS.map(m => visibleRows.reduce((s, r) => s + (r.amounts[m] || 0), 0));
         const grandTotal = totals.reduce((a, b) => a + b, 0);
         foot.innerHTML = `<tr>
-          <td colspan="3" style="text-align:right;padding-right:14px">Total</td>
-          ${totals.map(t => `<td style="text-align:right">${t ? t.toLocaleString('en-US') : '&#x2014;'}</td>`).join('')}
-          <td style="text-align:right">${grandTotal ? grandTotal.toLocaleString('en-US') : '&#x2014;'}</td>
+          <td colspan="${dimCols}" style="text-align:right;padding-right:14px">Total</td>
+          ${totals.map(t => `<td style="text-align:right">${t ? t.toLocaleString('en-US', nf) : '&#x2014;'}</td>`).join('')}
+          <td style="text-align:right">${grandTotal ? grandTotal.toLocaleString('en-US', nf) : '&#x2014;'}</td>
           <td></td>
         </tr>`;
       } else {
@@ -1161,7 +1214,7 @@ Submit:
       document.getElementById('tileBudgetYear').textContent = year;
       document.getElementById('tileRowCount').textContent = visibleRows.length;
       const gt = visibleRows.reduce((s, r) => s + MONTHS.reduce((ms, m) => ms + (r.amounts[m] || 0), 0), 0);
-      document.getElementById('tileGrandTotal').textContent = gt ? gt.toLocaleString('en-US') : '\u2014';
+      document.getElementById('tileGrandTotal').textContent = gt ? gt.toLocaleString('en-US', nf) : '\u2014';
       const tileStatus = document.getElementById('tileStatus');
       if (currentVersion) {
         if (currentVersion.status === 'published') {
@@ -1169,13 +1222,82 @@ Submit:
         } else if (currentVersion.status === 'submitted') {
           tileStatus.innerHTML = '<span style="color:#2e7d32">Submitted</span>';
         } else {
-          tileStatus.innerHTML = '<span style="color:#e65100">Draft</span>';
+          tileStatus.innerHTML = '<span style="color:#6c757d">Draft</span>';
         }
       } else {
         tileStatus.textContent = budgetRows.length > 0 ? 'Unsaved' : '\u2014';
       }
 
       updateSaveBtn();
+    }
+
+    // ── Budget sub-tabs (Entry / Details) ──
+
+    function switchBudgetTab(tab) {
+      document.querySelectorAll('.budget-tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.budget-tab-panel').forEach(p => p.classList.remove('active'));
+      document.getElementById(tab === 'entry' ? 'subTabEntry' : 'subTabDetails').classList.add('active');
+      document.getElementById(tab === 'entry' ? 'budgetTabEntry' : 'budgetTabDetails').classList.add('active');
+      if (tab === 'details') renderBudgetDetails();
+    }
+
+    function renderBudgetDetails() {
+      const accounts = (window._accounts || []);
+      const accMap = {}; accounts.forEach(a => { accMap[a.code] = a.name; });
+      const orgAll = window._orgUnits || [];
+      const orgMap = {}; orgAll.forEach(o => { orgMap[o.code] = o.name; });
+      const projAll = window._ownProjects || [];
+      const projMap = {}; projAll.forEach(p => { projMap[p.id] = p.name; });
+
+      const scope = getOrgScope();
+      const orgUnits = getScopedOrgUnits();
+      const orgCodes = new Set(orgUnits.map(o => o.code));
+      const visibleRows = scope
+        ? budgetRows.filter(r => orgCodes.has(r.org_unit))
+        : budgetRows;
+
+      const nf = { maximumFractionDigits: 0 };
+      const year = document.getElementById('budgetYear').value;
+      const lines = [];
+      visibleRows.forEach(row => {
+        MONTHS.forEach((m, mi) => {
+          const amt = row.amounts[m] || 0;
+          if (amt === 0) return;
+          lines.push({
+            account: row.account,
+            org_unit: row.org_unit,
+            project: row.project,
+            period: year + '-' + String(mi + 1).padStart(2, '0'),
+            amount: amt,
+          });
+        });
+      });
+
+      const body = document.getElementById('budgetDetailsBody');
+      const foot = document.getElementById('budgetDetailsFoot');
+      if (lines.length === 0) {
+        body.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#999;padding:24px 0">No budget data</td></tr>';
+        foot.innerHTML = '';
+        return;
+      }
+      let total = 0;
+      body.innerHTML = lines.map(l => {
+        total += l.amount;
+        const accLabel = l.account + (accMap[l.account] ? ' <span style="color:#888">' + accMap[l.account] + '</span>' : '');
+        const orgLabel = l.org_unit + (orgMap[l.org_unit] ? ' <span style="color:#888">' + orgMap[l.org_unit] + '</span>' : '');
+        const projLabel = l.project + (projMap[l.project] ? ' <span style="color:#888">' + projMap[l.project] + '</span>' : '');
+        return `<tr>
+          <td>${accLabel}</td>
+          <td>${orgLabel}</td>
+          <td>${projLabel}</td>
+          <td>${l.period}</td>
+          <td style="text-align:right;font-weight:600;font-variant-numeric:tabular-nums">${l.amount.toLocaleString('en-US', nf)}</td>
+        </tr>`;
+      }).join('');
+      foot.innerHTML = `<tr style="border-top:2px solid #ddd;font-weight:700">
+        <td colspan="4" style="text-align:right;color:#666">Total</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums">${total.toLocaleString('en-US', nf)}</td>
+      </tr>`;
     }
 
     // ── Cell selection & Fill Right ──
@@ -1791,23 +1913,20 @@ Submit:
       var label = document.getElementById('taskContextLabel');
       var statusEl = document.getElementById('taskContextStatus');
       var btn = document.getElementById('btnCompleteTask');
-      var dismiss = document.getElementById('btnDismissTask');
       if (!taskContext) {
         label.style.display = 'none';
         statusEl.style.display = 'none';
         btn.style.display = 'none';
-        dismiss.style.display = 'none';
         return;
       }
       label.style.display = '';
       label.textContent = taskContext.versionName || taskContext.version;
       statusEl.style.display = '';
-      dismiss.style.display = '';
       if (taskContext.assignmentStatus === 'done') {
         statusEl.innerHTML = '<span style="color:#2e7d32;font-weight:600">&#x2714; Completed</span>';
         btn.style.display = 'none';
       } else {
-        statusEl.innerHTML = '<span style="color:#e65100;font-weight:600">Pending</span>';
+        statusEl.innerHTML = '';
         btn.style.display = '';
       }
       renderBudgetGrid();

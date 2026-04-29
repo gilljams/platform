@@ -5,7 +5,7 @@ import jwt from "jsonwebtoken";
 import { Kafka } from "kafkajs";
 import path from "path";
 
-import { linkProjects, getAllProjects, getMappings, getOrCreateDimensionMapping, getAllDimensionMappings, updateDimensionMapping, lookupCanonical, configureDimModel, getDimModel, getAllDimModels, configureDimRouting, getAllDimRouting, registerSharedDimension, getAllSharedDimensions, upsertDimensionCode, getDimensionCodes, registerParticipant, getParticipants, upsertCodeMapping, getCodeMappings, registerConnector, registerConnectorDimension, getAllConnectors, getConnectorDimensions, updateConnectorField, registerDimensionAttribute, getDimensionAttributes, setCodeAttribute, getCodeAttributes, getAllCodeAttributes, setHierarchy, getHierarchy, resetAllData, getInboxItems, addInboxItem, updateInboxItem, getConnectorTaskBaseUrl, deleteDimModel, deleteDimRouting, deleteConnector, deleteParticipant, getAllUsers, getUser, getUserByUsername, getUserByExternalId, upsertUser, updateUser, deleteUser, updateLastLogin, getUserCount, getAuditEvents, getAuditEventCount } from "./mapper";
+import { linkProjects, getAllProjects, getMappings, getOrCreateDimensionMapping, getAllDimensionMappings, updateDimensionMapping, lookupCanonical, configureDimModel, getDimModel, getAllDimModels, configureDimRouting, getAllDimRouting, registerSharedDimension, getAllSharedDimensions, upsertDimensionCode, getDimensionCodes, deleteDimensionCode, registerParticipant, getParticipants, upsertCodeMapping, getCodeMappings, registerConnector, registerConnectorDimension, getAllConnectors, getConnectorDimensions, updateConnectorField, registerDimensionAttribute, getDimensionAttributes, setCodeAttribute, getCodeAttributes, getAllCodeAttributes, setHierarchy, getHierarchy, resetAllData, getInboxItems, addInboxItem, updateInboxItem, getConnectorTaskBaseUrl, deleteDimModel, deleteDimRouting, deleteConnector, deleteParticipant, getAllUsers, getUser, getUserByUsername, getUserByExternalId, upsertUser, updateUser, deleteUser, updateLastLogin, getUserCount, getAuditEvents, getAuditEventCount } from "./mapper";
 import { startRouter, publishLink, getEventLog } from "./router";
 
 // ── Config ──
@@ -176,7 +176,7 @@ app.delete("/api/users/:id", (req, res) => {
 // Here we simulate the protocol with simplified JSON payloads.
 
 app.post("/api/scim/v2/Users", (req, res) => {
-  const { externalId, userName, displayName, emails, groups, active } = req.body;
+  const { externalId, userName, displayName, emails, groups, active, password } = req.body;
   if (!userName || !displayName) {
     res.status(400).json({ error: "userName and displayName required" });
     return;
@@ -191,6 +191,7 @@ app.post("/api/scim/v2/Users", (req, res) => {
     groups: groups?.map((g: any) => g.display || g.value) || [],
     status: active !== false ? "active" : "suspended",
     source: "scim",
+    password_hash: password || undefined,
   });
   const { password_hash, ...safe } = user;
   res.status(201).json({ ...safe, schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"] });
@@ -608,6 +609,18 @@ app.post("/api/shared-dimensions/:name/codes", (req, res) => {
   res.json({ ok: true, dimension: req.params.name, code, label });
 });
 
+app.delete("/api/shared-dimensions/:name/codes/:code", (req, res) => {
+  deleteDimensionCode(req.params.name, req.params.code);
+  res.json({ ok: true, dimension: req.params.name, code: req.params.code });
+});
+
+app.patch("/api/shared-dimensions/:name/codes/:code", (req, res) => {
+  const { label } = req.body;
+  if (!label) { res.status(400).json({ error: "label required" }); return; }
+  upsertDimensionCode(req.params.name, req.params.code, label);
+  res.json({ ok: true, dimension: req.params.name, code: req.params.code, label });
+});
+
 app.post("/api/shared-dimensions/:name/participants", (req, res) => {
   const { product, role, uses_canonical } = req.body;
   if (!product || !role) {
@@ -829,9 +842,11 @@ app.post("/api/demo/step/1", async (_req, res) => {
     // Populate canonical code lists from ERP event data
     for (const acc of data.event?.accounts || data.accounts || []) {
       upsertDimensionCode("account", acc.code, acc.name);
+      if (acc.parent) setHierarchy("account", acc.code, acc.parent, 0);
     }
     for (const org of data.event?.org_units || data.org_units || []) {
       upsertDimensionCode("org_unit", org.code, org.name);
+      if (org.parent) setHierarchy("org_unit", org.code, org.parent, 0);
     }
 
     // Dimension attributes — enrich codes with metadata
@@ -895,8 +910,45 @@ app.post("/api/demo/step/1", async (_req, res) => {
   }
 });
 
-// Step 2: ERP creates a project
+// Step 2: IdP provisions users via SCIM
 app.post("/api/demo/step/2", async (_req, res) => {
+  try {
+    // Simulate IdP pushing 3 users via SCIM 2.0 (like Microsoft Entra ID would)
+    const scimUsers = [
+      { externalId: "entra-a1b2c3", userName: "lisa.berg", displayName: "Lisa Berg", emails: [{ value: "lisa.berg@acme.se", primary: true }], groups: [{ display: "controllers" }], active: true },
+      { externalId: "entra-d4e5f6", userName: "omar.hassan", displayName: "Omar Hassan", emails: [{ value: "omar.hassan@acme.se", primary: true }], groups: [{ display: "analysts" }], active: true },
+      { externalId: "entra-g7h8i9", userName: "maria.silva", displayName: "Maria Silva", emails: [{ value: "maria.silva@acme.se", primary: true }], groups: [{ display: "controllers" }, { display: "prod_a" }], active: true },
+    ];
+    const provisionedUsers: any[] = [];
+    for (const scimUser of scimUsers) {
+      const user = upsertUser({
+        user_id: "user-" + String(Date.now()).slice(-6) + String(Math.random()).slice(-2),
+        external_id: scimUser.externalId,
+        username: scimUser.userName,
+        name: scimUser.displayName,
+        email: scimUser.emails[0]?.value || null,
+        groups: scimUser.groups.map(g => g.display),
+        status: scimUser.active ? "active" : "suspended",
+        source: "scim",
+        password_hash: "demo",  // In production: no password, OIDC handles auth
+      });
+      provisionedUsers.push({ user_id: user.user_id, name: user.name, source: user.source, external_id: user.external_id });
+    }
+    // Assign roles and products (platform-side config after SCIM provision)
+    if (provisionedUsers[0]) updateUser(provisionedUsers[0].user_id, { role: "controller", org_unit: "OU-100", products: ["prod_a", "prod_b"], primary_product: "prod_a" });
+    if (provisionedUsers[1]) updateUser(provisionedUsers[1].user_id, { role: "analyst", org_unit: "OU-200", products: ["prod_b"], primary_product: "prod_b" });
+    if (provisionedUsers[2]) updateUser(provisionedUsers[2].user_id, { role: "controller", org_unit: "OU-300", products: ["prod_a"], primary_product: "prod_a" });
+
+    demoState.step = 2;
+    console.log(`[DEMO] Step 2: SCIM provisioned ${provisionedUsers.length} users from IdP`);
+    res.json({ ok: true, step: 2, description: `IdP provisioned ${provisionedUsers.length} users via SCIM (Lisa Berg, Omar Hassan, Maria Silva) — source: scim, external_id from Entra`, users: provisionedUsers });
+  } catch (err) {
+    res.status(500).json({ error: `SCIM provisioning failed: ${err}` });
+  }
+});
+
+// Step 3: ERP creates a project
+app.post("/api/demo/step/3", async (_req, res) => {
   try {
     const r = await fetch(`${ERP_URL}/api/create-project`, {
       method: "POST",
@@ -905,18 +957,18 @@ app.post("/api/demo/step/2", async (_req, res) => {
     });
     const data = await r.json() as any;
     demoState.erp_id = data.event?.erp_id;
-    demoState.step = 2;
-    console.log(`[DEMO] Step 2: ERP project ${demoState.erp_id}`);
-    res.json({ ok: true, step: 2, description: `ERP project created: ${demoState.erp_id}`, data });
+    demoState.step = 3;
+    console.log(`[DEMO] Step 3: ERP project ${demoState.erp_id}`);
+    res.json({ ok: true, step: 3, description: `ERP project created: ${demoState.erp_id}`, data });
   } catch (err) {
     res.status(500).json({ error: `Could not reach ERP: ${err}` });
   }
 });
 
-// Step 3: ERP publishes actuals (with activity dimension)
-app.post("/api/demo/step/3", async (_req, res) => {
+// Step 4: ERP publishes actuals (with activity dimension)
+app.post("/api/demo/step/4", async (_req, res) => {
   if (!demoState.erp_id) {
-    res.status(400).json({ error: "Run step 2 first — ERP project missing" });
+    res.status(400).json({ error: "Run step 3 first — ERP project missing" });
     return;
   }
   try {
@@ -930,9 +982,9 @@ app.post("/api/demo/step/3", async (_req, res) => {
     });
     const data = await r.json() as any;
     const count = data?.event?.entries?.length || 0;
-    demoState.step = 3;
-    console.log(`[DEMO] Step 3: GL published for ${demoState.erp_id} (${count} entries)`);
-    res.json({ ok: true, step: 3, description: `Published ${count} GL entries from ERP for project ${demoState.erp_id}`, data });
+    demoState.step = 4;
+    console.log(`[DEMO] Step 4: GL published for ${demoState.erp_id} (${count} entries)`);
+    res.json({ ok: true, step: 4, description: `Published ${count} GL entries from ERP for project ${demoState.erp_id}`, data });
   } catch (err) {
     res.status(500).json({ error: `Could not reach ERP: ${err}` });
   }
@@ -959,8 +1011,8 @@ app.post("/api/fetch-actuals", async (_req, res) => {
   }
 });
 
-// Step 4: Product A creates a budget project
-app.post("/api/demo/step/4", async (_req, res) => {
+// Step 5: Product A creates a budget project
+app.post("/api/demo/step/5", async (_req, res) => {
   try {
     const r = await fetch(`${PRODUCT_A_URL}/api/projects`, {
       method: "POST",
@@ -969,18 +1021,18 @@ app.post("/api/demo/step/4", async (_req, res) => {
     });
     const data = await r.json() as any;
     demoState.prod_a_id = data.event?.prod_a_id;
-    demoState.step = 4;
-    console.log(`[DEMO] Step 4: Budget project ${demoState.prod_a_id}`);
-    res.json({ ok: true, step: 4, description: `Budget project created: ${demoState.prod_a_id}`, data });
+    demoState.step = 5;
+    console.log(`[DEMO] Step 5: Budget project ${demoState.prod_a_id}`);
+    res.json({ ok: true, step: 5, description: `Budget project created: ${demoState.prod_a_id}`, data });
   } catch (err) {
     res.status(500).json({ error: `Could not reach Product A: ${err}` });
   }
 });
 
-// Step 5: Product A enters budget
-app.post("/api/demo/step/5", async (_req, res) => {
+// Step 6: Product A enters budget
+app.post("/api/demo/step/6", async (_req, res) => {
   if (!demoState.prod_a_id) {
-    res.status(400).json({ error: "Run step 4 first — budget project missing" });
+    res.status(400).json({ error: "Run step 5 first — budget project missing" });
     return;
   }
   try {
@@ -997,24 +1049,24 @@ app.post("/api/demo/step/5", async (_req, res) => {
     });
     const data = await r.json() as any;
     demoState.version_id = data.version_id || null;
-    demoState.step = 5;
-    console.log(`[DEMO] Step 5: Budget saved as draft for ${demoState.prod_a_id}`);
-    res.json({ ok: true, step: 5, description: `Budget saved as draft: 500k (4010) + 200k (4020) period 2025-01 → ${demoState.prod_a_id}`, data });
+    demoState.step = 6;
+    console.log(`[DEMO] Step 6: Budget saved as draft for ${demoState.prod_a_id}`);
+    res.json({ ok: true, step: 6, description: `Budget saved as draft: 500k (4010) + 200k (4020) period 2025-01 → ${demoState.prod_a_id}`, data });
   } catch (err) {
     res.status(500).json({ error: `Could not reach Product A: ${err}` });
   }
 });
 
-// Step 6: Platform: Configure dimension mapping (planning-dims)
-app.post("/api/demo/step/6", async (_req, res) => {
+// Step 7: Platform: Configure dimension mapping (planning-dims)
+app.post("/api/demo/step/7", async (_req, res) => {
   if (!demoState.prod_a_id || !demoState.version_id) {
-    res.status(400).json({ error: "Run step 5 first — budget version missing" });
+    res.status(400).json({ error: "Run step 6 first — budget version missing" });
     return;
   }
   try {
     const canonicalId = lookupCanonical("prod_a", demoState.prod_a_id);
     if (!canonicalId) {
-      res.status(400).json({ error: "Canonical ID missing — run step 4 first" });
+      res.status(400).json({ error: "Canonical ID missing — run step 5 first" });
       return;
     }
     // Planning dimension mapping (per budget version)
@@ -1022,11 +1074,11 @@ app.post("/api/demo/step/6", async (_req, res) => {
       canonicalId, "Budget 2025", "2025", demoState.version_id
     );
 
-    demoState.step = 6;
+    demoState.step = 7;
     const dimModel = getDimModel("prod_b");
-    console.log(`[DEMO] Step 6: Dimension mapping configured: ${JSON.stringify(mapping)}`);
+    console.log(`[DEMO] Step 7: Dimension mapping configured: ${JSON.stringify(mapping)}`);
     res.json({
-      ok: true, step: 6,
+      ok: true, step: 7,
       description: `Dimension mapping: "Budget 2025" → ${mapping.planning_type} ${mapping.planning_year} v${mapping.planning_version}. Flex-dims configured in step 1 (dim1=${dimModel.dim1}, dim2=${dimModel.dim2}, dim3=${dimModel.dim3})`,
       mapping,
       dim_model: dimModel,
@@ -1037,10 +1089,10 @@ app.post("/api/demo/step/6", async (_req, res) => {
   }
 });
 
-// Step 7: Product A submits budget (publishes to Kafka, Platform enriches with planning dimensions)
-app.post("/api/demo/step/7", async (_req, res) => {
+// Step 8: Product A submits budget (publishes to Kafka, Platform enriches with planning dimensions)
+app.post("/api/demo/step/8", async (_req, res) => {
   if (!demoState.version_id) {
-    res.status(400).json({ error: "Run step 5 first — no budget version to submit" });
+    res.status(400).json({ error: "Run step 6 first — no budget version to submit" });
     return;
   }
   try {
@@ -1048,50 +1100,50 @@ app.post("/api/demo/step/7", async (_req, res) => {
       method: "POST",
     });
     const data = await r.json() as any;
-    demoState.step = 7;
-    console.log(`[DEMO] Step 7: Budget submitted ${demoState.version_id}`);
-    res.json({ ok: true, step: 7, description: `Budget submitted! Platform uses the configured dimension mapping and routes to Product B`, data });
+    demoState.step = 8;
+    console.log(`[DEMO] Step 8: Budget submitted ${demoState.version_id}`);
+    res.json({ ok: true, step: 8, description: `Budget submitted! Platform uses the configured dimension mapping and routes to Product B`, data });
   } catch (err) {
     res.status(500).json({ error: `Could not reach Product A: ${err}` });
   }
 });
 
-// Step 8: Link projects
-app.post("/api/demo/step/8", async (_req, res) => {
+// Step 9: Link projects
+app.post("/api/demo/step/9", async (_req, res) => {
   if (!demoState.prod_a_id || !demoState.erp_id) {
-    res.status(400).json({ error: "Run steps 2 and 4 first — both projects are needed" });
+    res.status(400).json({ error: "Run steps 3 and 5 first — both projects are needed" });
     return;
   }
   try {
     const result = linkProjects(demoState.prod_a_id, demoState.erp_id);
     const event = await publishLink(result.canonical_id, result.linked);
     demoState.canonical_id = result.canonical_id;
-    demoState.step = 8;
-    console.log(`[DEMO] Step 8: Linked ${demoState.prod_a_id} ↔ ${demoState.erp_id} → ${result.canonical_id}`);
-    res.json({ ok: true, step: 8, description: `Linked: ${demoState.prod_a_id} ↔ ${demoState.erp_id} → ${result.canonical_id}`, data: { ...result, event } });
+    demoState.step = 9;
+    console.log(`[DEMO] Step 9: Linked ${demoState.prod_a_id} ↔ ${demoState.erp_id} → ${result.canonical_id}`);
+    res.json({ ok: true, step: 9, description: `Linked: ${demoState.prod_a_id} ↔ ${demoState.erp_id} → ${result.canonical_id}`, data: { ...result, event } });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     res.status(400).json({ error: message });
   }
 });
 
-// Step 9: Fetch analytics from Product B
-app.post("/api/demo/step/9", async (_req, res) => {
+// Step 10: Fetch analytics from Product B
+app.post("/api/demo/step/10", async (_req, res) => {
   try {
     const r = await fetch(`${PRODUCT_B_URL}/api/analytics`);
     const analytics = await r.json() as any[];
-    demoState.step = 9;
-    console.log(`[DEMO] Step 9: Analytics shows ${analytics.length} rows`);
-    res.json({ ok: true, step: 9, description: `Product B shows ${analytics.length} analytics row(s) — budget with planning dimensions + actuals with flex dimensions (dim1-dim3)`, analytics });
+    demoState.step = 10;
+    console.log(`[DEMO] Step 10: Analytics shows ${analytics.length} rows`);
+    res.json({ ok: true, step: 10, description: `Product B shows ${analytics.length} analytics row(s) — budget with planning dimensions + actuals with flex dimensions (dim1-dim3)`, analytics });
   } catch (err) {
     res.status(500).json({ error: `Could not reach Product B: ${err}` });
   }
 });
 
-// Step 10: Assign users to budget version and open it (creates inbox tasks)
-app.post("/api/demo/step/10", async (_req, res) => {
+// Step 11: Assign users to budget version and open it (creates inbox tasks)
+app.post("/api/demo/step/11", async (_req, res) => {
   if (!demoState.version_id) {
-    res.status(400).json({ error: "Run step 5 first — budget version missing" });
+    res.status(400).json({ error: "Run step 6 first — budget version missing" });
     return;
   }
   try {
@@ -1119,10 +1171,10 @@ app.post("/api/demo/step/10", async (_req, res) => {
     const openRes = await fetch(`${PRODUCT_A_URL}/api/budget-versions/${demoState.version_id}/open`, { method: "PUT" });
     const openData = await openRes.json() as any;
 
-    demoState.step = 10;
-    console.log(`[DEMO] Step 10: Budget version opened, ${openData.tasks_created} tasks created`);
+    demoState.step = 11;
+    console.log(`[DEMO] Step 11: Budget version opened, ${openData.tasks_created} tasks created`);
     res.json({
-      ok: true, step: 10,
+      ok: true, step: 11,
       description: `Budget version "${demoState.version_id}" opened — ${openData.tasks_created} tasks created. Anna → DEPT-A (group), Calle → OU-300.`,
       version_id: demoState.version_id,
       tasks_created: openData.tasks_created,

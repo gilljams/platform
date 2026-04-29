@@ -523,11 +523,16 @@ export function applyDimRouting(sourceSystem: string, targetProduct: string, sou
 // Translate a source system's local code to canonical code via dimension_code_mappings.
 // Falls back to the original value if no mapping exists (passthrough).
 function translateCode(sourceSystem: string, fieldName: string, localCode: string): string {
-  // Find which dimension this field belongs to (look by field_name matching dimension name or via direct mapping)
+  // Look up mapping scoped to dimension_name to avoid cross-dimension collisions
   const row = db.prepare(
+    "SELECT canonical_code FROM dimension_code_mappings WHERE dimension_name = ? AND product = ? AND local_code = ? LIMIT 1"
+  ).get(fieldName, sourceSystem, localCode) as { canonical_code: string } | undefined;
+  if (row) return row.canonical_code;
+  // Fallback: try without dimension_name for backwards compatibility
+  const fallback = db.prepare(
     "SELECT canonical_code FROM dimension_code_mappings WHERE product = ? AND local_code = ? LIMIT 1"
   ).get(sourceSystem, localCode) as { canonical_code: string } | undefined;
-  return row ? row.canonical_code : localCode;
+  return fallback ? fallback.canonical_code : localCode;
 }
 
 // ── Shared Dimension Catalog ──
@@ -554,6 +559,13 @@ export function upsertDimensionCode(dimensionName: string, code: string, label: 
   db.prepare(
     "INSERT OR REPLACE INTO dimension_codes (dimension_name, code, label) VALUES (?, ?, ?)"
   ).run(dimensionName, code, label);
+}
+
+export function deleteDimensionCode(dimensionName: string, code: string) {
+  db.prepare("DELETE FROM dimension_codes WHERE dimension_name = ? AND code = ?").run(dimensionName, code);
+  db.prepare("DELETE FROM dimension_code_attributes WHERE dimension_name = ? AND code = ?").run(dimensionName, code);
+  db.prepare("DELETE FROM dimension_hierarchy WHERE dimension_name = ? AND (child_code = ? OR parent_code = ?)").run(dimensionName, code, code);
+  db.prepare("DELETE FROM dimension_code_mappings WHERE dimension_name = ? AND canonical_code = ?").run(dimensionName, code);
 }
 
 export function getDimensionCodes(dimensionName: string) {
@@ -814,6 +826,7 @@ export function updateUser(userId: string, updates: Partial<{
   if (updates.primary_product !== undefined) { sets.push("primary_product = ?"); params.push(updates.primary_product); }
   if (updates.groups !== undefined) { sets.push("groups = ?"); params.push(JSON.stringify(updates.groups)); }
   if (updates.status !== undefined) { sets.push("status = ?"); params.push(updates.status); }
+  if ((updates as any).password_hash !== undefined) { sets.push("password_hash = ?"); params.push((updates as any).password_hash); }
   if (sets.length === 0) return user;
   sets.push("updated_at = datetime('now')");
   params.push(userId);
