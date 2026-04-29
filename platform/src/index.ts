@@ -5,8 +5,9 @@ import jwt from "jsonwebtoken";
 import { Kafka } from "kafkajs";
 import path from "path";
 
-import { linkProjects, getAllProjects, getMappings, getOrCreateDimensionMapping, getAllDimensionMappings, updateDimensionMapping, lookupCanonical, configureDimModel, getDimModel, getAllDimModels, configureDimRouting, getAllDimRouting, registerSharedDimension, getAllSharedDimensions, upsertDimensionCode, getDimensionCodes, deleteDimensionCode, registerParticipant, getParticipants, upsertCodeMapping, getCodeMappings, registerConnector, registerConnectorDimension, getAllConnectors, getConnectorDimensions, updateConnectorField, registerDimensionAttribute, getDimensionAttributes, setCodeAttribute, getCodeAttributes, getAllCodeAttributes, setHierarchy, getHierarchy, resetAllData, getInboxItems, addInboxItem, updateInboxItem, getConnectorTaskBaseUrl, deleteDimModel, deleteDimRouting, deleteConnector, deleteParticipant, getAllUsers, getUser, getUserByUsername, getUserByExternalId, upsertUser, updateUser, deleteUser, updateLastLogin, getUserCount, getAuditEvents, getAuditEventCount } from "./mapper";
+import { linkProjects, getAllProjects, getMappings, getOrCreateDimensionMapping, getAllDimensionMappings, updateDimensionMapping, lookupCanonical, configureDimModel, getDimModel, getAllDimModels, configureDimRouting, getAllDimRouting, registerSharedDimension, getAllSharedDimensions, upsertDimensionCode, getDimensionCodes, deleteDimensionCode, registerParticipant, getParticipants, upsertCodeMapping, getCodeMappings, registerConnector, registerConnectorDimension, getAllConnectors, getConnectorDimensions, updateConnectorField, registerDimensionAttribute, getDimensionAttributes, setCodeAttribute, getCodeAttributes, getAllCodeAttributes, setHierarchy, getHierarchy, resetAllData, getInboxItems, addInboxItem, updateInboxItem, getConnectorTaskBaseUrl, deleteDimModel, deleteDimRouting, deleteConnector, deleteParticipant, getAllUsers, getUser, getUserByUsername, getUserByExternalId, upsertUser, updateUser, deleteUser, updateLastLogin, getUserCount, getAuditEvents, getAuditEventCount, upsertEconEntity, getEconEntities, deleteEconEntity, upsertEconEntityAttribute, getEconEntityAttributes, upsertEconAttributeDef, getEconAttributeDefs, upsertEconRelation, getEconRelations, insertEconFacts, validateEconFacts, getEconFacts, getEconFactsSummary, publishEconFacts, getEconFactsForPublish, upsertSyncState, getSyncStates, getSyncState } from "./mapper";
 import { startRouter, publishLink, getEventLog } from "./router";
+import cron from "node-cron";
 
 // ── Config ──
 
@@ -766,6 +767,236 @@ app.patch("/api/inbox/:id", (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Economy Domain API ──
+
+// Entities (dimension members)
+app.get("/api/economy/entities", (req, res) => {
+  const dimension = req.query.dimension as string | undefined;
+  res.json(getEconEntities(dimension));
+});
+
+app.post("/api/economy/entities", (req, res) => {
+  const items = Array.isArray(req.body) ? req.body : [req.body];
+  for (const item of items) {
+    if (!item.source_system || !item.dimension || !item.code || !item.name) {
+      res.status(400).json({ error: "source_system, dimension, code, name required" }); return;
+    }
+    upsertEconEntity(item);
+  }
+  res.json({ ok: true, upserted: items.length });
+});
+
+app.delete("/api/economy/entities/:dimension/:code", (req, res) => {
+  const ok = deleteEconEntity(req.params.dimension, req.params.code);
+  res.json({ ok, deleted: ok ? 1 : 0 });
+});
+
+// Entity attributes
+app.get("/api/economy/entities/:dimension/:code/attributes", (req, res) => {
+  res.json(getEconEntityAttributes(req.params.dimension, req.params.code));
+});
+
+app.post("/api/economy/entities/:dimension/:code/attributes", (req, res) => {
+  const items = Array.isArray(req.body) ? req.body : [req.body];
+  for (const item of items) {
+    upsertEconEntityAttribute({ dimension: req.params.dimension, code: req.params.code, ...item });
+  }
+  res.json({ ok: true, upserted: items.length });
+});
+
+// Attribute definitions
+app.get("/api/economy/attribute-defs", (req, res) => {
+  const dimension = req.query.dimension as string | undefined;
+  res.json(getEconAttributeDefs(dimension));
+});
+
+app.post("/api/economy/attribute-defs", (req, res) => {
+  const items = Array.isArray(req.body) ? req.body : [req.body];
+  for (const item of items) { upsertEconAttributeDef(item); }
+  res.json({ ok: true, upserted: items.length });
+});
+
+// Relations (hierarchies)
+app.get("/api/economy/relations", (req, res) => {
+  const { dimension, hierarchy } = req.query as { dimension?: string; hierarchy?: string };
+  res.json(getEconRelations(dimension, hierarchy));
+});
+
+app.post("/api/economy/relations", (req, res) => {
+  const items = Array.isArray(req.body) ? req.body : [req.body];
+  for (const item of items) {
+    if (!item.source_system || !item.dimension || !item.child_code || !item.parent_code) {
+      res.status(400).json({ error: "source_system, dimension, child_code, parent_code required" }); return;
+    }
+    upsertEconRelation(item);
+  }
+  res.json({ ok: true, upserted: items.length });
+});
+
+// Facts (GL staging)
+app.get("/api/economy/facts", (req, res) => {
+  const { status, project_id, limit } = req.query as any;
+  res.json(getEconFacts({ status, project_id, limit: limit ? parseInt(limit) : undefined }));
+});
+
+app.get("/api/economy/facts/summary", (_req, res) => {
+  res.json(getEconFactsSummary());
+});
+
+app.post("/api/economy/facts", (req, res) => {
+  const items = Array.isArray(req.body) ? req.body : req.body.facts;
+  if (!items?.length) { res.status(400).json({ error: "Array of facts required" }); return; }
+  const result = insertEconFacts(items);
+  res.json(result);
+});
+
+app.post("/api/economy/facts/validate", (req, res) => {
+  const batchId = req.body.batch_id;
+  const result = validateEconFacts(batchId);
+  res.json(result);
+});
+
+app.post("/api/economy/facts/publish", async (_req, res) => {
+  const facts = getEconFactsForPublish();
+  if (facts.length === 0) { res.json({ published: 0 }); return; }
+  // Publish to Kafka
+  try {
+    const producer = kafka.producer();
+    await producer.connect();
+    await producer.send({
+      topic: "economy.facts.published",
+      messages: [{ key: "publish", value: JSON.stringify({ facts, published_at: new Date().toISOString() }) }],
+    });
+    await producer.disconnect();
+    const count = publishEconFacts();
+    res.json({ published: count });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Sync state
+app.get("/api/economy/sync-state", (_req, res) => {
+  res.json(getSyncStates());
+});
+
+app.get("/api/economy/sync-state/:source/:entityType", (req, res) => {
+  const state = getSyncState(req.params.source, req.params.entityType);
+  res.json(state || { error: "not found" });
+});
+
+app.post("/api/economy/sync-state", (req, res) => {
+  const { source_system, entity_type, ...updates } = req.body;
+  if (!source_system || !entity_type) { res.status(400).json({ error: "source_system, entity_type required" }); return; }
+  upsertSyncState(source_system, entity_type, updates);
+  res.json({ ok: true });
+});
+
+// ── Economy Scheduler ──
+
+const scheduledJobs: Map<string, cron.ScheduledTask> = new Map();
+
+// Sync runner: fetches data from ERP and stages into economy domain
+async function runEconSync(source: string) {
+  const t0 = Date.now();
+  console.log(`[SCHEDULER] Starting economy sync for ${source}...`);
+  try {
+    upsertSyncState(source, "entities", { status: "syncing" });
+    upsertSyncState(source, "facts", { status: "syncing" });
+
+    // 1. Sync entities (accounts + org_units)
+    const accResp = await fetch(`${ERP_URL}/api/publish-accounts`, { method: "POST" });
+    const accData = await accResp.json() as any;
+    const accounts = accData.event?.accounts || accData.accounts || [];
+    const orgUnits = accData.event?.org_units || accData.org_units || [];
+    let entityCount = 0, relCount = 0;
+    for (const acc of accounts) {
+      upsertEconEntity({ source_system: source, dimension: "account", code: acc.code, name: acc.name, type: acc.type || "leaf" });
+      entityCount++;
+      if (acc.parent) { upsertEconRelation({ source_system: source, dimension: "account", child_code: acc.code, parent_code: acc.parent, hierarchy_name: "standard" }); relCount++; }
+    }
+    for (const org of orgUnits) {
+      upsertEconEntity({ source_system: source, dimension: "org_unit", code: org.code, name: org.name, type: org.type || "leaf" });
+      entityCount++;
+      if (org.parent) { upsertEconRelation({ source_system: source, dimension: "org_unit", child_code: org.code, parent_code: org.parent, hierarchy_name: "standard" }); relCount++; }
+    }
+    upsertSyncState(source, "entities", { last_sync_at: new Date().toISOString(), rows_received: entityCount, rows_validated: entityCount, status: "idle", duration_ms: Date.now() - t0 });
+    upsertSyncState(source, "relations", { last_sync_at: new Date().toISOString(), rows_received: relCount, rows_validated: relCount, status: "idle" });
+
+    // 2. Sync facts (only if there's a linked ERP project)
+    if (demoState.erp_id) {
+      const glResp = await fetch(`${ERP_URL}/api/publish-gl`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ erp_id: demoState.erp_id }) });
+      const glData = await glResp.json() as any;
+      const entries = glData?.event?.entries || [];
+      if (entries.length > 0) {
+        const facts = entries.map((e: any) => ({
+          source_system: source, source_batch_id: `sync-${source}-${Date.now()}`, project_id: demoState.erp_id,
+          account: e.account, org_unit: e.org_unit, period: e.period, amount: e.amount, currency: e.currency || "SEK",
+          transaction_date: e.transaction_date, dim1: e.activity, dim2: e.cost_bearer, dim3: e.counterpart,
+        }));
+        const ins = insertEconFacts(facts);
+        const val = validateEconFacts(ins.batch_id);
+        upsertSyncState(source, "facts", { last_sync_at: new Date().toISOString(), rows_received: ins.received, rows_validated: val.validated, rows_rejected: val.rejected, status: "idle", duration_ms: Date.now() - t0 });
+      } else {
+        upsertSyncState(source, "facts", { status: "idle", duration_ms: Date.now() - t0 });
+      }
+    } else {
+      upsertSyncState(source, "facts", { status: "idle", duration_ms: Date.now() - t0 });
+    }
+
+    console.log(`[SCHEDULER] Economy sync for ${source} done in ${Date.now() - t0}ms — ${entityCount} entities, ${relCount} relations`);
+  } catch (err: any) {
+    console.error(`[SCHEDULER] Economy sync for ${source} failed:`, err.message);
+    upsertSyncState(source, "entities", { status: "error" });
+    upsertSyncState(source, "facts", { status: "error" });
+  }
+}
+
+// Schedule or reschedule a sync job
+function scheduleEconSync(source: string, cronExpr: string) {
+  const key = `econ-${source}`;
+  const existing = scheduledJobs.get(key);
+  if (existing) { existing.stop(); scheduledJobs.delete(key); }
+  if (!cron.validate(cronExpr)) return false;
+  const task = cron.schedule(cronExpr, () => runEconSync(source));
+  scheduledJobs.set(key, task);
+  upsertSyncState(source, "entities", { schedule_cron: cronExpr });
+  upsertSyncState(source, "facts", { schedule_cron: cronExpr });
+  console.log(`[SCHEDULER] Scheduled ${source} economy sync: ${cronExpr}`);
+  return true;
+}
+
+// API: Manual sync trigger
+app.post("/api/economy/sync/:source/run", async (req, res) => {
+  await runEconSync(req.params.source);
+  res.json({ ok: true, source: req.params.source });
+});
+
+// API: Schedule sync
+app.post("/api/economy/sync/:source/schedule", (req, res) => {
+  const { cron: cronExpr } = req.body;
+  if (!cronExpr) { res.status(400).json({ error: "cron expression required" }); return; }
+  const ok = scheduleEconSync(req.params.source, cronExpr);
+  if (!ok) { res.status(400).json({ error: "Invalid cron expression" }); return; }
+  res.json({ ok: true, source: req.params.source, cron: cronExpr });
+});
+
+// API: List scheduled jobs
+app.get("/api/economy/scheduler", (_req, res) => {
+  const jobs = Array.from(scheduledJobs.entries()).map(([key, task]) => ({
+    key, running: (task as any).options?.scheduled !== false,
+  }));
+  res.json(jobs);
+});
+
+// API: Stop scheduled job
+app.delete("/api/economy/sync/:source/schedule", (req, res) => {
+  const key = `econ-${req.params.source}`;
+  const existing = scheduledJobs.get(key);
+  if (existing) { existing.stop(); scheduledJobs.delete(key); }
+  res.json({ ok: true, stopped: !!existing });
+});
+
 // ── Demo Runner ──
 // Orchestrates the 8-step demo from Platform by calling ERP/Product A/Product B APIs
 
@@ -874,6 +1105,24 @@ app.post("/api/demo/step/1", async (_req, res) => {
     setCodeAttribute("org_unit", "DIV-01", "region", "Stockholm");
     setCodeAttribute("org_unit", "DIV-01", "level", "division");
 
+    // ── Economy Domain: stage entities + relations from ERP data ──
+    const accounts = data.event?.accounts || data.accounts || [];
+    const orgUnits = data.event?.org_units || data.org_units || [];
+    let econEntities = 0, econRelations = 0;
+    for (const acc of accounts) {
+      upsertEconEntity({ source_system: "erp", dimension: "account", code: acc.code, name: acc.name, type: acc.type || "leaf" });
+      econEntities++;
+      if (acc.parent) { upsertEconRelation({ source_system: "erp", dimension: "account", child_code: acc.code, parent_code: acc.parent, hierarchy_name: "standard" }); econRelations++; }
+    }
+    for (const org of orgUnits) {
+      upsertEconEntity({ source_system: "erp", dimension: "org_unit", code: org.code, name: org.name, type: org.type || "leaf" });
+      econEntities++;
+      if (org.parent) { upsertEconRelation({ source_system: "erp", dimension: "org_unit", child_code: org.code, parent_code: org.parent, hierarchy_name: "standard" }); econRelations++; }
+    }
+    upsertSyncState("erp", "entities", { last_sync_at: new Date().toISOString(), rows_received: econEntities, rows_validated: econEntities, status: "idle" });
+    upsertSyncState("erp", "relations", { last_sync_at: new Date().toISOString(), rows_received: econRelations, rows_validated: econRelations, status: "idle" });
+    console.log(`[DEMO] Economy Domain: staged ${econEntities} entities, ${econRelations} relations from ERP`);
+
     demoState.step = 1;
     console.log("[DEMO] Step 1: Reference data + economic model + dimension catalog");
 
@@ -904,7 +1153,7 @@ app.post("/api/demo/step/1", async (_req, res) => {
       task_path: "/admin.html",
     });
 
-    res.json({ ok: true, step: 1, description: "ERP published reference data + Platform configured economic model + dimension catalog (3 dimensions, code lists)", data });
+    res.json({ ok: true, step: 1, description: `ERP published reference data + Platform configured economic model + dimension catalog (3 dimensions, code lists). Economy Domain: ${econEntities} entities, ${econRelations} relations staged.`, data, economy: { entities: econEntities, relations: econRelations } });
   } catch (err) {
     res.status(500).json({ error: `Could not reach ERP: ${err}` });
   }
@@ -982,9 +1231,39 @@ app.post("/api/demo/step/4", async (_req, res) => {
     });
     const data = await r.json() as any;
     const count = data?.event?.entries?.length || 0;
+
+    // ── Economy Domain: stage GL facts ──
+    const glEntries = data?.event?.entries || [];
+    if (glEntries.length > 0) {
+      const facts = glEntries.map((e: any) => ({
+        source_system: "erp",
+        source_batch_id: `erp-gl-${demoState.erp_id}`,
+        project_id: demoState.erp_id,
+        account: e.account,
+        org_unit: e.org_unit,
+        period: e.period,
+        amount: e.amount,
+        currency: e.currency || "SEK",
+        transaction_date: e.transaction_date,
+        dim1: e.activity || null,
+        dim2: e.cost_bearer || null,
+        dim3: e.counterpart || null,
+      }));
+      const insertResult = insertEconFacts(facts);
+      const valResult = validateEconFacts(insertResult.batch_id);
+      upsertSyncState("erp", "facts", {
+        last_sync_at: new Date().toISOString(),
+        rows_received: insertResult.received,
+        rows_validated: valResult.validated,
+        rows_rejected: valResult.rejected,
+        status: "idle",
+      });
+      console.log(`[DEMO] Economy Domain: staged ${insertResult.received} facts, validated ${valResult.validated}, rejected ${valResult.rejected}`);
+    }
+
     demoState.step = 4;
     console.log(`[DEMO] Step 4: GL published for ${demoState.erp_id} (${count} entries)`);
-    res.json({ ok: true, step: 4, description: `Published ${count} GL entries from ERP for project ${demoState.erp_id}`, data });
+    res.json({ ok: true, step: 4, description: `Published ${count} GL entries from ERP for project ${demoState.erp_id}. Economy Domain: ${count} facts staged + validated.`, data });
   } catch (err) {
     res.status(500).json({ error: `Could not reach ERP: ${err}` });
   }

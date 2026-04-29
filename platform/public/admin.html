@@ -409,6 +409,7 @@
     <button class="tab-btn active" onclick="switchTab('setup')">Initial Setup</button>
     <button class="tab-btn" onclick="switchTab('users')">Users & Identity</button>
     <button class="tab-btn" onclick="switchTab('operations')">Operations</button>
+    <button class="tab-btn" onclick="switchTab('economy')">Economy Domain</button>
     <button class="tab-btn" onclick="switchTab('events')">Events</button>
     <button class="tab-btn" onclick="switchTab('demo')">Demo</button>
   </div>
@@ -865,6 +866,92 @@ Enriched on BudgetSubmitted event when routing to platform.budget.out</pre>
   </div>
 
   <!-- --------------------------------------------------------------- -->
+  <!-- TAB: ECONOMY DOMAIN -->
+  <!-- --------------------------------------------------------------- -->
+  <div class="tab-panel" id="tab-economy">
+    <div class="container">
+      <div class="setup-intro">
+        <h2>Economy Domain</h2>
+        <p>Staging layer for financial data from external sources. Entities (dimensions) and facts (GL) are received, validated, and published to downstream products.</p>
+      </div>
+
+      <!-- Pipeline Summary -->
+      <div class="card">
+        <div class="card-header">
+          <h2>Pipeline Summary</h2>
+          <button class="btn btn-sm" onclick="loadEconomyDomain()">↻ Refresh</button>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px;" id="econSummaryCards">
+          <div class="stat-card"><div class="stat-value" id="econEntitiesCount">-</div><div class="stat-label">Entities</div></div>
+          <div class="stat-card"><div class="stat-value" id="econRelationsCount">-</div><div class="stat-label">Relations</div></div>
+          <div class="stat-card"><div class="stat-value" id="econFactsReceived">-</div><div class="stat-label">Facts received</div></div>
+          <div class="stat-card"><div class="stat-value" id="econFactsValidated">-</div><div class="stat-label">Facts validated</div></div>
+          <div class="stat-card" style="border-color:#e74c3c44"><div class="stat-value" style="color:#e74c3c" id="econFactsRejected">-</div><div class="stat-label">Facts rejected</div></div>
+          <div class="stat-card" style="border-color:#27ae6044"><div class="stat-value" style="color:#27ae60" id="econFactsPublished">-</div><div class="stat-label">Facts published</div></div>
+        </div>
+        <style>
+          .stat-card { background:#f8f9fa; border:1px solid #e0e0e0; border-radius:8px; padding:16px; text-align:center; }
+          .stat-value { font-size:28px; font-weight:700; color:#1f64a4; }
+          .stat-label { font-size:12px; color:#666; margin-top:4px; text-transform:uppercase; letter-spacing:0.5px; }
+        </style>
+      </div>
+
+      <!-- Actions -->
+      <div class="card">
+        <h2>Actions</h2>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn" onclick="econValidate()">✓ Validate pending facts</button>
+          <button class="btn" onclick="econPublish()" style="background:#27ae60;color:#fff;">▶ Publish validated</button>
+          <button class="btn" onclick="econManualSync('erp')" style="background:#e67e22;color:#fff;">↻ Manual sync (ERP)</button>
+        </div>
+        <div id="econActionResult" style="margin-top:12px;font-size:13px;"></div>
+      </div>
+
+      <!-- Entities by dimension -->
+      <div class="card">
+        <div class="card-header">
+          <h2>Entities</h2>
+          <select id="econDimFilter" onchange="loadEconEntities()" style="padding:4px 8px;border-radius:4px;border:1px solid #ccc;font-size:13px;">
+            <option value="">All dimensions</option>
+            <option value="account">account</option>
+            <option value="org_unit">org_unit</option>
+            <option value="project">project</option>
+          </select>
+        </div>
+        <div id="econEntitiesTable" style="max-height:400px;overflow-y:auto;"></div>
+      </div>
+
+      <!-- Sync State + Scheduler -->
+      <div class="card">
+        <h2>Sync State & Scheduler</h2>
+        <div id="econSyncTable"></div>
+        <div style="margin-top:16px;padding-top:12px;border-top:1px solid #e0e0e0;">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <label style="font-size:13px;font-weight:600;">Schedule ERP sync:</label>
+            <input id="econCronInput" type="text" placeholder="e.g. 0 2 * * *  (nightly at 02:00)" style="padding:6px 10px;border:1px solid #ccc;border-radius:4px;font-size:13px;width:260px;" value="0 2 * * *">
+            <button class="btn" onclick="econSetSchedule('erp')">Set schedule</button>
+            <button class="btn" onclick="econStopSchedule('erp')" style="background:#e74c3c;color:#fff;">Stop</button>
+          </div>
+          <div id="econScheduleResult" style="margin-top:8px;font-size:13px;"></div>
+        </div>
+      </div>
+
+      <!-- Info block -->
+      <div class="info-block" style="margin-top:16px">
+        <div class="info-trigger" onclick="toggleInfo(this)">Show details ▸</div>
+        <div class="info-content">
+          <div class="info-title">Economy Domain architecture</div>
+          <p>The Economy Domain is a <strong>source-agnostic staging layer</strong> that decouples the platform from specific ERP connectors.</p>
+          <p><strong>Pipeline:</strong> External source → <code>econ_entities</code> / <code>econ_facts</code> → validate → publish → Kafka → downstream products.</p>
+          <p><strong>Tables:</strong> econ_entities, econ_entity_attributes, econ_attribute_defs, econ_relations, econ_facts, sync_state.</p>
+          <p><strong>API:</strong> <code>/api/economy/entities</code>, <code>/api/economy/facts</code>, <code>/api/economy/relations</code>, <code>/api/economy/sync-state</code></p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- --------------------------------------------------------------- -->
   <!-- TAB 3: EVENTS -->
   <!-- --------------------------------------------------------------- -->
   <div class="tab-panel" id="tab-events">
@@ -1244,7 +1331,7 @@ In production:
       document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
       document.getElementById('tab-' + tabId).classList.add('active');
       var btns = document.querySelectorAll('.tab-btn');
-      var tabMap = ['setup', 'users', 'operations', 'events', 'demo'];
+      var tabMap = ['setup', 'users', 'operations', 'economy', 'events', 'demo'];
       var idx = tabMap.indexOf(tabId);
       if (idx >= 0 && btns[idx]) btns[idx].classList.add('active');
       localStorage.setItem('activeTab', tabId);
@@ -2581,8 +2668,112 @@ In production:
       }
     }
 
+    // ── Economy Domain UI ──
+    async function loadEconomyDomain() {
+      try {
+        // Facts summary
+        const summary = await fetch('/api/economy/facts/summary').then(r => r.json());
+        document.getElementById('econFactsReceived').textContent = summary.received || '0';
+        document.getElementById('econFactsValidated').textContent = summary.validated || '0';
+        document.getElementById('econFactsRejected').textContent = summary.rejected || '0';
+        document.getElementById('econFactsPublished').textContent = summary.published || '0';
+
+        // Entities count
+        const entities = await fetch('/api/economy/entities').then(r => r.json());
+        document.getElementById('econEntitiesCount').textContent = entities.length || '0';
+
+        // Relations count
+        const relations = await fetch('/api/economy/relations').then(r => r.json());
+        document.getElementById('econRelationsCount').textContent = relations.length || '0';
+
+        // Sync state
+        const syncStates = await fetch('/api/economy/sync-state').then(r => r.json());
+        renderSyncTable(syncStates);
+
+        // Entities table
+        loadEconEntities();
+      } catch (e) { console.error('loadEconomyDomain error:', e); }
+    }
+
+    async function loadEconEntities() {
+      const dim = document.getElementById('econDimFilter')?.value || '';
+      const url = dim ? '/api/economy/entities?dimension=' + encodeURIComponent(dim) : '/api/economy/entities';
+      const entities = await fetch(url).then(r => r.json());
+      const el = document.getElementById('econEntitiesTable');
+      if (!entities.length) { el.innerHTML = '<div style="color:#999;font-size:13px;padding:12px 0;text-align:center;">No entities staged yet. Run demo step 1 or POST to /api/economy/entities.</div>'; return; }
+      let html = '<table><thead><tr><th>Dimension</th><th>Code</th><th>Name</th><th>Type</th><th>Source</th><th>Status</th><th>Received</th></tr></thead><tbody>';
+      for (const e of entities) {
+        const typeClass = e.type === 'group' ? 'style="color:#1f64a4;font-weight:600;"' : '';
+        html += '<tr><td>' + e.dimension + '</td><td ' + typeClass + '>' + e.code + '</td><td>' + e.name + '</td><td>' + e.type + '</td><td>' + e.source_system + '</td><td>' + e.status + '</td><td style="font-size:11px;color:#888;">' + (e.received_at || '') + '</td></tr>';
+      }
+      html += '</tbody></table>';
+      el.innerHTML = html;
+    }
+
+    function renderSyncTable(states) {
+      const el = document.getElementById('econSyncTable');
+      if (!states.length) { el.innerHTML = '<div style="color:#999;font-size:13px;padding:12px 0;text-align:center;">No sync state yet.</div>'; return; }
+      let html = '<table><thead><tr><th>Source</th><th>Type</th><th>Status</th><th>Last Sync</th><th>Received</th><th>Validated</th><th>Rejected</th></tr></thead><tbody>';
+      for (const s of states) {
+        const statusColor = s.status === 'idle' ? '#27ae60' : s.status === 'syncing' ? '#f39c12' : '#999';
+        html += '<tr><td>' + s.source_system + '</td><td>' + s.entity_type + '</td><td style="color:' + statusColor + ';font-weight:600;">' + (s.status || '-') + '</td><td style="font-size:11px;">' + (s.last_sync_at || 'never') + '</td><td>' + (s.rows_received || 0) + '</td><td>' + (s.rows_validated || 0) + '</td><td>' + (s.rows_rejected || 0) + '</td></tr>';
+      }
+      html += '</tbody></table>';
+      el.innerHTML = html;
+    }
+
+    async function econValidate() {
+      const el = document.getElementById('econActionResult');
+      el.innerHTML = '<span style="color:#888;">Validating...</span>';
+      try {
+        const r = await fetch('/api/economy/facts/validate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).then(r => r.json());
+        el.innerHTML = '<span style="color:#27ae60;">✓ Validated: ' + r.validated + ', Rejected: ' + r.rejected + (r.errors?.length ? ' — ' + r.errors.slice(0, 5).join('; ') : '') + '</span>';
+        loadEconomyDomain();
+      } catch (e) { el.innerHTML = '<span style="color:#e74c3c;">Validation failed: ' + e.message + '</span>'; }
+    }
+
+    async function econPublish() {
+      const el = document.getElementById('econActionResult');
+      el.innerHTML = '<span style="color:#888;">Publishing...</span>';
+      try {
+        const r = await fetch('/api/economy/facts/publish', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).then(r => r.json());
+        el.innerHTML = '<span style="color:#27ae60;">✓ Published ' + r.published + ' facts to Kafka</span>';
+        loadEconomyDomain();
+      } catch (e) { el.innerHTML = '<span style="color:#e74c3c;">Publish failed: ' + e.message + '</span>'; }
+    }
+
+    async function econManualSync(source) {
+      const el = document.getElementById('econActionResult');
+      el.innerHTML = '<span style="color:#888;">Syncing ' + source + '...</span>';
+      try {
+        const r = await fetch('/api/economy/sync/' + source + '/run', { method: 'POST' }).then(r => r.json());
+        el.innerHTML = '<span style="color:#27ae60;">✓ Sync complete for ' + source + '</span>';
+        loadEconomyDomain();
+      } catch (e) { el.innerHTML = '<span style="color:#e74c3c;">Sync failed: ' + e.message + '</span>'; }
+    }
+
+    async function econSetSchedule(source) {
+      const cronExpr = document.getElementById('econCronInput').value.trim();
+      const el = document.getElementById('econScheduleResult');
+      if (!cronExpr) { el.innerHTML = '<span style="color:#e74c3c;">Enter a cron expression</span>'; return; }
+      try {
+        const r = await fetch('/api/economy/sync/' + source + '/schedule', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cron: cronExpr }) }).then(r => r.json());
+        if (r.ok) { el.innerHTML = '<span style="color:#27ae60;">✓ Scheduled: ' + cronExpr + '</span>'; }
+        else { el.innerHTML = '<span style="color:#e74c3c;">' + (r.error || 'Failed') + '</span>'; }
+        loadEconomyDomain();
+      } catch (e) { el.innerHTML = '<span style="color:#e74c3c;">Schedule failed: ' + e.message + '</span>'; }
+    }
+
+    async function econStopSchedule(source) {
+      const el = document.getElementById('econScheduleResult');
+      try {
+        await fetch('/api/economy/sync/' + source + '/schedule', { method: 'DELETE' });
+        el.innerHTML = '<span style="color:#888;">Schedule stopped</span>';
+      } catch (e) { el.innerHTML = '<span style="color:#e74c3c;">Stop failed</span>'; }
+    }
+
     function refreshAll() {
-      loadProjects(); loadEventLog(); loadDimensionMappings(); loadDimModel(); loadSharedDimensions(); loadConnectors(); loadUsers(); loadTokenPayload();
+      loadProjects(); loadEventLog(); loadDimensionMappings(); loadDimModel(); loadSharedDimensions(); loadConnectors(); loadUsers(); loadTokenPayload(); loadEconomyDomain();
       if (typeof window.__platformShellReloadNav === 'function') window.__platformShellReloadNav();
     }
 

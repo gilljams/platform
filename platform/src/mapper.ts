@@ -193,6 +193,98 @@ db.exec(`
     created_at      TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
   );
+
+  -- ── Economy Domain (staging) ──
+  CREATE TABLE IF NOT EXISTS econ_entities (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_system   TEXT NOT NULL,
+    dimension       TEXT NOT NULL,
+    code            TEXT NOT NULL,
+    name            TEXT NOT NULL,
+    type            TEXT NOT NULL DEFAULT 'leaf',
+    status          TEXT NOT NULL DEFAULT 'active',
+    valid_from      TEXT,
+    valid_to        TEXT,
+    received_at     TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(dimension, code)
+  );
+
+  CREATE TABLE IF NOT EXISTS econ_entity_attributes (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    dimension       TEXT NOT NULL,
+    code            TEXT NOT NULL,
+    attribute_name  TEXT NOT NULL,
+    attribute_value TEXT NOT NULL,
+    source_system   TEXT NOT NULL,
+    received_at     TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(dimension, code, attribute_name, source_system)
+  );
+
+  CREATE TABLE IF NOT EXISTS econ_attribute_defs (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    dimension       TEXT NOT NULL,
+    attribute_name  TEXT NOT NULL,
+    attribute_label TEXT NOT NULL,
+    data_type       TEXT NOT NULL DEFAULT 'string',
+    source_system   TEXT,
+    allowed_values  TEXT,
+    UNIQUE(dimension, attribute_name, source_system)
+  );
+
+  CREATE TABLE IF NOT EXISTS econ_relations (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_system   TEXT NOT NULL,
+    relation_type   TEXT NOT NULL DEFAULT 'hierarchy',
+    dimension       TEXT NOT NULL,
+    child_code      TEXT NOT NULL,
+    parent_code     TEXT NOT NULL,
+    hierarchy_name  TEXT NOT NULL DEFAULT 'standard',
+    level           INTEGER NOT NULL DEFAULT 0,
+    sort_order      INTEGER NOT NULL DEFAULT 0,
+    valid_from      TEXT,
+    valid_to        TEXT,
+    received_at     TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(dimension, hierarchy_name, child_code, parent_code)
+  );
+
+  CREATE TABLE IF NOT EXISTS econ_facts (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_system     TEXT NOT NULL,
+    source_batch_id   TEXT,
+    source_row_id     TEXT,
+    source_modified_at TEXT,
+    project_id        TEXT,
+    account           TEXT NOT NULL,
+    org_unit          TEXT NOT NULL,
+    period            TEXT NOT NULL,
+    amount            REAL NOT NULL,
+    currency          TEXT NOT NULL DEFAULT 'SEK',
+    transaction_date  TEXT,
+    dim1              TEXT,
+    dim2              TEXT,
+    dim3              TEXT,
+    dim4              TEXT,
+    dim5              TEXT,
+    dim6              TEXT,
+    staging_status    TEXT NOT NULL DEFAULT 'received',
+    received_at       TEXT NOT NULL DEFAULT (datetime('now')),
+    validated_at      TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS sync_state (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_system   TEXT NOT NULL,
+    entity_type     TEXT NOT NULL,
+    last_sync_at    TEXT,
+    high_watermark  TEXT,
+    rows_received   INTEGER DEFAULT 0,
+    rows_validated  INTEGER DEFAULT 0,
+    rows_rejected   INTEGER DEFAULT 0,
+    status          TEXT NOT NULL DEFAULT 'idle',
+    schedule_cron   TEXT,
+    duration_ms     INTEGER,
+    UNIQUE(source_system, entity_type)
+  );
 `);
 
 // ── Schema migrations (add columns to existing tables) ──
@@ -281,6 +373,7 @@ export function resetAllData() {
   const tables = [
     'processed_events', 'audit_events',
     'inbox_items', 'users',
+    'sync_state', 'econ_facts', 'econ_relations', 'econ_entity_attributes', 'econ_attribute_defs', 'econ_entities',
     'dimension_hierarchy', 'dimension_code_attributes', 'dimension_attributes',
     'connector_dimensions', 'connectors', 'dimension_code_mappings',
     'dimension_participants', 'dimension_codes', 'shared_dimensions',
@@ -871,6 +964,164 @@ export function isEventProcessed(eventId: string): boolean {
 
 export function markEventProcessed(eventId: string) {
   db.prepare("INSERT OR IGNORE INTO processed_events (event_id, processed_at) VALUES (?, ?)").run(eventId, new Date().toISOString());
+}
+
+// ── Economy Domain ──
+
+export function upsertEconEntity(entity: { source_system: string; dimension: string; code: string; name: string; type?: string; status?: string; valid_from?: string; valid_to?: string }) {
+  db.prepare(`
+    INSERT INTO econ_entities (source_system, dimension, code, name, type, status, valid_from, valid_to, received_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(dimension, code) DO UPDATE SET
+      source_system = excluded.source_system, name = excluded.name, type = excluded.type,
+      status = excluded.status, valid_from = excluded.valid_from, valid_to = excluded.valid_to,
+      received_at = datetime('now')
+  `).run(entity.source_system, entity.dimension, entity.code, entity.name, entity.type || "leaf", entity.status || "active", entity.valid_from || null, entity.valid_to || null);
+}
+
+export function getEconEntities(dimension?: string): any[] {
+  if (dimension) return db.prepare("SELECT * FROM econ_entities WHERE dimension = ? ORDER BY code").all(dimension);
+  return db.prepare("SELECT * FROM econ_entities ORDER BY dimension, code").all();
+}
+
+export function deleteEconEntity(dimension: string, code: string): boolean {
+  db.prepare("DELETE FROM econ_entity_attributes WHERE dimension = ? AND code = ?").run(dimension, code);
+  db.prepare("DELETE FROM econ_relations WHERE dimension = ? AND (child_code = ? OR parent_code = ?)").run(dimension, code, code);
+  return db.prepare("DELETE FROM econ_entities WHERE dimension = ? AND code = ?").run(dimension, code).changes > 0;
+}
+
+export function upsertEconEntityAttribute(attr: { dimension: string; code: string; attribute_name: string; attribute_value: string; source_system: string }) {
+  db.prepare(`
+    INSERT INTO econ_entity_attributes (dimension, code, attribute_name, attribute_value, source_system, received_at)
+    VALUES (?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(dimension, code, attribute_name, source_system) DO UPDATE SET
+      attribute_value = excluded.attribute_value, received_at = datetime('now')
+  `).run(attr.dimension, attr.code, attr.attribute_name, attr.attribute_value, attr.source_system);
+}
+
+export function getEconEntityAttributes(dimension: string, code: string): any[] {
+  return db.prepare("SELECT * FROM econ_entity_attributes WHERE dimension = ? AND code = ? ORDER BY source_system, attribute_name").all(dimension, code);
+}
+
+export function upsertEconAttributeDef(def: { dimension: string; attribute_name: string; attribute_label: string; data_type?: string; source_system?: string; allowed_values?: string }) {
+  db.prepare(`
+    INSERT INTO econ_attribute_defs (dimension, attribute_name, attribute_label, data_type, source_system, allowed_values)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(dimension, attribute_name, source_system) DO UPDATE SET
+      attribute_label = excluded.attribute_label, data_type = excluded.data_type, allowed_values = excluded.allowed_values
+  `).run(def.dimension, def.attribute_name, def.attribute_label, def.data_type || "string", def.source_system || null, def.allowed_values || null);
+}
+
+export function getEconAttributeDefs(dimension?: string): any[] {
+  if (dimension) return db.prepare("SELECT * FROM econ_attribute_defs WHERE dimension = ? ORDER BY attribute_name").all(dimension);
+  return db.prepare("SELECT * FROM econ_attribute_defs ORDER BY dimension, attribute_name").all();
+}
+
+export function upsertEconRelation(rel: { source_system: string; relation_type?: string; dimension: string; child_code: string; parent_code: string; hierarchy_name?: string; level?: number; sort_order?: number; valid_from?: string; valid_to?: string }) {
+  db.prepare(`
+    INSERT INTO econ_relations (source_system, relation_type, dimension, child_code, parent_code, hierarchy_name, level, sort_order, valid_from, valid_to, received_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(dimension, hierarchy_name, child_code, parent_code) DO UPDATE SET
+      source_system = excluded.source_system, relation_type = excluded.relation_type,
+      level = excluded.level, sort_order = excluded.sort_order,
+      valid_from = excluded.valid_from, valid_to = excluded.valid_to, received_at = datetime('now')
+  `).run(rel.source_system, rel.relation_type || "hierarchy", rel.dimension, rel.child_code, rel.parent_code, rel.hierarchy_name || "standard", rel.level ?? 0, rel.sort_order ?? 0, rel.valid_from || null, rel.valid_to || null);
+}
+
+export function getEconRelations(dimension?: string, hierarchyName?: string): any[] {
+  if (dimension && hierarchyName) return db.prepare("SELECT * FROM econ_relations WHERE dimension = ? AND hierarchy_name = ? ORDER BY level, sort_order").all(dimension, hierarchyName);
+  if (dimension) return db.prepare("SELECT * FROM econ_relations WHERE dimension = ? ORDER BY hierarchy_name, level, sort_order").all(dimension);
+  return db.prepare("SELECT * FROM econ_relations ORDER BY dimension, hierarchy_name, level, sort_order").all();
+}
+
+export function insertEconFacts(facts: Array<{ source_system: string; source_batch_id?: string; source_row_id?: string; source_modified_at?: string; project_id?: string; account: string; org_unit: string; period: string; amount: number; currency?: string; transaction_date?: string; dim1?: string; dim2?: string; dim3?: string; dim4?: string; dim5?: string; dim6?: string }>): { received: number; rejected: number; batch_id: string } {
+  const batchId = facts[0]?.source_batch_id || `batch-${Date.now()}`;
+  const stmt = db.prepare(`
+    INSERT INTO econ_facts (source_system, source_batch_id, source_row_id, source_modified_at, project_id, account, org_unit, period, amount, currency, transaction_date, dim1, dim2, dim3, dim4, dim5, dim6, staging_status, received_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'received', datetime('now'))
+  `);
+  let received = 0, rejected = 0;
+  const run = db.transaction(() => {
+    for (const f of facts) {
+      try {
+        stmt.run(f.source_system, batchId, f.source_row_id || null, f.source_modified_at || null, f.project_id || null, f.account, f.org_unit, f.period, f.amount, f.currency || "SEK", f.transaction_date || null, f.dim1 || null, f.dim2 || null, f.dim3 || null, f.dim4 || null, f.dim5 || null, f.dim6 || null);
+        received++;
+      } catch { rejected++; }
+    }
+  });
+  run();
+  return { received, rejected, batch_id: batchId };
+}
+
+export function validateEconFacts(batchId?: string): { validated: number; rejected: number; errors: string[] } {
+  const where = batchId ? "AND source_batch_id = ?" : "";
+  const params = batchId ? ["received", batchId] : ["received"];
+  const pending = db.prepare(`SELECT * FROM econ_facts WHERE staging_status = ? ${where}`).all(...params) as any[];
+  let validated = 0, rejected = 0;
+  const errors: string[] = [];
+  for (const row of pending) {
+    const accExists = db.prepare("SELECT 1 FROM econ_entities WHERE dimension = 'account' AND code = ?").get(row.account);
+    const orgExists = db.prepare("SELECT 1 FROM econ_entities WHERE dimension = 'org_unit' AND code = ?").get(row.org_unit);
+    if (accExists && orgExists) {
+      db.prepare("UPDATE econ_facts SET staging_status = 'validated', validated_at = datetime('now') WHERE id = ?").run(row.id);
+      validated++;
+    } else {
+      db.prepare("UPDATE econ_facts SET staging_status = 'rejected' WHERE id = ?").run(row.id);
+      rejected++;
+      if (!accExists) errors.push(`Row ${row.id}: unknown account '${row.account}'`);
+      if (!orgExists) errors.push(`Row ${row.id}: unknown org_unit '${row.org_unit}'`);
+    }
+  }
+  return { validated, rejected, errors };
+}
+
+export function getEconFacts(opts?: { status?: string; project_id?: string; limit?: number }): any[] {
+  let sql = "SELECT * FROM econ_facts WHERE 1=1";
+  const params: any[] = [];
+  if (opts?.status) { sql += " AND staging_status = ?"; params.push(opts.status); }
+  if (opts?.project_id) { sql += " AND project_id = ?"; params.push(opts.project_id); }
+  sql += " ORDER BY period, account, org_unit";
+  if (opts?.limit) { sql += " LIMIT ?"; params.push(opts.limit); }
+  return db.prepare(sql).all(...params);
+}
+
+export function getEconFactsSummary(): { total: number; received: number; validated: number; rejected: number; published: number } {
+  const rows = db.prepare("SELECT staging_status, COUNT(*) as cnt FROM econ_facts GROUP BY staging_status").all() as { staging_status: string; cnt: number }[];
+  const result = { total: 0, received: 0, validated: 0, rejected: 0, published: 0 };
+  for (const r of rows) { (result as any)[r.staging_status] = r.cnt; result.total += r.cnt; }
+  return result;
+}
+
+export function publishEconFacts(): number {
+  const result = db.prepare("UPDATE econ_facts SET staging_status = 'published' WHERE staging_status = 'validated'").run();
+  return result.changes;
+}
+
+export function getEconFactsForPublish(): any[] {
+  return db.prepare("SELECT * FROM econ_facts WHERE staging_status = 'validated' ORDER BY period, account").all();
+}
+
+// Sync state management
+export function upsertSyncState(source: string, entityType: string, updates: Partial<{ last_sync_at: string; high_watermark: string; rows_received: number; rows_validated: number; rows_rejected: number; status: string; schedule_cron: string; duration_ms: number }>) {
+  db.prepare(`
+    INSERT INTO sync_state (source_system, entity_type, status) VALUES (?, ?, 'idle')
+    ON CONFLICT(source_system, entity_type) DO NOTHING
+  `).run(source, entityType);
+  const sets: string[] = [];
+  const params: any[] = [];
+  for (const [k, v] of Object.entries(updates)) { if (v !== undefined) { sets.push(`${k} = ?`); params.push(v); } }
+  if (sets.length > 0) {
+    params.push(source, entityType);
+    db.prepare(`UPDATE sync_state SET ${sets.join(", ")} WHERE source_system = ? AND entity_type = ?`).run(...params);
+  }
+}
+
+export function getSyncStates(): any[] {
+  return db.prepare("SELECT * FROM sync_state ORDER BY source_system, entity_type").all();
+}
+
+export function getSyncState(source: string, entityType: string): any {
+  return db.prepare("SELECT * FROM sync_state WHERE source_system = ? AND entity_type = ?").get(source, entityType);
 }
 
 export default db;
