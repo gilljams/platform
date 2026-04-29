@@ -624,11 +624,31 @@
             and <strong>consumers</strong> that receive it.
           </div>
           <div class="info-content">
+            <div class="info-title">Cross-reference mappings (code mappings)</div>
+            Each connected system's <strong>local code</strong> for a dimension member is registered as a cross-reference
+            mapping to the <strong>canonical code</strong>. This enables the platform to translate between systems.<br><br>
+            <strong>Automatic:</strong> When the platform routes reference data (e.g. <code>AccountsPublished</code>),
+            the router auto-registers code mappings for <em>all dimension participants</em> — both producers and consumers.
+            The source system (ERP) gets a <code>source_key</code> as authoritative reference ID.<br><br>
+            <strong>Product-specific local codes:</strong> When a product uses its own internal codes that differ from canonical
+            (e.g. Product&nbsp;A uses <code>BUD-4010</code> instead of <code>4010</code>), the product registers these back
+            via the platform API. <em>In this POC, Product&nbsp;A's local codes are seeded in demo step&nbsp;1 as a shortcut &mdash;
+            in production each product would call <code>POST /api/shared-dimensions/:name/mappings</code> to register its own codes.</em>
+          </div>
+          <div class="info-content">
             <div class="info-title">Shared Taxonomy (technical)</div>
             <pre>shared_dimensions (name PK, label, owner_system, taxonomy_type)
-dimension_codes (dimension_name, code, label)
+dimension_codes (dimension_name, code, label)  — delegates to econ_entities
 dimension_participants (dimension_name, product, role, uses_canonical)
-dimension_code_mappings (dimension_name, product, local_code, canonical_code)
+dimension_code_mappings (dimension_name, product, local_code, canonical_code, source_key)
+
+Code mapping flow:
+  1. ERP publishes AccountsPublished → Kafka
+  2. Platform Router forwards to platform.accounts.out
+  3. Router auto-registers mappings for ALL participants:
+     - ERP (producer): local_code=code, source_key=ERP-ACC-001...
+     - Product A/B (consumers): local_code=canonical_code (passthrough)
+  4. Products with own codes register via API (or demo seeding)
 
 Scaling: N+M mappings (N producers + M consumers), not N×M
 Normally set at customer installation, updated when chart of accounts changes.</pre>
