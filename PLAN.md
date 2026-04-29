@@ -24,7 +24,7 @@ Demonstrera en event-driven arkitektur med:
 | Grafana | Nej, Jaeger räcker |
 | Flex-dimensioner | Approach C: namngivna kärndims + generiska dim1-dim3 slots |
 | Dimension Mapping | Shared Taxonomy: plattformen äger kanonisk kodlista, per-produkt mappning |
-| Admin UI-struktur | 4 flikar: ⚙️ Grundinställning → 🔗 Löpande drift → 📋 Events → 🎬 Demo |
+| Admin UI-struktur | 6 flikar: ⚙️ Initial Setup → 🔑 Identity & Access → 📊 Master Data → 🔗 Operations → 📋 Events → 🎬 Demo |
 | Budget dim-routing | Budget berikas med flex-dims via samma applyDimRouting-mekanism som GL |
 | Economy Domain | Standardiserat staginglager (econ_*) — adapters transformerar källdata till gemensamt format. Ersätter Connector Registry. |
 

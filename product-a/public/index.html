@@ -612,6 +612,54 @@ Storage: SQLite (better-sqlite3), each product has its own database</pre>
         </div>
       </div>
 
+      <!-- Dimensions -->
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+          <h2 style="margin:0">Dimensions</h2>
+          <div style="flex:1"></div>
+          <span id="adminDimSummary" style="font-size:12px;color:#888"></span>
+          <button class="btn btn-primary" onclick="loadAdminDimensions()" style="font-size:11px;padding:3px 10px">↻ Refresh</button>
+        </div>
+        <div style="display:flex;gap:12px;margin-bottom:12px">
+          <button class="btn btn-primary" onclick="showDimTab('accounts')" id="dimTabAccounts" style="font-size:11px;padding:3px 10px">Accounts</button>
+          <button class="btn" onclick="showDimTab('orgunits')" id="dimTabOrgunits" style="font-size:11px;padding:3px 10px">Org Units</button>
+        </div>
+        <div id="adminDimAccounts">
+          <table>
+            <thead><tr><th>Code</th><th>Name</th><th>Parent</th><th>Type</th></tr></thead>
+            <tbody id="adminDimAccountsBody"></tbody>
+          </table>
+        </div>
+        <div id="adminDimOrgunits" style="display:none">
+          <table>
+            <thead><tr><th>Code</th><th>Name</th><th>Parent</th><th>Type</th></tr></thead>
+            <tbody id="adminDimOrgunitsBody"></tbody>
+          </table>
+        </div>
+        <div class="info-block">
+          <div class="info-trigger" onclick="toggleInfo(this)">&#x2139;&#xfe0f; Show explanation &#x25b8;</div>
+          <div class="info-content simple">
+            <div class="info-title">&#x2139;&#xfe0f; What is this?</div>
+            These are the dimensions (accounts and org units) that Product A has received
+            from the platform. They originate from the ERP via the Economy Domain and are
+            published to all connected products through Kafka.
+          </div>
+          <div class="info-content tech" style="display:none">
+            <div class="info-title">&#x2699;&#xfe0f; Technical</div>
+            <pre>Flow: ERP Mock &#x2192; Platform Economy Domain &#x2192; econ_entities
+  &#x2192; validate &amp; publish &#x2192; Kafka (platform.accounts.out)
+  &#x2192; Product A consumer &#x2192; local SQLite (accounts, org_units)
+
+Product A stores dimensions with local codes (BUD-xxx, TEAM-xxx)
+mapped from canonical codes via the platform router.
+
+Role: "both" (consumer + producer) for account &amp; org_unit dimensions.
+
+GET /api/accounts &#x2192; { accounts: [...], org_units: [...] }</pre>
+          </div>
+        </div>
+      </div>
+
       <!-- Resiliens -->
       <div class="card">
         <h2>Resilience &amp; Event Sourcing</h2>
@@ -906,6 +954,7 @@ Submit:
       if (view === 'report') renderBudgetGrid();
       if (view === 'process') loadProcessVersions();
       if (view === 'admin') loadAdminProcessSummary();
+      if (view === 'admin') loadAdminDimensions();
     }
 
     // ── Sidebar toggle ──
@@ -1883,6 +1932,35 @@ Submit:
       } catch {
         el.innerHTML = '<span style="color:#999">Could not load summary</span>';
       }
+    }
+
+    // ═══ Admin: Dimensions ═══
+    async function loadAdminDimensions() {
+      try {
+        var res = await fetch(API + '/api/accounts');
+        var data = await res.json();
+        var accounts = data.accounts || [];
+        var orgUnits = data.org_units || [];
+        document.getElementById('adminDimSummary').textContent = accounts.length + ' accounts, ' + orgUnits.length + ' org units';
+        var accBody = document.getElementById('adminDimAccountsBody');
+        accBody.innerHTML = accounts.length === 0 ? '<tr><td colspan="4" style="color:#999;text-align:center">No accounts yet</td></tr>' :
+          accounts.map(function(a) {
+            return '<tr><td style="font-family:monospace;font-size:12px">' + a.code + '</td><td>' + a.name + '</td><td style="font-family:monospace;font-size:12px;color:#888">' + (a.parent || '—') + '</td><td>' + (a.type || 'leaf') + '</td></tr>';
+          }).join('');
+        var ouBody = document.getElementById('adminDimOrgunitsBody');
+        ouBody.innerHTML = orgUnits.length === 0 ? '<tr><td colspan="4" style="color:#999;text-align:center">No org units yet</td></tr>' :
+          orgUnits.map(function(o) {
+            return '<tr><td style="font-family:monospace;font-size:12px">' + o.code + '</td><td>' + o.name + '</td><td style="font-family:monospace;font-size:12px;color:#888">' + (o.parent || '—') + '</td><td>' + (o.type || 'leaf') + '</td></tr>';
+          }).join('');
+      } catch {
+        document.getElementById('adminDimSummary').textContent = 'Could not load';
+      }
+    }
+    function showDimTab(tab) {
+      document.getElementById('adminDimAccounts').style.display = tab === 'accounts' ? '' : 'none';
+      document.getElementById('adminDimOrgunits').style.display = tab === 'orgunits' ? '' : 'none';
+      document.getElementById('dimTabAccounts').className = tab === 'accounts' ? 'btn btn-primary' : 'btn';
+      document.getElementById('dimTabOrgunits').className = tab === 'orgunits' ? 'btn btn-primary' : 'btn';
     }
 
     // ═══ URL Parameter Handling & Task Context ═══

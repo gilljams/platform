@@ -759,6 +759,56 @@ This separation means:
   - Product B knows its own business logic (defaults, derivations)</pre>
         </div>
       </div>
+
+      <!-- Dimensions -->
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+          <h2 style="margin:0">Dimensions</h2>
+          <div style="flex:1"></div>
+          <span id="adminDimSummary" style="font-size:12px;color:#888"></span>
+          <button onclick="loadAdminDimensions()" style="padding:0 10px;height:24px;border:1px solid #1f64a4;border-radius:3px;background:#1f64a4;color:#fff;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">↻ Refresh</button>
+        </div>
+        <div style="display:flex;gap:12px;margin-bottom:12px">
+          <button onclick="showDimTab('accounts')" id="dimTabAccounts" style="padding:0 10px;height:24px;border:1px solid #1f64a4;border-radius:3px;background:#1f64a4;color:#fff;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">Accounts</button>
+          <button onclick="showDimTab('orgunits')" id="dimTabOrgunits" style="padding:0 10px;height:24px;border:1px solid #ced4da;border-radius:3px;background:#fff;color:#333;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">Org Units</button>
+        </div>
+        <div id="adminDimAccounts">
+          <table>
+            <thead><tr><th>Code</th><th>Name</th><th>Parent</th><th>Type</th></tr></thead>
+            <tbody id="adminDimAccountsBody"></tbody>
+          </table>
+        </div>
+        <div id="adminDimOrgunits" style="display:none">
+          <table>
+            <thead><tr><th>Code</th><th>Name</th><th>Parent</th><th>Type</th></tr></thead>
+            <tbody id="adminDimOrgunitsBody"></tbody>
+          </table>
+        </div>
+        <div class="info-block">
+          <div class="info-trigger" onclick="toggleInfo(this)">&#x2139;&#xfe0f; Show explanation &#x25b8;</div>
+          <div class="info-content simple">
+            <div class="info-title">&#x2139;&#xfe0f; What is this?</div>
+            These are the dimensions (accounts and org units) that Product B has received
+            from the platform. They originate from the ERP via the Economy Domain and are
+            published to all connected products through Kafka. Product B uses these as
+            reference data for analytics grouping and reporting.
+          </div>
+          <div class="info-content tech" style="display:none">
+            <div class="info-title">&#x2699;&#xfe0f; Technical</div>
+            <pre>Flow: ERP Mock &#x2192; Platform Economy Domain &#x2192; econ_entities
+  &#x2192; validate &amp; publish &#x2192; Kafka (platform.accounts.out)
+  &#x2192; Product B consumer &#x2192; local SQLite (accounts, org_units)
+
+Product B stores dimensions with local codes mapped from
+canonical codes via the platform router.
+
+Role: "consumer" for account &amp; org_unit dimensions.
+
+GET /api/accounts &#x2192; { accounts: [...], org_units: [...] }</pre>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
   </div><!-- end view-admin -->
@@ -1553,8 +1603,40 @@ This separation means:
       loadRules();
     }
 
+    // ═══ Admin: Dimensions ═══
+    async function loadAdminDimensions() {
+      try {
+        var res = await fetch(API + '/api/accounts');
+        var data = await res.json();
+        var accounts = data.accounts || [];
+        var orgUnits = data.org_units || [];
+        document.getElementById('adminDimSummary').textContent = accounts.length + ' accounts, ' + orgUnits.length + ' org units';
+        var accBody = document.getElementById('adminDimAccountsBody');
+        accBody.innerHTML = accounts.length === 0 ? '<tr><td colspan="4" style="color:#999;text-align:center">No accounts yet</td></tr>' :
+          accounts.map(function(a) {
+            return '<tr><td style="font-family:monospace;font-size:12px">' + a.code + '</td><td>' + a.name + '</td><td style="font-family:monospace;font-size:12px;color:#888">' + (a.parent || '—') + '</td><td>' + (a.type || 'leaf') + '</td></tr>';
+          }).join('');
+        var ouBody = document.getElementById('adminDimOrgunitsBody');
+        ouBody.innerHTML = orgUnits.length === 0 ? '<tr><td colspan="4" style="color:#999;text-align:center">No org units yet</td></tr>' :
+          orgUnits.map(function(o) {
+            return '<tr><td style="font-family:monospace;font-size:12px">' + o.code + '</td><td>' + o.name + '</td><td style="font-family:monospace;font-size:12px;color:#888">' + (o.parent || '—') + '</td><td>' + (o.type || 'leaf') + '</td></tr>';
+          }).join('');
+      } catch {
+        document.getElementById('adminDimSummary').textContent = 'Could not load';
+      }
+    }
+    function showDimTab(tab) {
+      var activeStyle = 'padding:0 10px;height:24px;border:1px solid #1f64a4;border-radius:3px;background:#1f64a4;color:#fff;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit';
+      var inactiveStyle = 'padding:0 10px;height:24px;border:1px solid #ced4da;border-radius:3px;background:#fff;color:#333;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit';
+      document.getElementById('adminDimAccounts').style.display = tab === 'accounts' ? '' : 'none';
+      document.getElementById('adminDimOrgunits').style.display = tab === 'orgunits' ? '' : 'none';
+      document.getElementById('dimTabAccounts').style.cssText = tab === 'accounts' ? activeStyle : inactiveStyle;
+      document.getElementById('dimTabOrgunits').style.cssText = tab === 'orgunits' ? activeStyle : inactiveStyle;
+    }
+
     loadData();
     loadRules();
+    loadAdminDimensions();
     setInterval(loadData, 5000);
     window.addEventListener('resize', () => renderChart(getFiltered()));
   </script>

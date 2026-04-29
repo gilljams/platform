@@ -385,7 +385,8 @@
     <nav class="sidebar-nav">
       <div class="sidebar-section">Tabs</div>
       <a href="#" class="active" onclick="switchTab('setup');toggleSidebar();return false">Initial Setup</a>
-      <a href="#" onclick="switchTab('users');toggleSidebar();return false">Users & Identity</a>
+      <a href="#" onclick="switchTab('users');toggleSidebar();return false">Identity & Access</a>
+      <a href="#" onclick="switchTab('economy');toggleSidebar();return false">Master Data</a>
       <a href="#" onclick="switchTab('operations');toggleSidebar();return false">Operations</a>
       <a href="#" onclick="switchTab('events');toggleSidebar();return false">Events</a>
       <a href="#" onclick="switchTab('demo');toggleSidebar();return false">Demo</a>
@@ -407,9 +408,9 @@
   <!-- Tab bar -->
   <div class="tab-bar">
     <button class="tab-btn active" onclick="switchTab('setup')">Initial Setup</button>
-    <button class="tab-btn" onclick="switchTab('users')">Users & Identity</button>
+    <button class="tab-btn" onclick="switchTab('users')">Identity & Access</button>
+    <button class="tab-btn" onclick="switchTab('economy')">Master Data</button>
     <button class="tab-btn" onclick="switchTab('operations')">Operations</button>
-    <button class="tab-btn" onclick="switchTab('economy')">Economy Domain</button>
     <button class="tab-btn" onclick="switchTab('events')">Events</button>
     <button class="tab-btn" onclick="switchTab('demo')">Demo</button>
   </div>
@@ -857,13 +858,13 @@ Enriched on BudgetSubmitted event when routing to platform.budget.out</pre>
   </div>
 
   <!-- --------------------------------------------------------------- -->
-  <!-- TAB: ECONOMY DOMAIN -->
+  <!-- TAB: MASTER DATA -->
   <!-- --------------------------------------------------------------- -->
   <div class="tab-panel" id="tab-economy">
     <div class="container">
       <div class="setup-intro">
-        <h2>Economy Domain</h2>
-        <p>Staging layer for financial data from external sources. Entities (dimensions) and facts (GL) are received, validated, and published to downstream products.</p>
+        <h2>Master Data</h2>
+        <p>Staging layer for financial master data from external sources. Entities (dimensions) and facts (GL) are received, validated, and published to downstream products.</p>
       </div>
 
       <!-- Pipeline Summary -->
@@ -928,11 +929,35 @@ Enriched on BudgetSubmitted event when routing to platform.budget.out</pre>
       <div class="info-block" style="margin-top:16px">
         <div class="info-trigger" onclick="toggleInfo(this)">Show details ▸</div>
         <div class="info-content">
-          <div class="info-title">Economy Domain architecture</div>
-          <p>The Economy Domain is a <strong>source-agnostic staging layer</strong> that decouples the platform from specific ERP connectors.</p>
+          <div class="info-title">Master Data architecture</div>
+          <p>The Master Data layer (Economy Domain) is a <strong>source-agnostic staging layer</strong> that decouples the platform from specific ERP connectors.</p>
           <p><strong>Pipeline:</strong> External source → <code>econ_entities</code> / <code>econ_facts</code> → validate → publish → Kafka → downstream products.</p>
           <p><strong>Tables:</strong> econ_entities, econ_entity_attributes, econ_attribute_defs, econ_relations, econ_facts, sync_state.</p>
           <p><strong>API:</strong> <code>/api/economy/entities</code>, <code>/api/economy/facts</code>, <code>/api/economy/relations</code>, <code>/api/economy/sync-state</code></p>
+        </div>
+        <div class="info-content">
+          <div class="info-title">Scheduler &amp; cron syntax</div>
+          <p>The scheduler uses <strong>cron expressions</strong> to trigger periodic ERP syncs. Format:</p>
+          <pre>┌───── minute (0–59)
+│ ┌───── hour (0–23)
+│ │ ┌───── day of month (1–31)
+│ │ │ ┌───── month (1–12)
+│ │ │ │ ┌───── day of week (0–7, 0 and 7 = Sunday)
+│ │ │ │ │
+* * * * *</pre>
+          <p><strong>Examples:</strong></p>
+          <table style="font-size:12px;margin:8px 0;border-collapse:collapse;">
+            <tr><td style="padding:3px 12px 3px 0;font-family:monospace;white-space:nowrap"><code>0 2 * * *</code></td><td style="padding:3px 0">Every night at 02:00 (default)</td></tr>
+            <tr><td style="padding:3px 12px 3px 0;font-family:monospace;white-space:nowrap"><code>*/15 * * * *</code></td><td style="padding:3px 0">Every 15 minutes</td></tr>
+            <tr><td style="padding:3px 12px 3px 0;font-family:monospace;white-space:nowrap"><code>0 */6 * * *</code></td><td style="padding:3px 0">Every 6 hours</td></tr>
+            <tr><td style="padding:3px 12px 3px 0;font-family:monospace;white-space:nowrap"><code>0 8 * * 1-5</code></td><td style="padding:3px 0">Weekdays at 08:00</td></tr>
+            <tr><td style="padding:3px 12px 3px 0;font-family:monospace;white-space:nowrap"><code>0 6,18 * * *</code></td><td style="padding:3px 0">Twice daily at 06:00 and 18:00</td></tr>
+          </table>
+          <p><strong>How it works:</strong> The <code>node-cron</code> library runs inside the Platform container.
+            When the schedule fires it calls <code>POST /api/economy/sync/erp/run</code>, which fetches data from ERP Mock,
+            upserts into <code>econ_entities</code> / <code>econ_facts</code>, validates, and publishes to downstream products via Kafka.</p>
+          <p><strong>Set schedule:</strong> Enter a cron expression and click "Set schedule". The schedule persists until stopped or the container restarts.</p>
+          <p><strong>Stop:</strong> Click "Stop" to cancel the active schedule. You can always trigger a manual sync using the "Manual sync (ERP)" button above.</p>
         </div>
       </div>
 
@@ -1016,14 +1041,14 @@ POST /api/demo/step/11 → Process: open budget + assign users</pre>
   </div>
 
   <!-- --------------------------------------------------------------- -->
-  <!-- TAB: USERS & IDENTITY -->
+  <!-- TAB: IDENTITY & ACCESS -->
   <!-- --------------------------------------------------------------- -->
   <div class="tab-panel" id="tab-users">
     <div class="container">
 
       <!-- Identity Architecture overview -->
       <div class="setup-intro">
-        <h2>Users & Identity</h2>
+        <h2>Identity & Access</h2>
         <p>
           Manage platform users: who can log in, what products they access, and their organizational role.
         </p>
@@ -1319,7 +1344,7 @@ In production:
       document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
       document.getElementById('tab-' + tabId).classList.add('active');
       var btns = document.querySelectorAll('.tab-btn');
-      var tabMap = ['setup', 'users', 'operations', 'economy', 'events', 'demo'];
+      var tabMap = ['setup', 'users', 'economy', 'operations', 'events', 'demo'];
       var idx = tabMap.indexOf(tabId);
       if (idx >= 0 && btns[idx]) btns[idx].classList.add('active');
       localStorage.setItem('activeTab', tabId);
