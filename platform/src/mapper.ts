@@ -13,29 +13,16 @@ db.pragma("journal_mode = WAL");
 // ── Schema ──
 
 db.exec(`
-  CREATE TABLE IF NOT EXISTS canonical_projects (
-    canonical_id TEXT PRIMARY KEY,
-    created_at   TEXT NOT NULL DEFAULT (datetime('now'))
-  );
-
-  CREATE TABLE IF NOT EXISTS id_mappings (
-    source_system TEXT NOT NULL,  -- 'erp', 'prod_a', 'prod_b'
-    source_id     TEXT NOT NULL,
-    canonical_id  TEXT NOT NULL REFERENCES canonical_projects(canonical_id),
-    PRIMARY KEY (source_system, source_id)
-  );
-
-  CREATE INDEX IF NOT EXISTS idx_mappings_canonical ON id_mappings(canonical_id);
-
   CREATE TABLE IF NOT EXISTS dimension_mappings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    canonical_id       TEXT NOT NULL,
+    source_system      TEXT NOT NULL,
+    source_key         TEXT NOT NULL,
     source_version_id  TEXT,
     planning_year      TEXT NOT NULL,
     planning_type      TEXT NOT NULL,     -- 'Budget', 'F1', 'F2'
     planning_version   INTEGER NOT NULL DEFAULT 1,
     created_at         TEXT NOT NULL DEFAULT (datetime('now')),
-    UNIQUE(canonical_id, planning_year, planning_type, planning_version)
+    UNIQUE(source_system, source_key, planning_year, planning_type, planning_version)
   );
 
   CREATE TABLE IF NOT EXISTS dim_models (
@@ -123,7 +110,7 @@ db.exec(`
     topic TEXT NOT NULL,
     event_type TEXT NOT NULL,
     event_id TEXT,
-    canonical_id TEXT,
+    source_key TEXT,
     summary TEXT,
     timestamp TEXT NOT NULL
   );
@@ -263,42 +250,7 @@ addColumnIfNotExists("dimension_code_mappings", "source_key", "TEXT");
 
 // ── Prepared statements ──
 
-const stmts = {
-  insertCanonical: db.prepare(
-    "INSERT OR IGNORE INTO canonical_projects (canonical_id) VALUES (?)"
-  ),
-  insertMapping: db.prepare(
-    "INSERT OR REPLACE INTO id_mappings (source_system, source_id, canonical_id) VALUES (?, ?, ?)"
-  ),
-  findBySource: db.prepare(
-    "SELECT canonical_id FROM id_mappings WHERE source_system = ? AND source_id = ?"
-  ),
-  findMappings: db.prepare(
-    "SELECT source_system, source_id FROM id_mappings WHERE canonical_id = ?"
-  ),
-  allCanonicals: db.prepare(`
-    SELECT cp.canonical_id, cp.created_at, im.source_system, im.source_id
-    FROM canonical_projects cp
-    LEFT JOIN id_mappings im ON cp.canonical_id = im.canonical_id
-    ORDER BY cp.created_at
-  `),
-  updateMappingsCanonical: db.prepare(
-    "UPDATE id_mappings SET canonical_id = ? WHERE canonical_id = ?"
-  ),
-  deleteCanonical: db.prepare(
-    "DELETE FROM canonical_projects WHERE canonical_id = ?"
-  ),
-};
-
-// ── Counter for canonical IDs ──
-let counter = 0;
-const maxRow = db.prepare("SELECT COUNT(*) as c FROM canonical_projects").get() as { c: number };
-counter = maxRow.c;
-
-function nextCanonicalId(): string {
-  counter++;
-  return `platform-${String(counter).padStart(3, "0")}`;
-}
+// (canonical_projects + id_mappings removed — source_system+source_key is the identity)
 
 // ── Public API ──
 
@@ -335,118 +287,13 @@ export function resetAllData() {
     'system_config', 'dimension_code_mappings',
     'dimension_participants', 'shared_dimensions',
     'dim_routing', 'dim_models', 'dimension_mappings',
-    'id_mappings', 'canonical_projects',
   ];
   for (const t of tables) db.prepare(`DELETE FROM ${t}`).run();
-  counter = 0;
   console.log('[MAPPER] All data reset');
 }
 
-export function getOrCreateCanonical(sourceSystem: string, sourceId: string): string {
-  const existing = stmts.findBySource.get(sourceSystem, sourceId) as { canonical_id: string } | undefined;
-  if (existing) return existing.canonical_id;
-
-  const canonicalId = nextCanonicalId();
-  stmts.insertCanonical.run(canonicalId);
-  stmts.insertMapping.run(sourceSystem, sourceId, canonicalId);
-  console.log(`[MAPPER] Created ${canonicalId} for ${sourceSystem}:${sourceId}`);
-  return canonicalId;
-}
-
-export function lookupCanonical(sourceSystem: string, sourceId: string): string | undefined {
-  const row = stmts.findBySource.get(sourceSystem, sourceId) as { canonical_id: string } | undefined;
-  return row?.canonical_id;
-}
-
-export function getMappings(canonicalId: string): Record<string, string> {
-  const rows = stmts.findMappings.all(canonicalId) as { source_system: string; source_id: string }[];
-  const result: Record<string, string> = {};
-  for (const row of rows) {
-    result[row.source_system] = row.source_id;
-  }
-  return result;
-}
-
-export function linkProjects(sourceId: string, targetId: string): {
-  canonical_id: string;
-  linked: Record<string, string>;
-} {
-  // Find canonical IDs for both
-  const sourceCanonical = findCanonicalForAnySystem(sourceId);
-  const targetCanonical = findCanonicalForAnySystem(targetId);
-
-  if (!sourceCanonical && !targetCanonical) {
-    throw new Error(`Neither ${sourceId} nor ${targetId} is known`);
-  }
-
-  // Merge: keep the first one found, move all mappings to it
-  const keepId = sourceCanonical || targetCanonical!;
-  const mergeId = sourceCanonical && targetCanonical && sourceCanonical !== targetCanonical
-    ? targetCanonical
-    : null;
-
-  if (mergeId) {
-    // Check ownership BEFORE moving mappings (mergeId's source will be gone after)
-    const ownerRow = db.prepare("SELECT owner_system FROM shared_dimensions WHERE name = 'project'").get() as { owner_system: string } | undefined;
-    const mergeSource = db.prepare("SELECT source_system FROM id_mappings WHERE canonical_id = ?").get(mergeId) as { source_system: string } | undefined;
-    const mergeIsOwner = ownerRow && mergeSource?.source_system === ownerRow.owner_system;
-
-    stmts.updateMappingsCanonical.run(keepId, mergeId);
-    stmts.deleteCanonical.run(mergeId);
-    // Merge dimension codes: update cross-references pointing at old canonical
-    db.prepare("UPDATE dimension_code_mappings SET canonical_code = ? WHERE dimension_name = 'project' AND canonical_code = ?").run(keepId, mergeId);
-    // Determine authoritative label: prefer the dimension owner's name
-    const keepRow = db.prepare("SELECT name FROM econ_entities WHERE dimension = 'project' AND code = ?").get(keepId) as { name: string } | undefined;
-    const mergeRow = db.prepare("SELECT name FROM econ_entities WHERE dimension = 'project' AND code = ?").get(mergeId) as { name: string } | undefined;
-    if (mergeRow) {
-      if (!keepRow) {
-        db.prepare("UPDATE econ_entities SET code = ? WHERE dimension = 'project' AND code = ?").run(keepId, mergeId);
-      } else {
-        db.prepare("DELETE FROM econ_entities WHERE dimension = 'project' AND code = ?").run(mergeId);
-      }
-      // If the merged canonical came from the dimension owner, use its label
-      if (mergeIsOwner) {
-        db.prepare("UPDATE econ_entities SET name = ? WHERE dimension = 'project' AND code = ?").run(mergeRow.name, keepId);
-      }
-    }
-    console.log(`[MAPPER] Merged ${mergeId} into ${keepId}`);
-  }
-
-  const linked = getMappings(keepId);
-  return { canonical_id: keepId, linked };
-}
-
-function findCanonicalForAnySystem(id: string): string | undefined {
-  for (const sys of ["erp", "prod_a", "prod_b"]) {
-    const found = lookupCanonical(sys, id);
-    if (found) return found;
-  }
-  return undefined;
-}
-
-export function getAllProjects() {
-  const rows = stmts.allCanonicals.all() as {
-    canonical_id: string;
-    created_at: string;
-    source_system: string | null;
-    source_id: string | null;
-  }[];
-
-  const projects = new Map<string, { canonical_id: string; created_at: string; mappings: Record<string, string> }>();
-  for (const row of rows) {
-    if (!projects.has(row.canonical_id)) {
-      projects.set(row.canonical_id, {
-        canonical_id: row.canonical_id,
-        created_at: row.created_at,
-        mappings: {},
-      });
-    }
-    if (row.source_system && row.source_id) {
-      projects.get(row.canonical_id)!.mappings[row.source_system] = row.source_id;
-    }
-  }
-  return Array.from(projects.values());
-}
+// (getOrCreateCanonical, lookupCanonical, getMappings, linkProjects, getAllProjects removed
+//  — source_system+source_key replaces canonical_id as the identity model)
 
 // ── Planning-dimension mapping ──
 // Translates Product A's version concept ("Budget 2025") into Product B's
@@ -462,15 +309,16 @@ function parseVersionName(versionName: string, year: string): { planning_type: s
 }
 
 export function getOrCreateDimensionMapping(
-  canonicalId: string,
+  sourceSystem: string,
+  sourceKey: string,
   versionName: string,
   year: string,
   sourceVersionId?: string
 ): { planning_year: string; planning_type: string; planning_version: number } {
-  // Check if an explicit mapping already exists for this canonical + version
+  // Check if an explicit mapping already exists
   const existing = db.prepare(
-    "SELECT planning_year, planning_type, planning_version FROM dimension_mappings WHERE canonical_id = ? AND source_version_id = ?"
-  ).get(canonicalId, sourceVersionId || null) as { planning_year: string; planning_type: string; planning_version: number } | undefined;
+    "SELECT planning_year, planning_type, planning_version FROM dimension_mappings WHERE source_system = ? AND source_key = ? AND source_version_id = ?"
+  ).get(sourceSystem, sourceKey, sourceVersionId || null) as { planning_year: string; planning_type: string; planning_version: number } | undefined;
 
   if (existing) return existing;
 
@@ -479,27 +327,27 @@ export function getOrCreateDimensionMapping(
 
   // Find next planning_version if same type+year already exists
   const maxVer = db.prepare(
-    "SELECT MAX(planning_version) as mv FROM dimension_mappings WHERE canonical_id = ? AND planning_year = ? AND planning_type = ?"
-  ).get(canonicalId, parsed.planning_year, parsed.planning_type) as { mv: number | null };
+    "SELECT MAX(planning_version) as mv FROM dimension_mappings WHERE source_system = ? AND source_key = ? AND planning_year = ? AND planning_type = ?"
+  ).get(sourceSystem, sourceKey, parsed.planning_year, parsed.planning_type) as { mv: number | null };
   const nextVersion = (maxVer?.mv ?? 0) + 1;
 
   db.prepare(
-    "INSERT OR IGNORE INTO dimension_mappings (canonical_id, source_version_id, planning_year, planning_type, planning_version) VALUES (?, ?, ?, ?, ?)"
-  ).run(canonicalId, sourceVersionId || null, parsed.planning_year, parsed.planning_type, nextVersion);
+    "INSERT OR IGNORE INTO dimension_mappings (source_system, source_key, source_version_id, planning_year, planning_type, planning_version) VALUES (?, ?, ?, ?, ?, ?)"
+  ).run(sourceSystem, sourceKey, sourceVersionId || null, parsed.planning_year, parsed.planning_type, nextVersion);
 
-  console.log(`[MAPPER] Dimension mapping: "${versionName}" → ${parsed.planning_type} ${parsed.planning_year} v${nextVersion} (${canonicalId})`);
+  console.log(`[MAPPER] Dimension mapping: "${versionName}" → ${parsed.planning_type} ${parsed.planning_year} v${nextVersion} (${sourceSystem}:${sourceKey})`);
   return { planning_year: parsed.planning_year, planning_type: parsed.planning_type, planning_version: nextVersion };
 }
 
-export function getDimensionMappings(canonicalId: string) {
+export function getDimensionMappings(sourceSystem: string, sourceKey: string) {
   return db.prepare(
-    "SELECT * FROM dimension_mappings WHERE canonical_id = ? ORDER BY planning_year, planning_type, planning_version"
-  ).all(canonicalId);
+    "SELECT * FROM dimension_mappings WHERE source_system = ? AND source_key = ? ORDER BY planning_year, planning_type, planning_version"
+  ).all(sourceSystem, sourceKey);
 }
 
 export function getAllDimensionMappings() {
   return db.prepare(
-    "SELECT dm.*, cp.created_at AS project_created_at FROM dimension_mappings dm LEFT JOIN canonical_projects cp ON dm.canonical_id = cp.canonical_id ORDER BY dm.created_at DESC"
+    "SELECT * FROM dimension_mappings ORDER BY created_at DESC"
   ).all();
 }
 
@@ -516,7 +364,7 @@ export function updateDimensionMapping(id: number, updates: { planning_year?: st
   ).run(newYear, newType, newVersion, id);
 
   console.log(`[MAPPER] Dimension mapping #${id} updated: ${newType} ${newYear} v${newVersion}`);
-  return { id, canonical_id: current.canonical_id, source_version_id: current.source_version_id, planning_year: newYear, planning_type: newType, planning_version: newVersion };
+  return { id, source_system: current.source_system, source_key: current.source_key, source_version_id: current.source_version_id, planning_year: newYear, planning_type: newType, planning_version: newVersion };
 }
 
 // ── Flex-dimension model & routing ──
@@ -868,13 +716,13 @@ export function getUserCount(): number {
 
 // ── Audit Events ──
 
-export function insertAuditEvent(direction: 'in' | 'out', topic: string, event_type: string, event_id: string | undefined, canonical_id: string | undefined, summary: string) {
+export function insertAuditEvent(direction: 'in' | 'out', topic: string, event_type: string, event_id: string | undefined, source_key: string | undefined, summary: string) {
   db.prepare(
-    "INSERT INTO audit_events (direction, topic, event_type, event_id, canonical_id, summary, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)"
-  ).run(direction, topic, event_type, event_id || null, canonical_id || null, summary, new Date().toISOString());
+    "INSERT INTO audit_events (direction, topic, event_type, event_id, source_key, summary, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)"
+  ).run(direction, topic, event_type, event_id || null, source_key || null, summary, new Date().toISOString());
 }
 
-export function getAuditEvents(limit = 100): Array<{ id: number; direction: string; topic: string; event_type: string; event_id: string | null; canonical_id: string | null; summary: string; timestamp: string }> {
+export function getAuditEvents(limit = 100): Array<{ id: number; direction: string; topic: string; event_type: string; event_id: string | null; source_key: string | null; summary: string; timestamp: string }> {
   return db.prepare("SELECT * FROM audit_events ORDER BY id DESC LIMIT ?").all(limit) as any;
 }
 

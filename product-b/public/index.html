@@ -534,8 +534,8 @@
           <div class="info-title">&#x2699;&#xfe0f; Technical: Read Model + Flex Dimensions</div>
           <pre>Product B builds a read model by consuming egress topics:
 
-Budget: platform.budget.out &rarr; { canonical_id, planning_dimensions, dim_values_per_line }
-Actuals: platform.gl.out &rarr; { canonical_id, dim_values_per_entry }
+Budget: platform.budget.out &rarr; { source_system, source_key, planning_dimensions, dim_values_per_line }
+Actuals: platform.gl.out &rarr; { source_system, source_key, dim_values_per_entry }
 
 Flex dimensions (Approach C):
   account, org_unit, period = named standard dimensions
@@ -744,7 +744,7 @@ At-least-once delivery + INSERT OR REPLACE = idempotent.</pre>
           <div class="info-title">&#x2699;&#xfe0f; Ingestion pipeline architecture</div>
           <pre>Kafka event (platform.budget.out / platform.gl.out)
   │
-  ├─ Platform enrichment: canonical_id, planning_dimensions, dim_values_per_line
+  ├─ Platform enrichment: source_system, source_key, planning_dimensions, dim_values_per_line
   │
   └─ Product B ingestion pipeline (per line):
        1. Merge original line + platform dim routing
@@ -984,7 +984,7 @@ API:
     function dimValue(row) {
       if (currentDim === 'account') return row.account;
       if (currentDim === 'org_unit') return row.org_unit;
-      if (currentDim === 'project') return row.project_name || row.canonical_id;
+      if (currentDim === 'project') return row.project_name || row.group_key;
       return row[currentDim] || null;
     }
     function dimName(code) {
@@ -1428,7 +1428,7 @@ API:
         return `<tr>
           <td>${r.account}${accMap[r.account] ? ' <span style="color:#888">' + accMap[r.account] + '</span>' : ''}</td>
           <td>${r.org_unit}${orgMap[r.org_unit] ? ' <span style="color:#888">' + orgMap[r.org_unit] + '</span>' : ''}</td>
-          <td>${r.project_name || r.canonical_id}</td>
+          <td>${r.project_name || r.group_key}</td>
           <td>${dim1}</td>
           <td>${dim2}</td>
           <td>${dim3}</td>
@@ -1459,7 +1459,7 @@ API:
         return `<tr>
           <td>${r.account}${accMap[r.account] ? ' <span style="color:#888">' + accMap[r.account] + '</span>' : ''}</td>
           <td>${r.org_unit}${orgMap[r.org_unit] ? ' <span style="color:#888">' + orgMap[r.org_unit] + '</span>' : ''}</td>
-          <td>${r.project_name || r.canonical_id}</td>
+          <td>${r.project_name || r.group_key}</td>
           <td>${dim1}</td>
           <td>${dim2}</td>
           <td>${dim3}</td>

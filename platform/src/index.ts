@@ -5,8 +5,8 @@ import jwt from "jsonwebtoken";
 import { Kafka } from "kafkajs";
 import path from "path";
 
-import { linkProjects, getAllProjects, getMappings, getOrCreateDimensionMapping, getAllDimensionMappings, updateDimensionMapping, lookupCanonical, configureDimModel, getDimModel, getAllDimModels, configureDimRouting, getAllDimRouting, registerSharedDimension, getAllSharedDimensions, upsertDimensionCode, getDimensionCodes, deleteDimensionCode, registerParticipant, getParticipants, upsertCodeMapping, getCodeMappings, registerDimensionAttribute, getDimensionAttributes, setCodeAttribute, getCodeAttributes, getAllCodeAttributes, setHierarchy, getHierarchy, resetAllData, getInboxItems, addInboxItem, updateInboxItem, setSystemConfig, getSystemConfig, getAllSystemConfigs, deleteDimModel, deleteDimRouting, deleteSystem, deleteParticipant, getAllUsers, getUser, getUserByUsername, getUserByExternalId, upsertUser, updateUser, deleteUser, updateLastLogin, getUserCount, getAuditEvents, getAuditEventCount, upsertEconEntity, getEconEntities, deleteEconEntity, upsertEconEntityAttribute, getEconEntityAttributes, upsertEconAttributeDef, getEconAttributeDefs, upsertEconRelation, getEconRelations, insertEconFacts, validateEconFacts, getEconFacts, getEconFactsSummary, publishEconFacts, getEconFactsForPublish, upsertSyncState, getSyncStates, getSyncState } from "./mapper";
-import { startRouter, publishLink, getEventLog } from "./router";
+import { getOrCreateDimensionMapping, getAllDimensionMappings, updateDimensionMapping, configureDimModel, getDimModel, getAllDimModels, configureDimRouting, getAllDimRouting, registerSharedDimension, getAllSharedDimensions, upsertDimensionCode, getDimensionCodes, deleteDimensionCode, registerParticipant, getParticipants, upsertCodeMapping, getCodeMappings, registerDimensionAttribute, getDimensionAttributes, setCodeAttribute, getCodeAttributes, getAllCodeAttributes, setHierarchy, getHierarchy, resetAllData, getInboxItems, addInboxItem, updateInboxItem, setSystemConfig, getSystemConfig, getAllSystemConfigs, deleteDimModel, deleteDimRouting, deleteSystem, deleteParticipant, getAllUsers, getUser, getUserByUsername, getUserByExternalId, upsertUser, updateUser, deleteUser, updateLastLogin, getUserCount, getAuditEvents, getAuditEventCount, upsertEconEntity, getEconEntities, deleteEconEntity, upsertEconEntityAttribute, getEconEntityAttributes, upsertEconAttributeDef, getEconAttributeDefs, upsertEconRelation, getEconRelations, insertEconFacts, validateEconFacts, getEconFacts, getEconFactsSummary, publishEconFacts, getEconFactsForPublish, upsertSyncState, getSyncStates, getSyncState } from "./mapper";
+import { startRouter, publishEntityLinked, getEventLog } from "./router";
 import cron from "node-cron";
 
 // ── Config ──
@@ -261,27 +261,35 @@ app.get("/api/navigation", (req, res) => {
 
 // ── Platform API ──
 
-app.get("/api/projects", (_req, res) => {
-  const projects = getAllProjects();
-  res.json(projects);
-});
+// ── Economy Domain: Identity Resolution ──
+// The economy domain (not platform infrastructure) owns entity identity.
+// When two source entities represent the same real-world entity, the economy domain
+// records a "same_as" relation and publishes an EntityLinked event.
 
-app.get("/api/projects/:canonicalId/mappings", (req, res) => {
-  const mappings = getMappings(req.params.canonicalId);
-  res.json(mappings);
-});
-
-app.post("/api/link", async (req, res) => {
-  const { source_id, target_id } = req.body;
-  if (!source_id || !target_id) {
-    res.status(400).json({ error: "source_id and target_id required" });
+app.post("/api/economy/link-entities", async (req, res) => {
+  const { dimension, entities } = req.body;
+  if (!dimension || !entities || entities.length < 2) {
+    res.status(400).json({ error: "dimension and at least 2 entities required" });
     return;
   }
   try {
-    const result = linkProjects(source_id, target_id);
-    const event = await publishLink(result.canonical_id, result.linked);
-    console.log(`[PLATFORM] Linked: ${source_id} ↔ ${target_id} → ${result.canonical_id}`);
-    res.json({ ok: true, ...result, event });
+    // Record same_as relations in economy domain
+    const primary = entities[0];
+    for (let i = 1; i < entities.length; i++) {
+      const other = entities[i];
+      upsertEconRelation({
+        source_system: "economy_domain",
+        relation_type: "same_as",
+        dimension,
+        child_code: `${other.source_system}:${other.source_key}`,
+        parent_code: `${primary.source_system}:${primary.source_key}`,
+        hierarchy_name: "identity",
+      });
+    }
+    // Publish EntityLinked event so products can update their local models
+    const event = await publishEntityLinked(dimension, entities);
+    console.log(`[PLATFORM] Entity linked: ${dimension} — ${entities.map((e: any) => `${e.source_system}:${e.source_key}`).join(" ↔ ")}`);
+    res.json({ ok: true, event });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
     res.status(400).json({ error: message });
@@ -312,12 +320,12 @@ app.get("/api/dimension-mappings", (_req, res) => {
 });
 
 app.post("/api/dimension-mappings/configure", (req, res) => {
-  const { canonical_id, source_version_id, version_name, year } = req.body;
-  if (!canonical_id || !version_name || !year) {
-    res.status(400).json({ error: "canonical_id, version_name and year required" });
+  const { source_system, source_key, source_version_id, version_name, year } = req.body;
+  if (!source_system || !source_key || !version_name || !year) {
+    res.status(400).json({ error: "source_system, source_key, version_name and year required" });
     return;
   }
-  const mapping = getOrCreateDimensionMapping(canonical_id, version_name, year, source_version_id);
+  const mapping = getOrCreateDimensionMapping(source_system, source_key, version_name, year, source_version_id);
   res.json({ ok: true, mapping });
 });
 
@@ -842,7 +850,6 @@ const PRODUCT_B_URL = process.env.PRODUCT_B_URL || "http://product-b:3003";
 const demoState = {
   prod_a_id: null as string | null,
   erp_id: null as string | null,
-  canonical_id: null as string | null,
   version_id: null as string | null,
   step: 0,
 };
@@ -854,7 +861,6 @@ app.get("/api/demo/state", (_req, res) => {
 app.post("/api/demo/reset", async (_req, res) => {
   demoState.prod_a_id = null;
   demoState.erp_id = null;
-  demoState.canonical_id = null;
   demoState.version_id = null;
   demoState.step = 0;
   resetAllData();
@@ -986,17 +992,6 @@ app.post("/api/demo/step/1", async (_req, res) => {
 
     demoState.step = 1;
     console.log("[DEMO] Step 1: Reference data + economic model + dimension catalog");
-
-    // Code mappings for ERP + consumers are auto-registered by the router
-    // when it routes AccountsPublished. Here we only seed Product A's
-    // OWN local codes (BUD-xxx, TEAM-xxx) which differ from canonical codes.
-    // In production, Product A would report these back via an API.
-    for (const acc of accounts.filter((a: any) => a.type === "leaf")) {
-      upsertCodeMapping("account", "prod_a", `BUD-${acc.code}`, acc.code);
-    }
-    for (const org of orgUnits.filter((o: any) => o.type === "leaf")) {
-      upsertCodeMapping("org_unit", "prod_a", `TEAM-${org.code}`, org.code);
-    }
 
     // Seed inbox task (platform-generated, visible to all admins)
     addInboxItem({
@@ -1201,14 +1196,9 @@ app.post("/api/demo/step/7", async (_req, res) => {
     return;
   }
   try {
-    const canonicalId = lookupCanonical("prod_a", demoState.prod_a_id);
-    if (!canonicalId) {
-      res.status(400).json({ error: "Canonical ID missing — run step 5 first" });
-      return;
-    }
-    // Planning dimension mapping (per budget version)
+    // Planning dimension mapping (per budget version) — uses source identity
     const mapping = getOrCreateDimensionMapping(
-      canonicalId, "Budget 2025", "2025", demoState.version_id
+      "prod_a", demoState.prod_a_id, "Budget 2025", "2025", demoState.version_id
     );
 
     demoState.step = 7;
@@ -1219,7 +1209,8 @@ app.post("/api/demo/step/7", async (_req, res) => {
       description: `Dimension mapping: "Budget 2025" → ${mapping.planning_type} ${mapping.planning_year} v${mapping.planning_version}. Flex-dims configured in step 1 (dim1=${dimModel.dim1}, dim2=${dimModel.dim2}, dim3=${dimModel.dim3})`,
       mapping,
       dim_model: dimModel,
-      canonical_id: canonicalId,
+      source_system: "prod_a",
+      source_key: demoState.prod_a_id,
     });
   } catch (err) {
     res.status(500).json({ error: `Could not configure mapping: ${err}` });
@@ -1245,19 +1236,31 @@ app.post("/api/demo/step/8", async (_req, res) => {
   }
 });
 
-// Step 9: Link projects
+// Step 9: Economy Domain: Link projects (identity resolution — business decision, not infra)
 app.post("/api/demo/step/9", async (_req, res) => {
   if (!demoState.prod_a_id || !demoState.erp_id) {
     res.status(400).json({ error: "Run steps 3 and 5 first — both projects are needed" });
     return;
   }
   try {
-    const result = linkProjects(demoState.prod_a_id, demoState.erp_id);
-    const event = await publishLink(result.canonical_id, result.linked);
-    demoState.canonical_id = result.canonical_id;
+    const entities = [
+      { source_system: "erp", source_key: demoState.erp_id, name: "New Office Building" },
+      { source_system: "prod_a", source_key: demoState.prod_a_id, name: "New Office Building — planning" },
+    ];
+    // Record same_as relation in economy domain
+    upsertEconRelation({
+      source_system: "economy_domain",
+      relation_type: "same_as",
+      dimension: "project",
+      child_code: `prod_a:${demoState.prod_a_id}`,
+      parent_code: `erp:${demoState.erp_id}`,
+      hierarchy_name: "identity",
+    });
+    // Publish EntityLinked event
+    const event = await publishEntityLinked("project", entities);
     demoState.step = 9;
-    console.log(`[DEMO] Step 9: Linked ${demoState.prod_a_id} ↔ ${demoState.erp_id} → ${result.canonical_id}`);
-    res.json({ ok: true, step: 9, description: `Linked: ${demoState.prod_a_id} ↔ ${demoState.erp_id} → ${result.canonical_id}`, data: { ...result, event } });
+    console.log(`[DEMO] Step 9: Economy Domain linked erp:${demoState.erp_id} ↔ prod_a:${demoState.prod_a_id}`);
+    res.json({ ok: true, step: 9, description: `Economy Domain: erp:${demoState.erp_id} ↔ prod_a:${demoState.prod_a_id} are the same project`, data: { event } });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     res.status(400).json({ error: message });
@@ -1334,11 +1337,10 @@ async function start() {
   app.listen(PORT, () => {
     console.log(`[PLATFORM] Running on http://localhost:${PORT}`);
     console.log("[PLATFORM] Endpoints:");
-    console.log("  POST /api/login          — Log in (anna/demo or erik/demo)");
-    console.log("  POST /api/logout         — Log out");
-    console.log("  GET  /api/me             — Who is logged in?");
-    console.log("  GET  /api/projects       — All canonical projects + mappings");
-    console.log("  POST /api/link           — Link source_id ↔ target_id");
+    console.log("  POST /api/login                    — Log in (anna/demo or erik/demo)");
+    console.log("  POST /api/logout                   — Log out");
+    console.log("  GET  /api/me                       — Who is logged in?");
+    console.log("  POST /api/economy/link-entities     — Economy domain: identity resolution");
   });
 }
 

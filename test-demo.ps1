@@ -262,7 +262,7 @@ if ($Steps -contains 8) {
     $r = Invoke-RestMethod "$PLATFORM/api/demo/step/8" -Method POST
     if ($r.ok) {
         Write-Ok $r.description
-        Write-Info "Events: ProjectLinked → platform.links.out"
+        Write-Info "Events: EntityLinked → platform.entity-linked.out"
         Write-Info "Product A + B uppdaterar sina lokala mappningar"
     } else {
         Write-Fail "Steg 8 misslyckades: $($r.error)"
@@ -404,7 +404,7 @@ $state = Invoke-RestMethod "$PLATFORM/api/demo/state"
 Write-Info "Demo-state:"
 if ($state.prod_a_id) { Write-Info "  Product A: $($state.prod_a_id)" }
 if ($state.erp_id)    { Write-Info "  ERP:       $($state.erp_id)" }
-if ($state.canonical_id) { Write-Info "  Canonical: $($state.canonical_id)" }
+
 Write-Host ""
 Write-Info "Öppna i webbläsare:"
 Write-Info "  Platform Admin:  http://localhost:3000/admin.html (admin/demo)"

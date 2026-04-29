@@ -14,7 +14,7 @@ export const TOPICS_EGRESS = {
   ACCOUNTS_OUT: "platform.accounts.out",
   BUDGET_OUT: "platform.budget.out",
   GL_OUT: "platform.gl.out",
-  LINKS_OUT: "platform.links.out",
+  ENTITY_LINKED_OUT: "platform.entity-linked.out",
 } as const;
 
 export const ALL_TOPICS = [
@@ -122,25 +122,26 @@ export interface BudgetSubmitted extends BaseEvent {
 
 // ── Platform Events ──
 
-export interface ProjectLinked extends BaseEvent {
-  event_type: "ProjectLinked";
+export interface EntityLinked extends BaseEvent {
+  event_type: "EntityLinked";
   source_system: "platform";
-  canonical_id: string;
-  linked: {
-    erp?: string;
-    prod_a?: string;
-    prod_b?: string;
-  };
+  dimension: string;
+  entities: Array<{
+    source_system: string;
+    source_key: string;
+    name: string;
+  }>;
 }
 
-// ── Enriched wrapper (Platform adds canonical_id) ──
+// ── Enriched wrapper (Platform adds source identity) ──
 export interface EnrichedEvent<T extends BaseEvent> {
-  canonical_id: string;
+  source_system: string;
+  source_key: string;
   original: T;
 }
 
 // ── Union types ──
 export type ErpEvent = AccountsPublished | ProjectCreated | GeneralLedgerPublished;
 export type ProductAEvent = BudgetProjectCreated | BudgetUpdated | BudgetSubmitted;
-export type PlatformEvent = ProjectLinked;
+export type PlatformEvent = EntityLinked;
 export type AnyEvent = ErpEvent | ProductAEvent | PlatformEvent;

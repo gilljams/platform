@@ -26,15 +26,17 @@ db.exec(`
     type TEXT NOT NULL DEFAULT 'leaf'
   );
   CREATE TABLE IF NOT EXISTS projects (
-    canonical_id TEXT PRIMARY KEY,
+    source_system TEXT NOT NULL,
+    source_key TEXT NOT NULL,
     name TEXT NOT NULL,
     source TEXT NOT NULL,
-    erp_id TEXT,
-    prod_a_id TEXT
+    group_key TEXT,
+    PRIMARY KEY (source_system, source_key)
   );
   CREATE TABLE IF NOT EXISTS budget_lines (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    canonical_id TEXT NOT NULL,
+    source_system TEXT NOT NULL,
+    source_key TEXT NOT NULL,
     account TEXT NOT NULL,
     org_unit TEXT NOT NULL,
     amount REAL NOT NULL,
@@ -51,7 +53,8 @@ db.exec(`
   );
   CREATE TABLE IF NOT EXISTS gl_lines (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    canonical_id TEXT NOT NULL,
+    source_system TEXT NOT NULL,
+    source_key TEXT NOT NULL,
     account TEXT NOT NULL,
     org_unit TEXT NOT NULL,
     amount REAL NOT NULL,
@@ -207,7 +210,7 @@ const CONSUME_TOPICS = [
   "platform.projects.out",
   "platform.budget.out",
   "platform.gl.out",
-  "platform.links.out",
+  "platform.entity-linked.out",
 ];
 
 async function startConsumer() {
@@ -245,17 +248,12 @@ async function startConsumer() {
         }
 
         case "platform.projects.out": {
-          const orig = data.original;
-          if (orig?.event_type === "ProjectCreated") {
+          // Store project with source identity
+          if (data.source_system && data.source_key) {
             db.prepare(
-              "INSERT OR REPLACE INTO projects (canonical_id, name, source, erp_id) VALUES (?, ?, 'erp', ?)"
-            ).run(data.canonical_id, orig.name, orig.erp_id);
-            console.log(`[PROD-B] ERP project stored: ${data.canonical_id}`);
-          } else if (orig?.event_type === "BudgetProjectCreated") {
-            db.prepare(
-              "INSERT OR REPLACE INTO projects (canonical_id, name, source, prod_a_id) VALUES (?, ?, 'prod_a', ?)"
-            ).run(data.canonical_id, orig.name, orig.prod_a_id);
-            console.log(`[PROD-B] Budget project stored: ${data.canonical_id}`);
+              "INSERT OR REPLACE INTO projects (source_system, source_key, name, source) VALUES (?, ?, ?, ?)"
+            ).run(data.source_system, data.source_key, data.name || data.source_key, data.source_system);
+            console.log(`[PROD-B] Project stored: ${data.source_system}:${data.source_key}`);
           }
           break;
         }
@@ -265,43 +263,43 @@ async function startConsumer() {
           const orig = data.original;
           const dims = data.planning_dimensions;
           const dimPerLine = data.dim_values_per_line || [];
+          const srcSys = data.source_system || "prod_a";
+          const srcKey = data.source_key || orig?.prod_a_id;
 
-          // Clear previous budget lines for this canonical_id + year to handle re-submissions
+          // Clear previous budget lines for this source + year to handle re-submissions
           const pYear = dims?.planning_year || orig?.year || null;
           if (pYear) {
-            db.prepare("DELETE FROM budget_lines WHERE canonical_id = ? AND planning_year = ?")
-              .run(data.canonical_id, pYear);
+            db.prepare("DELETE FROM budget_lines WHERE source_system = ? AND source_key = ? AND planning_year = ?")
+              .run(srcSys, srcKey, pYear);
           } else {
-            db.prepare("DELETE FROM budget_lines WHERE canonical_id = ?")
-              .run(data.canonical_id);
+            db.prepare("DELETE FROM budget_lines WHERE source_system = ? AND source_key = ?")
+              .run(srcSys, srcKey);
           }
 
           const stmt = db.prepare(
-            "INSERT INTO budget_lines (canonical_id, account, org_unit, amount, currency, period, dim1, dim2, dim3, dim4, dim5, planning_year, planning_type, planning_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            "INSERT INTO budget_lines (source_system, source_key, account, org_unit, amount, currency, period, dim1, dim2, dim3, dim4, dim5, planning_year, planning_type, planning_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
           );
           const budgetLines = orig?.lines || [];
           let rulesApplied = 0;
           for (let i = 0; i < budgetLines.length; i++) {
             const line = budgetLines[i];
             const dv = dimPerLine[i] || {};
-            // Build a merged line object for rule evaluation
             const merged = {
               account: line.account, org_unit: line.org_unit, amount: line.amount,
               currency: line.currency || "SEK", period: line.period,
               dim1: dv.dim1 || null, dim2: dv.dim2 || null, dim3: dv.dim3 || null,
               dim4: dv.dim4 || null, dim5: dv.dim5 || null,
             };
-            // Apply product-specific ingestion rules
             const enriched = applyIngestionRules(merged, "budget") as Record<string, unknown>;
             if (JSON.stringify(merged) !== JSON.stringify(enriched)) rulesApplied++;
             stmt.run(
-              data.canonical_id, enriched.account, enriched.org_unit, enriched.amount, enriched.currency, enriched.period,
+              srcSys, srcKey, enriched.account, enriched.org_unit, enriched.amount, enriched.currency, enriched.period,
               enriched.dim1 || null, enriched.dim2 || null, enriched.dim3 || null, enriched.dim4 || null, enriched.dim5 || null,
               dims?.planning_year || null, dims?.planning_type || null, dims?.planning_version || null
             );
             registerDimMembers([enriched]);
           }
-          console.log(`[PROD-B] Budget lines stored for ${data.canonical_id} (${budgetLines.length} lines, year=${pYear}, ${rulesApplied} enriched by ingestion rules)`);
+          console.log(`[PROD-B] Budget lines stored for ${srcSys}:${srcKey} (${budgetLines.length} lines, year=${pYear}, ${rulesApplied} enriched by ingestion rules)`);
           break;
         }
 
@@ -309,15 +307,16 @@ async function startConsumer() {
           // GL from ERP — Platform has enriched with dim_values_per_entry via dim_routing
           const orig = data.original;
           const dimPerEntry = data.dim_values_per_entry || [];
+          const srcSys = data.source_system || "erp";
+          const srcKey = data.source_key || orig?.erp_id;
           const stmt = db.prepare(
-            "INSERT INTO gl_lines (canonical_id, account, org_unit, amount, currency, period, transaction_date, dim1, dim2, dim3, dim4, dim5) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            "INSERT INTO gl_lines (source_system, source_key, account, org_unit, amount, currency, period, transaction_date, dim1, dim2, dim3, dim4, dim5) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
           );
           const entries = orig?.entries || [];
           let rulesApplied = 0;
           for (let i = 0; i < entries.length; i++) {
             const entry = entries[i];
             const dv = dimPerEntry[i] || {};
-            // Build a merged line object for rule evaluation
             const merged = {
               account: entry.account, org_unit: entry.org_unit, amount: entry.amount,
               currency: entry.currency || "SEK", period: entry.period,
@@ -325,51 +324,27 @@ async function startConsumer() {
               dim1: dv.dim1 || null, dim2: dv.dim2 || null, dim3: dv.dim3 || null,
               dim4: dv.dim4 || null, dim5: dv.dim5 || null,
             };
-            // Apply product-specific ingestion rules
             const enriched = applyIngestionRules(merged, "gl") as Record<string, unknown>;
             if (JSON.stringify(merged) !== JSON.stringify(enriched)) rulesApplied++;
-            stmt.run(data.canonical_id, enriched.account, enriched.org_unit, enriched.amount, enriched.currency, enriched.period,
+            stmt.run(srcSys, srcKey, enriched.account, enriched.org_unit, enriched.amount, enriched.currency, enriched.period,
               enriched.transaction_date || null, enriched.dim1 || null, enriched.dim2 || null, enriched.dim3 || null, enriched.dim4 || null, enriched.dim5 || null);
             registerDimMembers([enriched]);
           }
-          console.log(`[PROD-B] GL lines stored for ${data.canonical_id} (${entries.length} lines, ${rulesApplied} enriched by ingestion rules)`);
+          console.log(`[PROD-B] GL lines stored for ${srcSys}:${srcKey} (${entries.length} lines, ${rulesApplied} enriched by ingestion rules)`);
           break;
         }
 
-        case "platform.links.out": {
-          // Merge projects: consolidate all data under data.canonical_id
-          if (data.linked?.erp && data.linked?.prod_a) {
-            const newCid = data.canonical_id;
-
-            // Find old canonical IDs for prod_a and erp projects
-            const prodARow = db.prepare(
-              "SELECT canonical_id FROM projects WHERE prod_a_id = ?"
-            ).get(data.linked.prod_a) as { canonical_id: string } | undefined;
-            const erpRow = db.prepare(
-              "SELECT canonical_id FROM projects WHERE erp_id = ? AND source = 'erp'"
-            ).get(data.linked.erp) as { canonical_id: string } | undefined;
-
-            // Move budget_lines from old prod_a canonical to new
-            if (prodARow && prodARow.canonical_id !== newCid) {
-              db.prepare("UPDATE budget_lines SET canonical_id = ? WHERE canonical_id = ?")
-                .run(newCid, prodARow.canonical_id);
-              db.prepare("UPDATE projects SET canonical_id = ?, erp_id = ? WHERE canonical_id = ? AND source = 'prod_a'")
-                .run(newCid, data.linked.erp, prodARow.canonical_id);
-            } else {
-              // prod_a project already has the right canonical_id, just add erp_id
-              db.prepare("UPDATE projects SET erp_id = ? WHERE canonical_id = ? AND source = 'prod_a'")
-                .run(data.linked.erp, newCid);
+        case "platform.entity-linked.out": {
+          // Economy domain says these entities are the same real-world thing
+          // Product B creates a group_key so analytics can join budget + actuals
+          if (data.dimension === "project" && data.entities?.length >= 2) {
+            const groupKey = `group-${Date.now()}`;
+            for (const entity of data.entities) {
+              db.prepare(
+                "UPDATE projects SET group_key = ? WHERE source_system = ? AND source_key = ?"
+              ).run(groupKey, entity.source_system, entity.source_key);
             }
-
-            // Move gl_lines from old ERP canonical to new
-            if (erpRow && erpRow.canonical_id !== newCid) {
-              db.prepare("UPDATE gl_lines SET canonical_id = ? WHERE canonical_id = ?")
-                .run(newCid, erpRow.canonical_id);
-              db.prepare("DELETE FROM projects WHERE canonical_id = ? AND source = 'erp'")
-                .run(erpRow.canonical_id);
-            }
-
-            console.log(`[PROD-B] Projects linked: ${newCid}`);
+            console.log(`[PROD-B] Projects linked under group: ${data.entities.map((e: any) => `${e.source_system}:${e.source_key}`).join(", ")}`);
           }
           break;
         }
@@ -400,11 +375,13 @@ app.use((req, _res, next) => {
 app.use(express.static(path.join(__dirname, "..", "public")));
 
 // GET /api/analytics — the main read model: budget vs actuals
-// Returns separate rows for budget and GL so different dimensions show independently
+// Uses group_key (set by EntityLinked event) to correlate budget + GL from different sources
 app.get("/api/analytics", (_req, res) => {
   const rows = db.prepare(`
     SELECT
-      p.canonical_id,
+      p.source_system,
+      p.source_key,
+      COALESCE(p.group_key, p.source_system || ':' || p.source_key) AS group_key,
       p.name AS project_name,
       b.account,
       b.org_unit,
@@ -420,11 +397,13 @@ app.get("/api/analytics", (_req, res) => {
       NULL AS transaction_date,
       SUM(b.amount) AS amount
     FROM projects p
-    JOIN budget_lines b ON p.canonical_id = b.canonical_id
-    GROUP BY p.canonical_id, b.account, b.org_unit, b.period, b.dim1, b.dim2, b.dim3, b.planning_year, b.planning_type, b.planning_version
+    JOIN budget_lines b ON p.source_system = b.source_system AND p.source_key = b.source_key
+    GROUP BY p.source_system, p.source_key, b.account, b.org_unit, b.period, b.dim1, b.dim2, b.dim3, b.planning_year, b.planning_type, b.planning_version
     UNION ALL
     SELECT
-      p.canonical_id,
+      p.source_system,
+      p.source_key,
+      COALESCE(p.group_key, p.source_system || ':' || p.source_key) AS group_key,
       p.name AS project_name,
       g.account,
       g.org_unit,
@@ -440,8 +419,8 @@ app.get("/api/analytics", (_req, res) => {
       g.transaction_date,
       SUM(g.amount) AS amount
     FROM projects p
-    JOIN gl_lines g ON p.canonical_id = g.canonical_id
-    GROUP BY p.canonical_id, g.account, g.org_unit, g.period, g.dim1, g.dim2, g.dim3, g.transaction_date
+    JOIN gl_lines g ON p.source_system = g.source_system AND p.source_key = g.source_key
+    GROUP BY p.source_system, p.source_key, g.account, g.org_unit, g.period, g.dim1, g.dim2, g.dim3, g.transaction_date
     ORDER BY account, org_unit, project_name
   `).all();
   res.json(rows);

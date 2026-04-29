@@ -772,16 +772,15 @@ Can be extended if the customer adds more source fields.</pre>
           <div class="info-content">
             <div class="info-title">What is this?</div>
             When ERP or Product A creates a new project it automatically appears here
-            with a "canonical ID". The status shows if the project only exists in one system (unlinked)
-            or if it's connected in both (linked).
+            Economy domain owns entity identity. When two source entities represent
+            the same real-world thing, the economy domain records a "same_as" relation.
           </div>
           <div class="info-content">
-            <div class="info-title">ID Mapping (technical)</div>
-            <pre>canonical_projects (canonical_id PK)
-id_mappings (source_system, source_id ? canonical_id)
-
-Automatiskt vid ProjectCreated/BudgetProjectCreated events.
-Manual linking: POST /api/link → merge canonical_id</pre>
+            <div class="info-title">Identity Model (technical)</div>
+            <pre>Each entity is identified by source_system + source_key.
+Economy domain records same_as relations in econ_relations.
+EntityLinked events notify products so they can group locally.
+POST /api/economy/link-entities → same_as relation + event</pre>
           </div>
         </div>
       </div>
@@ -789,24 +788,24 @@ Manual linking: POST /api/link → merge canonical_id</pre>
       <!-- Link -->
       <div class="card">
         <div class="card-header">
-          <h2>Link Projects</h2>
-          <span style="font-size:12px;color:#888;">Manual step — link ERP project to budget project</span>
+          <h2>Link Entities</h2>
+          <span style="font-size:12px;color:#888;">Economy Domain: identity resolution — declare two entities as the same</span>
         </div>
         <p style="font-size:13px;color:#666;margin-bottom:12px;">
-          ERP and Product A create projects independently. Here they are linked
-          so that the platform knows it's the <strong>same physical project</strong>. Afterwards Product B
-          can show budget + actuals in the same view.
+          ERP and Product A create projects independently. Here the economy domain declares they are
+          the <strong>same real-world entity</strong>. An EntityLinked event is published so products
+          can group budget + actuals locally.
         </p>
         <div class="form-row">
           <div class="form-group" style="flex:1">
-            <label>Source ID</label>
+            <label>Source Entity</label>
             <select id="sourceId"></select>
           </div>
           <div class="form-group" style="flex:1">
-            <label>Target ID</label>
+            <label>Target Entity</label>
             <select id="targetId"></select>
           </div>
-          <button class="btn btn-primary" id="linkBtn" onclick="linkProjects()">Link</button>
+          <button class="btn btn-primary" id="linkBtn" onclick="linkEntities()">Link</button>
         </div>
         <div class="link-result" id="linkResult"></div>
       </div>
@@ -825,7 +824,7 @@ Manual linking: POST /api/link → merge canonical_id</pre>
         <table>
           <thead>
             <tr>
-              <th>Canonical ID</th>
+              <th>Source</th>
               <th>Source (version)</th>
               <th>Planning Year</th>
               <th>Planning Type</th>
@@ -847,7 +846,7 @@ Manual linking: POST /api/link → merge canonical_id</pre>
           <div class="info-content">
             <div class="info-title">Technical</div>
             <pre>Auto-parse: "Budget 2025" → { type: "Budget", year: "2025", version: 1 }
-Lagras i dimension_mappings (canonical_id, source_version_id, ...)
+Lagras i dimension_mappings (source_system, source_key, source_version_id, ...)
 PUT /api/dimension-mappings/:id — manuell override
 Enriched on BudgetSubmitted event when routing to platform.budget.out</pre>
           </div>
@@ -985,7 +984,7 @@ Enriched on BudgetSubmitted event when routing to platform.budget.out</pre>
             <div class="info-title">Event routing (technical)</div>
             <pre>Ingress: erp.projects, erp.accounts, erp.general-ledger, product-a.events
 Egress: platform.projects.out, platform.accounts.out,
-  platform.budget.out, platform.gl.out, platform.links.out
+  platform.budget.out, platform.gl.out, platform.entity-linked.out
 
 In-memory ring buffer (max 200) → GET /api/events</pre>
           </div>
@@ -1434,50 +1433,38 @@ In production:
       setCheck(sysCheck, sysCount > 0, sysCount > 0 ? sysCount + ' systems' : 'not configured');
     }
 
-    // Projects
+    // Projects — list from economy domain entities
     async function loadProjects() {
-      var res = await fetch(API + '/api/projects');
-      var projects = await res.json();
+      var res = await fetch(API + '/api/economy/entities?dimension=project');
+      var entities = await res.json();
       var body = document.getElementById('projectsBody');
       var sourceSel = document.getElementById('sourceId');
       var targetSel = document.getElementById('targetId');
-      body.innerHTML = projects.map(function(p) {
-        var erpId = p.mappings ? (p.mappings.erp || '') : '';
-        var prodAId = p.mappings ? (p.mappings.prod_a || '') : '';
-        var linked = erpId && prodAId;
+      body.innerHTML = entities.map(function(e) {
         return '<tr>' +
-          '<td><code>' + p.canonical_id + '</code></td>' +
-          '<td style="font-size:12px;color:#999">' + new Date(p.created_at).toLocaleString('en-US') + '</td>' +
-          '<td>' + (erpId ? '<span class="tag tag-erp">' + erpId + '</span>' : '<span style="color:#ccc">—</span>') + '</td>' +
-          '<td>' + (prodAId ? '<span class="tag tag-prod_a">' + prodAId + '</span>' : '<span style="color:#ccc">—</span>') + '</td>' +
-          '<td><span class="tag ' + (linked ? 'tag-linked' : 'tag-unlinked') + '">' + (linked ? 'Linked' : 'Unlinked') + '</span></td>' +
+          '<td><code>' + e.source_system + ':' + e.code + '</code></td>' +
+          '<td>' + e.name + '</td>' +
+          '<td><span class="tag tag-' + e.source_system + '">' + e.source_system + '</span></td>' +
+          '<td>' + (e.status || 'active') + '</td>' +
         '</tr>';
-      }).join('') || '<tr><td colspan="5" style="color:#999">No projects yet — projects are created by ERP and Product A</td></tr>';
-      var allIds = [];
-      for (var i = 0; i < projects.length; i++) {
-        var p = projects[i];
-        if (p.mappings) {
-          var entries = Object.entries(p.mappings);
-          for (var j = 0; j < entries.length; j++) {
-            allIds.push({ sys: entries[j][0], id: entries[j][1], canonical: p.canonical_id });
-          }
-        }
-      }
-      var opts = allIds.map(function(x) { return '<option value="' + x.id + '">' + x.id + ' (' + x.sys + ' ? ' + x.canonical + ')</option>'; }).join('');
+      }).join('') || '<tr><td colspan="4" style="color:#999">No projects yet — projects are created by ERP and Product A</td></tr>';
+      var opts = entities.map(function(e) { return '<option value="' + e.source_system + '::' + e.code + '">' + e.source_system + ':' + e.code + ' (' + e.name + ')</option>'; }).join('');
       sourceSel.innerHTML = opts;
       targetSel.innerHTML = opts;
     }
 
-    async function linkProjects() {
-      var source_id = document.getElementById('sourceId').value;
-      var target_id = document.getElementById('targetId').value;
+    async function linkEntities() {
+      var sourceVal = document.getElementById('sourceId').value;
+      var targetVal = document.getElementById('targetId').value;
       var btn = document.getElementById('linkBtn');
-      if (!source_id || !target_id || source_id === target_id) { showLinkResult('Select two different IDs', 'error'); return; }
+      if (!sourceVal || !targetVal || sourceVal === targetVal) { showLinkResult('Select two different entities', 'error'); return; }
+      var [srcSys, srcKey] = sourceVal.split('::');
+      var [tgtSys, tgtKey] = targetVal.split('::');
       btn.disabled = true; btn.textContent = 'Linking...';
       try {
-        var res = await fetch(API + '/api/link', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ source_id: source_id, target_id: target_id }) });
+        var res = await fetch(API + '/api/economy/link-entities', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ dimension: 'project', entities: [{ source_system: srcSys, source_key: srcKey, name: srcKey }, { source_system: tgtSys, source_key: tgtKey, name: tgtKey }] }) });
         var data = await res.json();
-        if (data.ok) { showLinkResult('Linked! ' + source_id + ' → ' + target_id + ' → ' + data.canonical_id, 'success'); showToast('Linked → ' + data.canonical_id); loadProjects(); }
+        if (data.ok) { showLinkResult('Linked! ' + srcSys + ':' + srcKey + ' ↔ ' + tgtSys + ':' + tgtKey, 'success'); showToast('Entities linked'); loadProjects(); }
         else { showLinkResult('Error: ' + data.error, 'error'); }
       } catch(e) { showLinkResult('Network error', 'error'); }
       finally { btn.disabled = false; btn.textContent = 'Link'; }
@@ -1495,7 +1482,7 @@ In production:
             '<span class="event-time">' + e.timestamp.substring(11, 19) + '</span>' +
             '<span class="tag ' + (e.direction === 'in' ? 'tag-in' : 'tag-out') + '">' + (e.direction === 'in' ? 'IN' : 'UT') + '</span>' +
             '<span class="event-topic">' + e.topic + '</span>' +
-            '<span class="event-summary">' + e.event_type + (e.canonical_id ? ' <code>' + e.canonical_id + '</code>' : '') + '</span>' +
+            '<span class="event-summary">' + e.event_type + (e.source_key ? ' <code>' + e.source_key + '</code>' : '') + '</span>' +
           '</div>';
         }).join('');
       } catch(e) {}
@@ -1531,7 +1518,7 @@ In production:
         else if (result && result.error) resultHtml = '<div class="step-result error">' + result.error + '</div>';
         if (result && result.mapping) {
           resultHtml += '<div class="step-result info" style="display:block;margin-top:6px;background:#eef2ff;color:#4361ee;border:1px solid #c7d2fe">' +
-            '<strong>' + result.canonical_id + '</strong>: "' + result.mapping.planning_type + ' ' + result.mapping.planning_year + '" v' + result.mapping.planning_version +
+            '<strong>' + (result.source_system || '') + ':' + (result.source_key || '') + '</strong>: "' + result.mapping.planning_type + ' ' + result.mapping.planning_year + '" v' + result.mapping.planning_version +
             (result.dim_model ? '<br>Flex-dims: dim1=' + result.dim_model.dim1 + ', dim2=' + result.dim_model.dim2 + ', dim3=' + result.dim_model.dim3 : '') + '</div>';
         }
         if (result && result.analytics && result.analytics.length > 0) {
@@ -1562,7 +1549,6 @@ In production:
       var parts = [];
       if (state.prod_a_id) parts.push('<strong>Product A:</strong> ' + state.prod_a_id);
       if (state.erp_id) parts.push('<strong>ERP:</strong> ' + state.erp_id);
-      if (state.canonical_id) parts.push('<strong>Canonical:</strong> ' + state.canonical_id);
       el.innerHTML = parts.length ? parts.join(' <span style="color:#ddd">|</span> ') : '<span>No active IDs yet — run step 1 to begin</span>';
       document.getElementById('demoProgress').textContent = 'Step ' + state.step + ' / 11';
     }
@@ -1621,7 +1607,7 @@ In production:
         if (!mappings.length) { body.innerHTML = '<tr><td colspan="6" style="color:#999;text-align:center;">No mappings yet — created automatically for budget versions</td></tr>'; return; }
         body.innerHTML = mappings.map(function(m) {
           return '<tr>' +
-            '<td><code>' + m.canonical_id + '</code></td>' +
+            '<td><code>' + m.source_system + ':' + m.source_key + '</code></td>' +
             '<td><span class="tag tag-prod_a">' + (m.source_version_id || '—') + '</span></td>' +
             '<td><strong>' + m.planning_year + '</strong></td>' +
             '<td><span class="tag tag-linked">' + m.planning_type + '</span></td>' +

@@ -1,5 +1,5 @@
 import { Kafka, Consumer, Producer, Partitioners } from "kafkajs";
-import { getOrCreateCanonical, lookupCanonical, getMappings, getOrCreateDimensionMapping, applyDimRouting, addInboxItem, updateInboxItem, upsertDimensionCode, upsertCodeMapping, getParticipants, insertAuditEvent, isEventProcessed, markEventProcessed } from "./mapper";
+import { getOrCreateDimensionMapping, applyDimRouting, addInboxItem, updateInboxItem, upsertEconEntity, upsertEconRelation, insertAuditEvent, isEventProcessed, markEventProcessed } from "./mapper";
 
 const INGRESS = {
   ERP_PROJECTS: "erp.projects",
@@ -14,7 +14,7 @@ const EGRESS = {
   ACCOUNTS_OUT: "platform.accounts.out",
   BUDGET_OUT: "platform.budget.out",
   GL_OUT: "platform.gl.out",
-  LINKS_OUT: "platform.links.out",
+  ENTITY_LINKED_OUT: "platform.entity-linked.out",
 };
 
 let producer: Producer;
@@ -22,13 +22,13 @@ let consumer: Consumer;
 
 // In-memory event log (ring buffer)
 const EVENT_LOG_MAX = 200;
-const eventLog: Array<{ timestamp: string; direction: 'in' | 'out'; topic: string; event_type: string; canonical_id?: string; summary: string }> = [];
+const eventLog: Array<{ timestamp: string; direction: 'in' | 'out'; topic: string; event_type: string; source_key?: string; summary: string }> = [];
 
-function logEvent(direction: 'in' | 'out', topic: string, event_type: string, canonical_id: string | undefined, summary: string, event_id?: string) {
-  eventLog.unshift({ timestamp: new Date().toISOString(), direction, topic, event_type, canonical_id, summary });
+function logEvent(direction: 'in' | 'out', topic: string, event_type: string, source_key: string | undefined, summary: string, event_id?: string) {
+  eventLog.unshift({ timestamp: new Date().toISOString(), direction, topic, event_type, source_key, summary });
   if (eventLog.length > EVENT_LOG_MAX) eventLog.length = EVENT_LOG_MAX;
   // Persist to audit_events table
-  insertAuditEvent(direction, topic, event_type, event_id, canonical_id, summary);
+  insertAuditEvent(direction, topic, event_type, event_id, source_key, summary);
 }
 
 export function getEventLog(limit = 100) {
@@ -36,12 +36,12 @@ export function getEventLog(limit = 100) {
 }
 
 async function publishEgress(topic: string, message: Record<string, unknown>) {
-  const key = (message.canonical_id as string) || (message.event_id as string) || "unknown";
+  const key = (message.source_key as string) || (message.event_id as string) || "unknown";
   await producer.send({
     topic,
     messages: [{ key, value: JSON.stringify(message) }],
   });
-  logEvent('out', topic, (message.event_type as string) || (message.original as any)?.event_type || 'enriched', message.canonical_id as string | undefined, `→ ${topic} [${key}]`, (message.event_id as string) || (message.original as any)?.event_id);
+  logEvent('out', topic, (message.event_type as string) || (message.original as any)?.event_type || 'enriched', message.source_key as string | undefined, `→ ${topic} [${key}]`, (message.event_id as string) || (message.original as any)?.event_id);
   console.log(`[ROUTER] → ${topic}`);
 }
 
@@ -62,101 +62,64 @@ async function handleMessage(topic: string, rawValue: string) {
     case INGRESS.ERP_ACCOUNTS: {
       // Referensdata — vidarebefordra utan berikning
       await publishEgress(EGRESS.ACCOUNTS_OUT, event);
-
-      // Auto-register code mappings for all dimension participants
-      // When the platform routes reference data, it registers which codes each system now has
-      const accs = event.accounts || [];
-      const orgs = event.org_units || [];
-      for (const dim of ["account", "org_unit"] as const) {
-        const codes = dim === "account" ? accs : orgs;
-        const participants = getParticipants(dim) as Array<{product: string; role: string}>;
-        for (const p of participants) {
-          for (let i = 0; i < codes.length; i++) {
-            const c = codes[i];
-            if (p.product === "erp") {
-              // ERP is source-of-truth — register with source_key reference
-              const prefix = dim === "account" ? "ERP-ACC" : "ERP-ORG";
-              const sk = `${prefix}-${String(i + 1).padStart(3, "0")}`;
-              upsertCodeMapping(dim, "erp", c.code, c.code, sk);
-            } else {
-              // Consumers receive canonical codes directly (local_code = canonical_code)
-              upsertCodeMapping(dim, p.product, c.code, c.code);
-            }
-          }
-        }
-      }
-      console.log(`[ROUTER] Auto-registered code mappings for ${accs.length} accounts + ${orgs.length} org_units`);
+      console.log(`[ROUTER] Forwarded accounts: ${(event.accounts || []).length} accounts + ${(event.org_units || []).length} org_units`);
       break;
     }
 
     case INGRESS.ERP_PROJECTS: {
-      // Create canonical ID for ERP project
-      const canonicalId = getOrCreateCanonical("erp", event.erp_id);
-      // Register as dimension code + cross-reference
-      upsertDimensionCode("project", canonicalId, event.name || event.erp_id);
-      upsertCodeMapping("project", "erp", event.erp_id, canonicalId);
+      // Route with source_system + source_key (no canonical ID creation)
       await publishEgress(EGRESS.PROJECTS_OUT, {
-        canonical_id: canonicalId,
+        source_system: "erp",
+        source_key: event.erp_id,
+        name: event.name || event.erp_id,
         original: event,
       });
       break;
     }
 
     case INGRESS.ERP_GENERAL_LEDGER: {
-      // Enrich with canonical_id based on erp_id + flex dimensions via dim_routing
-      const canonicalId = lookupCanonical("erp", event.erp_id);
-      if (canonicalId) {
-        // Apply dim routing to each GL entry
-        const entries = event.entries || [];
-        const dimValuesPerEntry = entries.map((entry: Record<string, unknown>) =>
-          applyDimRouting("erp", "prod_b", entry)
-        );
-        await publishEgress(EGRESS.GL_OUT, {
-          canonical_id: canonicalId,
-          dim_values_per_entry: dimValuesPerEntry,
-          original: event,
-        });
-      } else {
-        console.warn(`[ROUTER] No canonical ID for erp:${event.erp_id} — skipping GL`);
-      }
+      // Enrich with flex dimensions via dim_routing, route with source identity
+      const entries = event.entries || [];
+      const dimValuesPerEntry = entries.map((entry: Record<string, unknown>) =>
+        applyDimRouting("erp", "prod_b", entry)
+      );
+      await publishEgress(EGRESS.GL_OUT, {
+        source_system: "erp",
+        source_key: event.erp_id,
+        dim_values_per_entry: dimValuesPerEntry,
+        original: event,
+      });
       break;
     }
 
     case INGRESS.PRODUCT_A_EVENTS: {
       if (event.event_type === "BudgetProjectCreated") {
-        const canonicalId = getOrCreateCanonical("prod_a", event.prod_a_id);
-        // Register as dimension code + cross-reference
-        upsertDimensionCode("project", canonicalId, event.name || event.prod_a_id);
-        upsertCodeMapping("project", "prod_a", event.prod_a_id, canonicalId);
         await publishEgress(EGRESS.PROJECTS_OUT, {
-          canonical_id: canonicalId,
+          source_system: "prod_a",
+          source_key: event.prod_a_id,
+          name: event.name || event.prod_a_id,
           original: event,
         });
       } else if (event.event_type === "BudgetUpdated" || event.event_type === "BudgetSubmitted") {
-        const canonicalId = lookupCanonical("prod_a", event.prod_a_id);
-        if (canonicalId) {
-          // Enrich with planning dimensions when submitting
-          const enriched: Record<string, unknown> = {
-            canonical_id: canonicalId,
-            original: event,
-          };
-          if (event.event_type === "BudgetSubmitted" && event.version_name && event.year) {
-            enriched.planning_dimensions = getOrCreateDimensionMapping(
-              canonicalId, event.version_name, event.year, event.version_id
-            );
-          }
-          // Apply dim routing to each budget line (same mechanism as GL)
-          const lines = event.lines || [];
-          const dimValuesPerLine = lines.map((line: Record<string, unknown>) =>
-            applyDimRouting("prod_a", "prod_b", line)
+        const enriched: Record<string, unknown> = {
+          source_system: "prod_a",
+          source_key: event.prod_a_id,
+          original: event,
+        };
+        if (event.event_type === "BudgetSubmitted" && event.version_name && event.year) {
+          enriched.planning_dimensions = getOrCreateDimensionMapping(
+            "prod_a", event.prod_a_id, event.version_name, event.year, event.version_id
           );
-          if (dimValuesPerLine.some((dv: Record<string, string | null>) => dv.dim1 || dv.dim2 || dv.dim3 || dv.dim4 || dv.dim5)) {
-            enriched.dim_values_per_line = dimValuesPerLine;
-          }
-          await publishEgress(EGRESS.BUDGET_OUT, enriched);
-        } else {
-          console.warn(`[ROUTER] No canonical ID for prod_a:${event.prod_a_id} — skipping budget`);
         }
+        // Apply dim routing to each budget line
+        const lines = event.lines || [];
+        const dimValuesPerLine = lines.map((line: Record<string, unknown>) =>
+          applyDimRouting("prod_a", "prod_b", line)
+        );
+        if (dimValuesPerLine.some((dv: Record<string, string | null>) => dv.dim1 || dv.dim2 || dv.dim3 || dv.dim4 || dv.dim5)) {
+          enriched.dim_values_per_line = dimValuesPerLine;
+        }
+        await publishEgress(EGRESS.BUDGET_OUT, enriched);
       }
       break;
     }
@@ -218,15 +181,15 @@ export async function startRouter(kafka: Kafka) {
   });
 }
 
-export async function publishLink(canonicalId: string, linked: Record<string, string>) {
+export async function publishEntityLinked(dimension: string, entities: Array<{source_system: string; source_key: string; name: string}>) {
   const event = {
     event_id: require("uuid").v4(),
-    event_type: "ProjectLinked",
+    event_type: "EntityLinked",
     timestamp: new Date().toISOString(),
-    source_system: "platform",
-    canonical_id: canonicalId,
-    linked,
+    source_system: "economy_domain",
+    dimension,
+    entities,
   };
-  await publishEgress(EGRESS.LINKS_OUT, event);
+  await publishEgress(EGRESS.ENTITY_LINKED_OUT, event);
   return event;
 }

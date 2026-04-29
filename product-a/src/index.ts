@@ -30,8 +30,8 @@ db.exec(`
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     source TEXT NOT NULL,       -- 'prod_a' or 'erp'
-    canonical_id TEXT,
-    erp_id TEXT
+    source_system TEXT NOT NULL DEFAULT '',
+    source_key TEXT NOT NULL DEFAULT ''
   );
   CREATE TABLE IF NOT EXISTS budget_versions (
     id TEXT PRIMARY KEY,
@@ -98,7 +98,6 @@ const consumer = kafka.consumer({ groupId: "product-a-consumer" });
 const CONSUME_TOPICS = [
   "platform.accounts.out",
   "platform.projects.out",
-  "platform.links.out",
 ];
 
 async function startConsumer() {
@@ -136,23 +135,12 @@ async function startConsumer() {
           break;
         }
         case "platform.projects.out": {
-          const orig = data.original;
-          if (orig?.event_type === "ProjectCreated") {
-            // ERP project
+          // Store project with source identity — the product builds its own local model
+          if (data.source_system && data.source_key) {
             db.prepare(
-              "INSERT OR REPLACE INTO projects (id, name, source, canonical_id, erp_id) VALUES (?, ?, 'erp', ?, ?)"
-            ).run(orig.erp_id, orig.name, data.canonical_id, orig.erp_id);
-            console.log(`[PROD-A] ERP project stored: ${orig.erp_id}`);
-          }
-          break;
-        }
-        case "platform.links.out": {
-          // Update canonical_id and erp_id on our local project
-          if (data.linked?.prod_a && data.linked?.erp) {
-            db.prepare(
-              "UPDATE projects SET canonical_id = ?, erp_id = ? WHERE id = ?"
-            ).run(data.canonical_id, data.linked.erp, data.linked.prod_a);
-            console.log(`[PROD-A] Project ${data.linked.prod_a} linked to ERP ${data.linked.erp}`);
+              "INSERT OR REPLACE INTO projects (id, name, source, source_system, source_key) VALUES (?, ?, ?, ?, ?)"
+            ).run(data.source_key, data.name || data.source_key, data.source_system, data.source_system, data.source_key);
+            console.log(`[PROD-A] Project stored: ${data.source_system}:${data.source_key}`);
           }
           break;
         }
@@ -223,8 +211,8 @@ app.post("/api/projects", async (req, res) => {
 
   // Save locally
   db.prepare(
-    "INSERT INTO projects (id, name, source, canonical_id) VALUES (?, ?, 'prod_a', NULL)"
-  ).run(prodAId, event.name);
+    "INSERT INTO projects (id, name, source, source_system, source_key) VALUES (?, ?, 'prod_a', 'prod_a', ?)"
+  ).run(prodAId, event.name, prodAId);
 
   // Publish to Kafka
   await producer.send({

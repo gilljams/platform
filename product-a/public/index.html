@@ -564,7 +564,7 @@
             <div class="info-title">&#x2699;&#xfe0f; Technical flow</div>
             <pre>1. POST /api/projects &#x2192; Product A creates project locally (SQLite)
 2. Publishes BudgetProjectCreated &#x2192; Kafka topic: product-a.events
-3. Platform consumes &#x2192; creates canonical_id (platform-XXX) in mapper (SQLite)
+3. Platform routes event (source_system + source_key identity)
 4. Platform publishes enriched event &#x2192; Kafka topic: platform.projects.out
 5. Product B consumes from platform.projects.out &#x2192; stores in its read model
 
@@ -582,8 +582,8 @@ Technologies: Express, KafkaJS (Redpanda), better-sqlite3</pre>
               <th>ID</th>
               <th>Name</th>
               <th>Source</th>
-              <th>Canonical ID</th>
-              <th>ERP Link</th>
+              <th>Source System</th>
+              <th>Source Key</th>
             </tr>
           </thead>
           <tbody id="projectsBody"></tbody>
@@ -601,11 +601,11 @@ Technologies: Express, KafkaJS (Redpanda), better-sqlite3</pre>
   ERP &#x2192; erp.accounts &#x2192; Platform &#x2192; platform.accounts.out &#x2192; Product A consumes
 
 Project flow:
-  ERP &#x2192; erp.projects &#x2192; Platform (creates canonical_id) &#x2192; platform.projects.out &#x2192; Product A
-  Product A &#x2192; product-a.events &#x2192; Platform (creates canonical_id) &#x2192; platform.projects.out
+  ERP &#x2192; erp.projects &#x2192; Platform (routes via source_system+source_key) &#x2192; platform.projects.out &#x2192; Product A
+  Product A &#x2192; product-a.events &#x2192; Platform (routes via source_system+source_key) &#x2192; platform.projects.out
 
 Linking:
-  POST /api/link &#x2192; Platform merges canonical IDs &#x2192; platform.links.out &#x2192; Product A updates
+  Economy Domain resolves identity (same_as relation) &#x2192; platform.entity-linked.out &#x2192; Products update
 
 Storage: SQLite (better-sqlite3), each product has its own database</pre>
           </div>
@@ -889,7 +889,7 @@ Submit:
   POST /api/budget-versions/:id/submit
   1. Status changes draft &#x2192; submitted
   2. Publishes BudgetSubmitted &#x2192; Kafka topic: product-a.events
-  3. Platform consumes &#x2192; looks up canonical_id via prod_a_id
+  3. Platform consumes &#x2192; routes via source_system + source_key identity
   4. Platform publishes enriched event &#x2192; Kafka topic: platform.budget.out
   5. Product B consumes &#x2192; stores in its read model &#x2192; shows budget vs actuals</pre>
         </div>
@@ -1024,8 +1024,8 @@ Submit:
           <td><code style="font-size:12px;color:#7a7fa0">${p.id}</code></td>
           <td style="font-weight:500">${p.name}</td>
           <td><span class="tag ${p.source === 'erp' ? 'tag-erp' : 'tag-own'}">${p.source}</span></td>
-          <td>${p.canonical_id ? `<code style="font-size:12px;color:#7a7fa0">${p.canonical_id}</code>` : '<span style="color:#ccc">&#x2014;</span>'}</td>
-          <td>${p.erp_id && p.source === 'prod_a' ? `<span class="tag tag-linked">${p.erp_id}</span>` : '<span style="color:#ccc">&#x2014;</span>'}</td>
+          <td><span class="tag ${p.source_system === 'erp' ? 'tag-erp' : 'tag-own'}">${p.source_system || '&#x2014;'}</span></td>
+          <td><code style="font-size:12px;color:#7a7fa0">${p.source_key || '&#x2014;'}</code></td>
         </tr>
       `).join('');
 
