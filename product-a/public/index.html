@@ -620,11 +620,19 @@ Storage: SQLite (better-sqlite3), each product has its own database</pre>
           <span id="adminDimSummary" style="font-size:12px;color:#888"></span>
           <button class="btn btn-primary" onclick="loadAdminDimensions()" style="font-size:11px;padding:3px 10px">↻ Refresh</button>
         </div>
-        <div style="display:flex;gap:12px;margin-bottom:12px">
-          <button class="btn btn-primary" onclick="showDimTab('accounts')" id="dimTabAccounts" style="font-size:11px;padding:3px 10px">Accounts</button>
+        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+          <button class="btn btn-primary" onclick="showDimTab('overview')" id="dimTabOverview" style="font-size:11px;padding:3px 10px">Overview</button>
+          <button class="btn" onclick="showDimTab('accounts')" id="dimTabAccounts" style="font-size:11px;padding:3px 10px">Accounts</button>
           <button class="btn" onclick="showDimTab('orgunits')" id="dimTabOrgunits" style="font-size:11px;padding:3px 10px">Org Units</button>
+          <button class="btn" onclick="showDimTab('projects')" id="dimTabProjects" style="font-size:11px;padding:3px 10px">Projects</button>
         </div>
-        <div id="adminDimAccounts">
+        <div id="adminDimOverview">
+          <table>
+            <thead><tr><th>Dimension</th><th>Label</th><th>Shared</th><th>Role</th><th>Members</th></tr></thead>
+            <tbody id="adminDimOverviewBody"></tbody>
+          </table>
+        </div>
+        <div id="adminDimAccounts" style="display:none">
           <table>
             <thead><tr><th>Code</th><th>Name</th><th>Parent</th><th>Type</th></tr></thead>
             <tbody id="adminDimAccountsBody"></tbody>
@@ -636,26 +644,30 @@ Storage: SQLite (better-sqlite3), each product has its own database</pre>
             <tbody id="adminDimOrgunitsBody"></tbody>
           </table>
         </div>
+        <div id="adminDimProjects" style="display:none">
+          <table>
+            <thead><tr><th>ID</th><th>Name</th><th>Source</th><th>Canonical ID</th><th>ERP ID</th></tr></thead>
+            <tbody id="adminDimProjectsBody"></tbody>
+          </table>
+        </div>
         <div class="info-block">
           <div class="info-trigger" onclick="toggleInfo(this)">&#x2139;&#xfe0f; Show explanation &#x25b8;</div>
           <div class="info-content simple">
             <div class="info-title">&#x2139;&#xfe0f; What is this?</div>
-            These are the dimensions (accounts and org units) that Product A has received
-            from the platform. They originate from the ERP via the Economy Domain and are
-            published to all connected products through Kafka.
+            All dimensions available in Product A. The <strong>Overview</strong> tab shows each dimension
+            declared in the capabilities API, its role (producer/consumer/both) and member count.
+            Accounts and Org Units come from the platform (Economy Domain). Projects can be created
+            locally or received from ERP. Flex dimensions (dim1&#x2013;dim3) are general-purpose slots.
           </div>
           <div class="info-content tech" style="display:none">
             <div class="info-title">&#x2699;&#xfe0f; Technical</div>
-            <pre>Flow: ERP Mock &#x2192; Platform Economy Domain &#x2192; econ_entities
-  &#x2192; validate &amp; publish &#x2192; Kafka (platform.accounts.out)
-  &#x2192; Product A consumer &#x2192; local SQLite (accounts, org_units)
+            <pre>Data sources:
+  GET /api/capabilities &#x2192; dimension declarations (field_name, role, shared_dimension)
+  GET /api/accounts     &#x2192; { accounts: [...], org_units: [...] }
+  GET /api/projects      &#x2192; [...]
 
-Product A stores dimensions with local codes (BUD-xxx, TEAM-xxx)
-mapped from canonical codes via the platform router.
-
-Role: "both" (consumer + producer) for account &amp; org_unit dimensions.
-
-GET /api/accounts &#x2192; { accounts: [...], org_units: [...] }</pre>
+Shared dimensions (account, org_unit, project) have canonical mapping via the platform router.
+Flex dimensions (dim1&#x2013;dim3) are product-local and carry inline values in budget lines.</pre>
           </div>
         </div>
       </div>
@@ -1937,30 +1949,67 @@ Submit:
     // ═══ Admin: Dimensions ═══
     async function loadAdminDimensions() {
       try {
-        var res = await fetch(API + '/api/accounts');
-        var data = await res.json();
-        var accounts = data.accounts || [];
-        var orgUnits = data.org_units || [];
-        document.getElementById('adminDimSummary').textContent = accounts.length + ' accounts, ' + orgUnits.length + ' org units';
+        var [accRes, projRes, capRes] = await Promise.all([
+          fetch(API + '/api/accounts'),
+          fetch(API + '/api/projects'),
+          fetch(API + '/api/capabilities')
+        ]);
+        var accData = await accRes.json();
+        var projects = await projRes.json();
+        var caps = await capRes.json();
+        var accounts = accData.accounts || [];
+        var orgUnits = accData.org_units || [];
+        var fields = caps.data_fields || [];
+
+        // Summary
+        document.getElementById('adminDimSummary').textContent = fields.length + ' dimensions | ' + accounts.length + ' accounts, ' + orgUnits.length + ' org units, ' + projects.length + ' projects';
+
+        // Member counts for overview
+        var memberCounts = { account: accounts.length, org_unit: orgUnits.length, project: projects.length };
+
+        // Overview table
+        var ovBody = document.getElementById('adminDimOverviewBody');
+        ovBody.innerHTML = fields.map(function(f) {
+          var shared = f.shared_dimension || '—';
+          var role = f.role || (f.data_type ? 'local (' + f.data_type + ')' : '—');
+          var count = memberCounts[f.field_name] !== undefined ? memberCounts[f.field_name] : '—';
+          var roleBg = role === 'both' ? '#e8f5e9' : role === 'producer' ? '#fff3e0' : role === 'consumer' ? '#e3f2fd' : '#f5f5f5';
+          return '<tr><td style="font-family:monospace;font-size:12px;font-weight:600">' + f.field_name + '</td><td>' + f.field_label + '</td><td style="font-family:monospace;font-size:12px">' + shared + '</td><td><span style="background:' + roleBg + ';padding:2px 8px;border-radius:3px;font-size:11px">' + role + '</span></td><td style="text-align:right;font-variant-numeric:tabular-nums">' + count + '</td></tr>';
+        }).join('');
+
+        // Accounts table
         var accBody = document.getElementById('adminDimAccountsBody');
         accBody.innerHTML = accounts.length === 0 ? '<tr><td colspan="4" style="color:#999;text-align:center">No accounts yet</td></tr>' :
           accounts.map(function(a) {
             return '<tr><td style="font-family:monospace;font-size:12px">' + a.code + '</td><td>' + a.name + '</td><td style="font-family:monospace;font-size:12px;color:#888">' + (a.parent || '—') + '</td><td>' + (a.type || 'leaf') + '</td></tr>';
           }).join('');
+
+        // Org units table
         var ouBody = document.getElementById('adminDimOrgunitsBody');
         ouBody.innerHTML = orgUnits.length === 0 ? '<tr><td colspan="4" style="color:#999;text-align:center">No org units yet</td></tr>' :
           orgUnits.map(function(o) {
             return '<tr><td style="font-family:monospace;font-size:12px">' + o.code + '</td><td>' + o.name + '</td><td style="font-family:monospace;font-size:12px;color:#888">' + (o.parent || '—') + '</td><td>' + (o.type || 'leaf') + '</td></tr>';
+          }).join('');
+
+        // Projects table
+        var projBody = document.getElementById('adminDimProjectsBody');
+        projBody.innerHTML = projects.length === 0 ? '<tr><td colspan="5" style="color:#999;text-align:center">No projects yet</td></tr>' :
+          projects.map(function(p) {
+            return '<tr><td style="font-family:monospace;font-size:12px">' + p.id + '</td><td>' + p.name + '</td><td>' + p.source + '</td><td style="font-family:monospace;font-size:12px;color:#888">' + (p.canonical_id || '—') + '</td><td style="font-family:monospace;font-size:12px;color:#888">' + (p.erp_id || '—') + '</td></tr>';
           }).join('');
       } catch {
         document.getElementById('adminDimSummary').textContent = 'Could not load';
       }
     }
     function showDimTab(tab) {
-      document.getElementById('adminDimAccounts').style.display = tab === 'accounts' ? '' : 'none';
-      document.getElementById('adminDimOrgunits').style.display = tab === 'orgunits' ? '' : 'none';
-      document.getElementById('dimTabAccounts').className = tab === 'accounts' ? 'btn btn-primary' : 'btn';
-      document.getElementById('dimTabOrgunits').className = tab === 'orgunits' ? 'btn btn-primary' : 'btn';
+      var tabs = ['overview', 'accounts', 'orgunits', 'projects'];
+      tabs.forEach(function(t) {
+        var panelId = 'adminDim' + t.charAt(0).toUpperCase() + t.slice(1);
+        var el = document.getElementById(panelId);
+        if (el) el.style.display = t === tab ? '' : 'none';
+        var btn = document.getElementById('dimTab' + t.charAt(0).toUpperCase() + t.slice(1));
+        if (btn) btn.className = t === tab ? 'btn btn-primary' : 'btn';
+      });
     }
 
     // ═══ URL Parameter Handling & Task Context ═══

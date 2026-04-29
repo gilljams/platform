@@ -768,11 +768,19 @@ This separation means:
           <span id="adminDimSummary" style="font-size:12px;color:#888"></span>
           <button onclick="loadAdminDimensions()" style="padding:0 10px;height:24px;border:1px solid #1f64a4;border-radius:3px;background:#1f64a4;color:#fff;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">↻ Refresh</button>
         </div>
-        <div style="display:flex;gap:12px;margin-bottom:12px">
-          <button onclick="showDimTab('accounts')" id="dimTabAccounts" style="padding:0 10px;height:24px;border:1px solid #1f64a4;border-radius:3px;background:#1f64a4;color:#fff;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">Accounts</button>
+        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+          <button onclick="showDimTab('overview')" id="dimTabOverview" style="padding:0 10px;height:24px;border:1px solid #1f64a4;border-radius:3px;background:#1f64a4;color:#fff;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">Overview</button>
+          <button onclick="showDimTab('accounts')" id="dimTabAccounts" style="padding:0 10px;height:24px;border:1px solid #ced4da;border-radius:3px;background:#fff;color:#333;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">Accounts</button>
           <button onclick="showDimTab('orgunits')" id="dimTabOrgunits" style="padding:0 10px;height:24px;border:1px solid #ced4da;border-radius:3px;background:#fff;color:#333;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">Org Units</button>
+          <button onclick="showDimTab('projects')" id="dimTabProjects" style="padding:0 10px;height:24px;border:1px solid #ced4da;border-radius:3px;background:#fff;color:#333;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">Projects</button>
         </div>
-        <div id="adminDimAccounts">
+        <div id="adminDimOverview">
+          <table>
+            <thead><tr><th>Dimension</th><th>Label</th><th>Shared</th><th>Role</th><th>Members</th></tr></thead>
+            <tbody id="adminDimOverviewBody"></tbody>
+          </table>
+        </div>
+        <div id="adminDimAccounts" style="display:none">
           <table>
             <thead><tr><th>Code</th><th>Name</th><th>Parent</th><th>Type</th></tr></thead>
             <tbody id="adminDimAccountsBody"></tbody>
@@ -784,27 +792,31 @@ This separation means:
             <tbody id="adminDimOrgunitsBody"></tbody>
           </table>
         </div>
+        <div id="adminDimProjects" style="display:none">
+          <table>
+            <thead><tr><th>Canonical ID</th><th>Name</th><th>Source</th><th>ERP ID</th><th>Product A ID</th></tr></thead>
+            <tbody id="adminDimProjectsBody"></tbody>
+          </table>
+        </div>
         <div class="info-block">
           <div class="info-trigger" onclick="toggleInfo(this)">&#x2139;&#xfe0f; Show explanation &#x25b8;</div>
           <div class="info-content simple">
             <div class="info-title">&#x2139;&#xfe0f; What is this?</div>
-            These are the dimensions (accounts and org units) that Product B has received
-            from the platform. They originate from the ERP via the Economy Domain and are
-            published to all connected products through Kafka. Product B uses these as
-            reference data for analytics grouping and reporting.
+            All dimensions available in Product B. The <strong>Overview</strong> tab shows each dimension
+            declared in the capabilities API, its role (consumer) and member count.
+            Accounts and Org Units come from the platform (Economy Domain). Projects are received
+            from the platform. Flex dimensions (dim1&#x2013;dim5) are general-purpose slots for analytics enrichment.
           </div>
           <div class="info-content tech" style="display:none">
             <div class="info-title">&#x2699;&#xfe0f; Technical</div>
-            <pre>Flow: ERP Mock &#x2192; Platform Economy Domain &#x2192; econ_entities
-  &#x2192; validate &amp; publish &#x2192; Kafka (platform.accounts.out)
-  &#x2192; Product B consumer &#x2192; local SQLite (accounts, org_units)
+            <pre>Data sources:
+  GET /api/capabilities &#x2192; dimension declarations (field_name, role, shared_dimension)
+  GET /api/accounts     &#x2192; { accounts: [...], org_units: [...] }
+  GET /api/projects      &#x2192; [...]
 
-Product B stores dimensions with local codes mapped from
-canonical codes via the platform router.
-
-Role: "consumer" for account &amp; org_unit dimensions.
-
-GET /api/accounts &#x2192; { accounts: [...], org_units: [...] }</pre>
+Shared dimensions (account, org_unit, project) have canonical mapping via the platform router.
+Flex dimensions (dim1&#x2013;dim5) are product-local and carry inline values in GL/budget lines.
+Ingestion rules can enrich flex dims based on conditions.</pre>
           </div>
         </div>
       </div>
@@ -1606,20 +1618,53 @@ GET /api/accounts &#x2192; { accounts: [...], org_units: [...] }</pre>
     // ═══ Admin: Dimensions ═══
     async function loadAdminDimensions() {
       try {
-        var res = await fetch(API + '/api/accounts');
-        var data = await res.json();
-        var accounts = data.accounts || [];
-        var orgUnits = data.org_units || [];
-        document.getElementById('adminDimSummary').textContent = accounts.length + ' accounts, ' + orgUnits.length + ' org units';
+        var [accRes, projRes, capRes] = await Promise.all([
+          fetch(API + '/api/accounts'),
+          fetch(API + '/api/projects'),
+          fetch(API + '/api/capabilities')
+        ]);
+        var accData = await accRes.json();
+        var projects = await projRes.json();
+        var caps = await capRes.json();
+        var accounts = accData.accounts || [];
+        var orgUnits = accData.org_units || [];
+        var fields = caps.data_fields || [];
+
+        // Summary
+        document.getElementById('adminDimSummary').textContent = fields.length + ' dimensions | ' + accounts.length + ' accounts, ' + orgUnits.length + ' org units, ' + projects.length + ' projects';
+
+        // Member counts for overview
+        var memberCounts = { account: accounts.length, org_unit: orgUnits.length, project: projects.length };
+
+        // Overview table
+        var ovBody = document.getElementById('adminDimOverviewBody');
+        ovBody.innerHTML = fields.map(function(f) {
+          var shared = f.shared_dimension || '—';
+          var role = f.role || (f.data_type ? 'local (' + f.data_type + ')' : '—');
+          var count = memberCounts[f.field_name] !== undefined ? memberCounts[f.field_name] : '—';
+          var roleBg = role === 'both' ? '#e8f5e9' : role === 'producer' ? '#fff3e0' : role === 'consumer' ? '#e3f2fd' : '#f5f5f5';
+          return '<tr><td style="font-family:monospace;font-size:12px;font-weight:600">' + f.field_name + '</td><td>' + f.field_label + '</td><td style="font-family:monospace;font-size:12px">' + shared + '</td><td><span style="background:' + roleBg + ';padding:2px 8px;border-radius:3px;font-size:11px">' + role + '</span></td><td style="text-align:right;font-variant-numeric:tabular-nums">' + count + '</td></tr>';
+        }).join('');
+
+        // Accounts table
         var accBody = document.getElementById('adminDimAccountsBody');
         accBody.innerHTML = accounts.length === 0 ? '<tr><td colspan="4" style="color:#999;text-align:center">No accounts yet</td></tr>' :
           accounts.map(function(a) {
             return '<tr><td style="font-family:monospace;font-size:12px">' + a.code + '</td><td>' + a.name + '</td><td style="font-family:monospace;font-size:12px;color:#888">' + (a.parent || '—') + '</td><td>' + (a.type || 'leaf') + '</td></tr>';
           }).join('');
+
+        // Org units table
         var ouBody = document.getElementById('adminDimOrgunitsBody');
         ouBody.innerHTML = orgUnits.length === 0 ? '<tr><td colspan="4" style="color:#999;text-align:center">No org units yet</td></tr>' :
           orgUnits.map(function(o) {
             return '<tr><td style="font-family:monospace;font-size:12px">' + o.code + '</td><td>' + o.name + '</td><td style="font-family:monospace;font-size:12px;color:#888">' + (o.parent || '—') + '</td><td>' + (o.type || 'leaf') + '</td></tr>';
+          }).join('');
+
+        // Projects table
+        var projBody = document.getElementById('adminDimProjectsBody');
+        projBody.innerHTML = projects.length === 0 ? '<tr><td colspan="5" style="color:#999;text-align:center">No projects yet</td></tr>' :
+          projects.map(function(p) {
+            return '<tr><td style="font-family:monospace;font-size:12px">' + p.canonical_id + '</td><td>' + p.name + '</td><td>' + p.source + '</td><td style="font-family:monospace;font-size:12px;color:#888">' + (p.erp_id || '—') + '</td><td style="font-family:monospace;font-size:12px;color:#888">' + (p.prod_a_id || '—') + '</td></tr>';
           }).join('');
       } catch {
         document.getElementById('adminDimSummary').textContent = 'Could not load';
@@ -1628,10 +1673,14 @@ GET /api/accounts &#x2192; { accounts: [...], org_units: [...] }</pre>
     function showDimTab(tab) {
       var activeStyle = 'padding:0 10px;height:24px;border:1px solid #1f64a4;border-radius:3px;background:#1f64a4;color:#fff;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit';
       var inactiveStyle = 'padding:0 10px;height:24px;border:1px solid #ced4da;border-radius:3px;background:#fff;color:#333;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit';
-      document.getElementById('adminDimAccounts').style.display = tab === 'accounts' ? '' : 'none';
-      document.getElementById('adminDimOrgunits').style.display = tab === 'orgunits' ? '' : 'none';
-      document.getElementById('dimTabAccounts').style.cssText = tab === 'accounts' ? activeStyle : inactiveStyle;
-      document.getElementById('dimTabOrgunits').style.cssText = tab === 'orgunits' ? activeStyle : inactiveStyle;
+      var tabs = ['overview', 'accounts', 'orgunits', 'projects'];
+      tabs.forEach(function(t) {
+        var panelId = 'adminDim' + t.charAt(0).toUpperCase() + t.slice(1);
+        var el = document.getElementById(panelId);
+        if (el) el.style.display = t === tab ? '' : 'none';
+        var btn = document.getElementById('dimTab' + t.charAt(0).toUpperCase() + t.slice(1));
+        if (btn) btn.style.cssText = t === tab ? activeStyle : inactiveStyle;
+      });
     }
 
     loadData();
