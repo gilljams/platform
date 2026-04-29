@@ -75,6 +75,13 @@ db.exec(`
     event_id TEXT PRIMARY KEY,
     processed_at TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS dim_members (
+    dimension TEXT NOT NULL,
+    code TEXT NOT NULL,
+    name TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (dimension, code)
+  );
 `);
 
 // ── Kafka ──
@@ -159,7 +166,7 @@ async function startConsumer() {
   });
 }
 
-// ── Express ──
+// ── Dim member auto-registration ──\nconst upsertDimMember = db.prepare(\"INSERT OR IGNORE INTO dim_members (dimension, code, name) VALUES (?, ?, '')\");\nfunction registerDimMembers(lines: Record<string, unknown>[]) {\n  for (const line of lines) {\n    for (const dim of [\"dim1\", \"dim2\", \"dim3\"]) {\n      const val = line[dim];\n      if (val && typeof val === \"string\" && val.trim()) {\n        upsertDimMember.run(dim, val.trim());\n      }\n    }\n  }\n}\n\n// ── Express ──
 
 const app = express();
 app.use(cors({ origin: true, credentials: true }));
@@ -280,6 +287,7 @@ app.post("/api/budget", async (req, res) => {
   for (const line of lines) {
     stmt.run(version.id, prod_a_id, line.account, line.org_unit, line.amount, line.currency || "SEK", line.period, line.dim1 || null, line.dim2 || null, line.dim3 || null);
   }
+  registerDimMembers(lines);
 
   console.log(`[PROD-A] Budget saved as draft for ${prod_a_id} (${version.id}) — ${lines.length} lines, NO Kafka event`);
   res.json({ ok: true, version_id: version.id, status: "draft", lines_count: lines.length });
@@ -662,9 +670,15 @@ app.get("/api/capabilities", (_req, res) => {
 });
 
 app.post("/api/reset", (_req, res) => {
-  db.exec("DELETE FROM processed_events; DELETE FROM budget_assignments; DELETE FROM budget_lines; DELETE FROM budget_versions; DELETE FROM projects; DELETE FROM accounts; DELETE FROM org_units;");
+  db.exec("DELETE FROM processed_events; DELETE FROM budget_assignments; DELETE FROM budget_lines; DELETE FROM budget_versions; DELETE FROM projects; DELETE FROM accounts; DELETE FROM org_units; DELETE FROM dim_members;");
   console.log("[PROD-A] All data reset");
   res.json({ ok: true });
+});
+
+// GET /api/dim-members — flex-dimension members
+app.get("/api/dim-members", (_req, res) => {
+  const rows = db.prepare("SELECT dimension, code, name FROM dim_members ORDER BY dimension, code").all();
+  res.json(rows);
 });
 
 app.get("/", (_req, res) => {

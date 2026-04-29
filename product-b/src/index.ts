@@ -83,7 +83,27 @@ db.exec(`
     event_id TEXT PRIMARY KEY,
     processed_at TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS dim_members (
+    dimension TEXT NOT NULL,
+    code TEXT NOT NULL,
+    name TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (dimension, code)
+  );
 `);
+
+// ── Dim member auto-registration ──
+const upsertDimMember = db.prepare("INSERT OR IGNORE INTO dim_members (dimension, code, name) VALUES (?, ?, '')");
+function registerDimMembers(lines: Record<string, unknown>[]) {
+  for (const line of lines) {
+    for (const dim of ["dim1", "dim2", "dim3", "dim4", "dim5"]) {
+      const val = line[dim];
+      if (val && typeof val === "string" && val.trim()) {
+        upsertDimMember.run(dim, val.trim());
+      }
+    }
+  }
+}
 
 // ── Ingestion rules engine ──
 
@@ -279,6 +299,7 @@ async function startConsumer() {
               enriched.dim1 || null, enriched.dim2 || null, enriched.dim3 || null, enriched.dim4 || null, enriched.dim5 || null,
               dims?.planning_year || null, dims?.planning_type || null, dims?.planning_version || null
             );
+            registerDimMembers([enriched]);
           }
           console.log(`[PROD-B] Budget lines stored for ${data.canonical_id} (${budgetLines.length} lines, year=${pYear}, ${rulesApplied} enriched by ingestion rules)`);
           break;
@@ -309,6 +330,7 @@ async function startConsumer() {
             if (JSON.stringify(merged) !== JSON.stringify(enriched)) rulesApplied++;
             stmt.run(data.canonical_id, enriched.account, enriched.org_unit, enriched.amount, enriched.currency, enriched.period,
               enriched.transaction_date || null, enriched.dim1 || null, enriched.dim2 || null, enriched.dim3 || null, enriched.dim4 || null, enriched.dim5 || null);
+            registerDimMembers([enriched]);
           }
           console.log(`[PROD-B] GL lines stored for ${data.canonical_id} (${entries.length} lines, ${rulesApplied} enriched by ingestion rules)`);
           break;
@@ -507,9 +529,15 @@ app.get("/api/dim-labels", async (_req, res) => {
 });
 
 app.post("/api/reset", (_req, res) => {
-  db.exec("DELETE FROM processed_events; DELETE FROM budget_lines; DELETE FROM gl_lines; DELETE FROM projects; DELETE FROM accounts; DELETE FROM org_units; DELETE FROM ingestion_rules;");
+  db.exec("DELETE FROM processed_events; DELETE FROM budget_lines; DELETE FROM gl_lines; DELETE FROM projects; DELETE FROM accounts; DELETE FROM org_units; DELETE FROM ingestion_rules; DELETE FROM dim_members;");
   console.log("[PRODUCT-B] All data reset");
   res.json({ ok: true });
+});
+
+// GET /api/dim-members — flex-dimension members
+app.get("/api/dim-members", (_req, res) => {
+  const rows = db.prepare("SELECT dimension, code, name FROM dim_members ORDER BY dimension, code").all();
+  res.json(rows);
 });
 
 app.get("/", (_req, res) => {
