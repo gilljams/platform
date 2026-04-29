@@ -988,18 +988,27 @@ app.post("/api/demo/step/1", async (_req, res) => {
     console.log("[DEMO] Step 1: Reference data + economic model + dimension catalog");
 
     // Seed cross-system code mappings
-    // ERP is source-of-truth — its source_key is the authoritative reference
-    upsertCodeMapping("account", "erp", "4010", "4010", "ERP-ACC-001");
-    upsertCodeMapping("account", "erp", "4020", "4020", "ERP-ACC-002");
-    upsertCodeMapping("account", "erp", "5010", "5010", "ERP-ACC-003");
-    upsertCodeMapping("org_unit", "erp", "OU-100", "OU-100", "ERP-ORG-100");
-    upsertCodeMapping("org_unit", "erp", "OU-200", "OU-200", "ERP-ORG-200");
-    // Product A uses own local codes but references ERP's source key for traceability
-    upsertCodeMapping("account", "prod_a", "BUD-4010", "4010", "ERP-ACC-001");
-    upsertCodeMapping("account", "prod_a", "BUD-4020", "4020", "ERP-ACC-002");
-    upsertCodeMapping("account", "prod_a", "BUD-5010", "5010", "ERP-ACC-003");
-    upsertCodeMapping("org_unit", "prod_a", "TEAM-ALFA", "OU-100", "ERP-ORG-100");
-    upsertCodeMapping("org_unit", "prod_a", "TEAM-BETA", "OU-200", "ERP-ORG-200");
+    // ERP is source-of-truth — register ALL codes with ERP source_key
+    let accIdx = 0;
+    for (const acc of accounts) {
+      accIdx++;
+      const sk = `ERP-ACC-${String(accIdx).padStart(3, "0")}`;
+      upsertCodeMapping("account", "erp", acc.code, acc.code, sk);
+    }
+    let orgIdx = 0;
+    for (const org of orgUnits) {
+      orgIdx++;
+      const sk = `ERP-ORG-${String(orgIdx).padStart(3, "0")}`;
+      upsertCodeMapping("org_unit", "erp", org.code, org.code, sk);
+    }
+    // Product A uses own local codes for leaf accounts used in budgeting
+    for (const acc of accounts.filter((a: any) => a.type === "leaf")) {
+      upsertCodeMapping("account", "prod_a", `BUD-${acc.code}`, acc.code);
+    }
+    // Product A uses own local codes for leaf org_units
+    for (const org of orgUnits.filter((o: any) => o.type === "leaf")) {
+      upsertCodeMapping("org_unit", "prod_a", `TEAM-${org.code}`, org.code);
+    };
 
     // Seed inbox task (platform-generated, visible to all admins)
     addInboxItem({
