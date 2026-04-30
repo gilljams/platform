@@ -98,12 +98,19 @@
     .tag-own { background: #e8f5e9; color: #2e7d32; }
     .tag-linked { background: #fff3e0; color: #e65100; }
 
-    /* ── Status bar ── */
-    .status-bar {
-      padding: 10px 14px; border-radius: 3px; margin-bottom: 14px;
-      font-size: 12px; background: #e8f5e9; color: #2e7d32;
-      display: none; font-weight: 500;
+    /* ── Toast notification ── */
+    .pa-toast {
+      position: fixed; top: 70px; right: 20px; z-index: 10000;
+      padding: 10px 16px 10px 14px; border-radius: 4px; font-size: 12px; font-weight: 500;
+      background: #fff; color: #333; border: 1px solid #e0e0e0;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.10); transform: translateX(120%);
+      transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+      display: flex; align-items: center; gap: 8px;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     }
+    .pa-toast.show { transform: translateX(0); }
+    .pa-toast.toast-success { border-left: 3px solid #2e7d32; }
+    .pa-toast.toast-error { border-left: 3px solid #c62828; }
 
     /* ── Budget grid (spreadsheet) ── */
     .budget-grid-wrapper {
@@ -226,6 +233,17 @@
       cursor: pointer; height: 24px; font-family: inherit; box-shadow: none;
     }
     .year-select:focus { outline: none; border-color: #1f64a4; box-shadow: 0 0 0 2px rgba(31,100,164,0.12); }
+    .pv-user-select {
+      padding: 2px 8px; border: 1px solid #ced4da; border-radius: 3px;
+      font-size: 12px; background: #fff; color: #333;
+      cursor: pointer; height: 26px; font-family: inherit;
+      min-width: 200px; width: auto;
+      appearance: none; -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%23999' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 8px center;
+      padding-right: 24px;
+    }
+    .pv-user-select:focus { outline: none; border-color: #1f64a4; box-shadow: 0 0 0 2px rgba(31,100,164,0.12); }
 
     /* ── Summary tiles ── */
     .tile-row {
@@ -1000,11 +1018,24 @@ Submit:
     const savedMode = localStorage.getItem('infoMode') || 'simple';
     setTimeout(() => setMode(savedMode), 0);
 
-    function showStatus(msg) {
-      ['statusBar', 'statusBarBudget'].forEach(id => {
-        const bar = document.getElementById(id);
-        if (bar) { bar.textContent = msg; bar.style.display = 'block'; setTimeout(() => bar.style.display = 'none', 3000); }
+    function showToast(msg, type) {
+      type = type || 'success';
+      var toast = document.getElementById('pa-toast');
+      if (!toast) { toast = document.createElement('div'); toast.id = 'pa-toast'; document.body.appendChild(toast); }
+      toast.className = 'pa-toast toast-' + type;
+      var icon = type === 'success'
+        ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2e7d32" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>'
+        : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#c62828" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
+      toast.innerHTML = icon + '<span>' + msg + '</span>';
+      requestAnimationFrame(function() {
+        toast.classList.add('show');
+        setTimeout(function() { toast.classList.remove('show'); }, 4000);
       });
+    }
+
+    function showStatus(msg) {
+      var isError = /error|could not|save first|enter a/i.test(msg);
+      showToast(msg, isError ? 'error' : 'success');
     }
 
     async function loadAccounts() {
@@ -1388,13 +1419,13 @@ Submit:
       if (currentVersion?.status === 'published') return;
       const year = document.getElementById('budgetYear').value;
 
-      const byProject = {};
+      // Collect all budget lines
+      const allLines = [];
       for (const row of budgetRows) {
-        if (!byProject[row.project]) byProject[row.project] = [];
         for (const m of MONTHS) {
           const amt = row.amounts[m] || 0;
           if (amt !== 0) {
-            byProject[row.project].push({
+            allLines.push({
               account: row.account,
               org_unit: row.org_unit,
               amount: amt,
@@ -1406,19 +1437,49 @@ Submit:
       }
 
       let ok = true;
-      for (const [projId, lines] of Object.entries(byProject)) {
-        if (lines.length === 0) continue;
+      if (currentVersion && currentVersion.id) {
+        // Save directly on the current version
         try {
-          const res = await fetch(API + '/api/budget', {
+          const res = await fetch(API + '/api/budget-versions/' + currentVersion.id + '/lines', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prod_a_id: projId, lines, year }),
+            body: JSON.stringify({ lines: allLines }),
           });
           const data = await res.json();
-          if (data.version_id) {
-            currentVersion = { id: data.version_id, status: data.status || 'draft' };
-          }
+          if (!data.ok) ok = false;
         } catch (e) { ok = false; }
+      } else {
+        // Legacy: save per project via POST /api/budget
+        const byProject = {};
+        for (const row of budgetRows) {
+          if (!byProject[row.project]) byProject[row.project] = [];
+          for (const m of MONTHS) {
+            const amt = row.amounts[m] || 0;
+            if (amt !== 0) {
+              byProject[row.project].push({
+                account: row.account,
+                org_unit: row.org_unit,
+                amount: amt,
+                currency: 'SEK',
+                period: `${year}-${m}`,
+              });
+            }
+          }
+        }
+        for (const [projId, lines] of Object.entries(byProject)) {
+          if (lines.length === 0) continue;
+          try {
+            const res = await fetch(API + '/api/budget', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ prod_a_id: projId, lines, year }),
+            });
+            const data = await res.json();
+            if (data.version_id) {
+              currentVersion = { id: data.version_id, status: data.status || 'draft' };
+            }
+          } catch (e) { ok = false; }
+        }
       }
 
       if (ok) {
@@ -1491,27 +1552,31 @@ Submit:
       const year = document.getElementById('budgetYear')?.value || '2025';
       currentVersion = null;
 
-      const newRows = [];
-      for (const p of projects) {
-        try {
-          // Load version info so submit button works
-          const vRes = await fetch(API + `/api/budget-versions/${p.id}`);
-          const versions = await vRes.json();
-          const yearVersion = versions.find(v => v.year === year);
-          if (yearVersion && !currentVersion) {
-            currentVersion = { id: yearVersion.id, status: yearVersion.status };
-          }
+      // First: look for a process-managed version for this year (takes priority)
+      try {
+        const allRes = await fetch(API + '/api/budget-versions');
+        const allVersions = await allRes.json();
+        const processVersion = allVersions.find(v => v.year === year && !v.prod_a_id);
+        if (processVersion) {
+          currentVersion = { id: processVersion.id, status: processVersion.status };
+        }
+      } catch (e) { /* ignore */ }
 
-          // Fetch lines filtered by year (avoids duplicates across versions)
-          const res = await fetch(API + `/api/budget/${p.id}?year=${year}`);
-          const lines = await res.json();
+      const newRows = [];
+
+      if (currentVersion) {
+        // Load lines from the process-managed version
+        try {
+          const lRes = await fetch(API + '/api/budget-versions/' + currentVersion.id + '/lines');
+          const vLines = await lRes.json();
           const groups = {};
-          for (const l of lines) {
-            const key = `${p.id}|${l.account}|${l.org_unit}`;
+          for (const l of vLines) {
+            const proj = l.prod_a_id || '';
+            const key = `${proj}|${l.account}|${l.org_unit}`;
             if (!groups[key]) {
               const amounts = {};
               MONTHS.forEach(m => amounts[m] = 0);
-              groups[key] = { project: p.id, account: l.account, org_unit: l.org_unit, amounts };
+              groups[key] = { project: proj, account: l.account, org_unit: l.org_unit, amounts };
             }
             const month = l.period.slice(5, 7);
             if (MONTHS.includes(month)) {
@@ -1520,7 +1585,37 @@ Submit:
           }
           newRows.push(...Object.values(groups));
         } catch (e) { /* ignore */ }
+      } else {
+        // Fallback: load from project-scoped versions
+        for (const p of projects) {
+          try {
+            const vRes = await fetch(API + `/api/budget-versions/${p.id}`);
+            const versions = await vRes.json();
+            const yearVersion = versions.find(v => v.year === year);
+            if (yearVersion && !currentVersion) {
+              currentVersion = { id: yearVersion.id, status: yearVersion.status };
+            }
+
+            const res = await fetch(API + `/api/budget/${p.id}?year=${year}`);
+            const lines = await res.json();
+            const groups = {};
+            for (const l of lines) {
+              const key = `${p.id}|${l.account}|${l.org_unit}`;
+              if (!groups[key]) {
+                const amounts = {};
+                MONTHS.forEach(m => amounts[m] = 0);
+                groups[key] = { project: p.id, account: l.account, org_unit: l.org_unit, amounts };
+              }
+              const month = l.period.slice(5, 7);
+              if (MONTHS.includes(month)) {
+                groups[key].amounts[month] = l.amount;
+              }
+            }
+            newRows.push(...Object.values(groups));
+          } catch (e) { /* ignore */ }
+        }
       }
+
       budgetRows = newRows;
       dirty = false;
       renderBudgetGrid();
@@ -1699,7 +1794,7 @@ Submit:
 
         var userCell;
         if (isEditable) {
-          userCell = '<select class="cell-select pv-user-select" data-org="' + org.code + '" style="width:auto;min-width:200px">' +
+          userCell = '<select class="pv-user-select" data-org="' + org.code + '">' +
             '<option value="">— Not assigned —</option>' +
             pvUsers.map(function(u) {
               return '<option value="' + u.user_id + '" data-name="' + u.name + '"' + (u.user_id === userId ? ' selected' : '') + '>' + u.name + ' (' + u.role + ')</option>';
@@ -1916,8 +2011,8 @@ Submit:
     }
 
     function showProcessStatus(msg) {
-      var bar = document.getElementById('statusBarProcess');
-      if (bar) { bar.textContent = msg; bar.style.display = 'block'; setTimeout(function() { bar.style.display = 'none'; }, 3000); }
+      var isError = /error|could not|enter a/i.test(msg);
+      showToast(msg, isError ? 'error' : 'success');
     }
 
     // ═══ Admin: Summary card ═══

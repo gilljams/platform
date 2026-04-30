@@ -190,10 +190,46 @@ app.use((req, res, next) => {
 
 Effekt: Alla nya endpoints som läggs till under `/api/` skyddas automatiskt utan extra kod.
 
+### SCIM Group Claim Mapping (parseGroupClaims)
+
+**Fil:** `platform/src/index.ts`
+
+Funktion som tolkar IdP-grupper med typad prefix-konvention:
+- `role:editor` → sätter `role` till "editor"
+- `product:prod_a` → lägger till i `products`-array
+- `org:OU-100` → sätter `org_unit`
+
+Möjliggör automatisk roll/produkt/org-tilldelning via IdP-grupper utan manuell konfiguration per användare. SCIM-endpointen anropar `parseGroupClaims()` vid provisionering.
+
+### Unique Event ID per Egress (idempotency fix)
+
+**Fil:** `platform/src/router.ts`
+
+`publishEgress` genererar nu ett unikt `event_id` (via `uuid.v4()`) för varje egress-meddelande. Löser en bugg där samma original-event_id delades över flera egress-topics (t.ex. `projects.out` och `budget.out`), vilket orsakade att downstream-konsumenter idempotent-avvisade det andra meddelandet.
+
+### External Tools (platform-managed navigation)
+
+**Filer:** `platform/src/mapper.ts`, `platform/src/index.ts`, `platform/public/shell.js`, `platform/public/admin.html`
+
+Nytt plattformskoncept: konfigurerbara externa verktyg som visas i shell-barens navigation.
+- DB-tabell `external_tools` med CRUD-API
+- `/api/navigation` returnerar `{ items, externalTools }`
+- Shell renderar 1–3 som direktlänkar med ↗-ikon, 4+ med dropdown
+- Admin-UI med tabell + add/edit-formulär
+
+### Toast & Confirm Dialog (UI harmonisering)
+
+**Filer:** `platform/public/admin.html`, `product-a/public/index.html`
+
+- Toast: vit bakgrund, färgad vänsterkant (grön/röd), SVG-ikoner. Ersätter gamla emojis + solid-färg-toasts (admin) och gröna statusbarer (Product A).
+- Confirm dialog: modal med overlay, impact-text med orange vänsterkant, destruktiv röd knapp. Används vid systemavaktivering.
+
 ---
 
 ## Slutsats
 
 **POC:n demonstrerar ett arkitekturmönster som ligger i framkant** för multi-produkt-plattformar. Det event-drivna mönstret med plattformen som identitetsmedlare och routing-lager är precis hur Visma, Atlassian och Salesforce bygger sina plattformar. Svagheterna (SQLite, avsaknad av schema registry, minimal auth) är helt förväntade på POC-nivå och visar tydligt *var* investeringar behövs för att gå till produktion. Arkitekturen är **sund och skalbar i sin grunddesign**.
 
-De implementerade förbättringarna (persistent audit log, idempotent consumers, API-versionering, auth middleware) fungerar som **referensimplementationer** som visar exakt hur dessa mönster realiseras i kod — värdefullt som blueprint vid framtida produktionsutveckling.
+De implementerade förbättringarna (persistent audit log, idempotent consumers, API-versionering, auth middleware, SCIM claim-mapping, external tools, unique event IDs) fungerar som **referensimplementationer** som visar exakt hur dessa mönster realiseras i kod — värdefullt som blueprint vid framtida produktionsutveckling.
+
+Dokumentation finns nu integrerad i admin-UI:t via fliken **POC & Production** med sub-flikarna *Architecture Vision* (arkitekturbild + plattformsmodell) och *Production Notes* (genvägar, vägval, produktionsöverväganden).

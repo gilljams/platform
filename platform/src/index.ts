@@ -5,7 +5,7 @@ import jwt from "jsonwebtoken";
 import { Kafka } from "kafkajs";
 import path from "path";
 
-import { getOrCreateDimensionMapping, getAllDimensionMappings, updateDimensionMapping, configureDimModel, getDimModel, getAllDimModels, configureDimRouting, getAllDimRouting, registerSharedDimension, getAllSharedDimensions, upsertDimensionCode, getDimensionCodes, deleteDimensionCode, registerParticipant, getParticipants, upsertCodeMapping, getCodeMappings, registerDimensionAttribute, getDimensionAttributes, setCodeAttribute, getCodeAttributes, getAllCodeAttributes, setHierarchy, getHierarchy, resetAllData, getInboxItems, addInboxItem, updateInboxItem, setSystemConfig, getSystemConfig, getAllSystemConfigs, deleteDimModel, deleteDimRouting, deleteSystem, deleteParticipant, getAllUsers, getUser, getUserByUsername, getUserByExternalId, upsertUser, updateUser, deleteUser, updateLastLogin, getUserCount, getAuditEvents, getAuditEventCount, upsertEconEntity, getEconEntities, deleteEconEntity, upsertEconEntityAttribute, getEconEntityAttributes, upsertEconAttributeDef, getEconAttributeDefs, upsertEconRelation, getEconRelations, insertEconFacts, validateEconFacts, getEconFacts, getEconFactsSummary, publishEconFacts, getEconFactsForPublish, upsertSyncState, getSyncStates, getSyncState } from "./mapper";
+import { getOrCreateDimensionMapping, getAllDimensionMappings, updateDimensionMapping, configureDimModel, getDimModel, getAllDimModels, configureDimRouting, getAllDimRouting, registerSharedDimension, deleteSharedDimension, getAllSharedDimensions, upsertDimensionCode, getDimensionCodes, deleteDimensionCode, registerParticipant, getParticipants, upsertCodeMapping, getCodeMappings, registerDimensionAttribute, getDimensionAttributes, setCodeAttribute, getCodeAttributes, getAllCodeAttributes, setHierarchy, getHierarchy, resetAllData, getInboxItems, addInboxItem, updateInboxItem, setSystemConfig, getSystemConfig, getAllSystemConfigs, deleteDimModel, deleteDimRouting, deleteSystem, deleteParticipant, getAllUsers, getUser, getUserByUsername, getUserByExternalId, upsertUser, updateUser, deleteUser, updateLastLogin, getUserCount, getAuditEvents, getAuditEventCount, upsertEconEntity, getEconEntities, deleteEconEntity, upsertEconEntityAttribute, getEconEntityAttributes, upsertEconAttributeDef, getEconAttributeDefs, upsertEconRelation, getEconRelations, insertEconFacts, validateEconFacts, getEconFacts, getEconFactsSummary, publishEconFacts, getEconFactsForPublish, upsertSyncState, getSyncStates, getSyncState, applyDimRouting, getExternalTools, getAllExternalTools, createExternalTool, updateExternalTool, deleteExternalTool } from "./mapper";
 import { startRouter, publishEntityLinked, getEventLog } from "./router";
 import cron from "node-cron";
 
@@ -158,6 +158,26 @@ app.get("/api/users/:id", (req, res) => {
 });
 
 // Create/update user (admin UI)
+app.post("/api/users", (req, res) => {
+  const { username, name, email, role, org_unit, products, primary_product, password } = req.body;
+  if (!username || !name) { res.status(400).json({ error: "username and name required" }); return; }
+  const userId = "user-" + String(Date.now()).slice(-6);
+  const user = upsertUser({
+    user_id: userId,
+    username,
+    name,
+    email: email || undefined,
+    role: role || "viewer",
+    org_unit: org_unit || undefined,
+    products: products || [],
+    primary_product: primary_product || undefined,
+    source: "local",
+    password_hash: password || "demo",
+  });
+  const { password_hash, ...safe } = user;
+  res.status(201).json({ ok: true, user: safe });
+});
+
 app.put("/api/users/:id", (req, res) => {
   const result = updateUser(req.params.id, req.body);
   if (!result) { res.status(404).json({ error: "User not found" }); return; }
@@ -176,12 +196,29 @@ app.delete("/api/users/:id", (req, res) => {
 // In production: IdP (Zitadel/Azure AD) pushes user lifecycle events via SCIM 2.0.
 // Here we simulate the protocol with simplified JSON payloads.
 
+// Group claim mapping: extracts role:X, product:X, org:X from group names
+function parseGroupClaims(groups: string[]): { role?: string; products: string[]; org_unit?: string; primary_product?: string; plainGroups: string[] } {
+  const products: string[] = [];
+  const plainGroups: string[] = [];
+  let role: string | undefined;
+  let org_unit: string | undefined;
+  for (const g of groups) {
+    if (g.startsWith("role:")) { role = g.slice(5); }
+    else if (g.startsWith("product:")) { products.push(g.slice(8)); }
+    else if (g.startsWith("org:")) { org_unit = g.slice(4); }
+    else { plainGroups.push(g); }
+  }
+  return { role, products, org_unit, primary_product: products[0], plainGroups };
+}
+
 app.post("/api/scim/v2/Users", (req, res) => {
   const { externalId, userName, displayName, emails, groups, active, password } = req.body;
   if (!userName || !displayName) {
     res.status(400).json({ error: "userName and displayName required" });
     return;
   }
+  const groupNames = groups?.map((g: any) => g.display || g.value) || [];
+  const claims = parseGroupClaims(groupNames);
   const userId = "user-" + String(Date.now()).slice(-6);
   const user = upsertUser({
     user_id: userId,
@@ -189,7 +226,11 @@ app.post("/api/scim/v2/Users", (req, res) => {
     username: userName,
     name: displayName,
     email: emails?.[0]?.value || null,
-    groups: groups?.map((g: any) => g.display || g.value) || [],
+    role: claims.role,
+    org_unit: claims.org_unit,
+    products: claims.products.length ? claims.products : undefined,
+    primary_product: claims.primary_product,
+    groups: claims.plainGroups,
     status: active !== false ? "active" : "suspended",
     source: "scim",
     password_hash: password || undefined,
@@ -228,6 +269,30 @@ app.delete("/api/scim/v2/Users/:id", (req, res) => {
   res.status(204).end();
 });
 
+// ── External Tools CRUD ──
+app.get("/api/external-tools", (_req, res) => {
+  res.json(getAllExternalTools());
+});
+
+app.post("/api/external-tools", (req, res) => {
+  const { name, url, icon_url, sort_order } = req.body;
+  if (!name || !url) { res.status(400).json({ error: "name and url required" }); return; }
+  const tool = createExternalTool({ name, url, icon_url, sort_order });
+  res.status(201).json({ ok: true, tool });
+});
+
+app.put("/api/external-tools/:id", (req, res) => {
+  const result = updateExternalTool(req.params.id, req.body);
+  if (!result) { res.status(404).json({ error: "Tool not found" }); return; }
+  res.json({ ok: true, tool: result });
+});
+
+app.delete("/api/external-tools/:id", (req, res) => {
+  const ok = deleteExternalTool(req.params.id);
+  if (!ok) { res.status(404).json({ error: "Tool not found" }); return; }
+  res.json({ ok: true });
+});
+
 // Navigation: dynamic product list based on system config + user entitlements
 app.get("/api/navigation", (req, res) => {
   const token = req.cookies?.platform_token;
@@ -256,7 +321,17 @@ app.get("/api/navigation", (req, res) => {
     items.push({ key: p.system_name, label: p.label, url: taskUrl });
   }
 
-  res.json(items);
+  // External tools — visible to all users
+  const tools = getExternalTools();
+  const externalItems = tools.map(t => ({
+    key: "ext-" + t.id,
+    label: t.name,
+    url: t.url,
+    external: true,
+    icon_url: t.icon_url,
+  }));
+
+  res.json({ items, externalTools: externalItems });
 });
 
 // ── Platform API ──
@@ -393,6 +468,32 @@ app.delete("/api/dim-routing/:source/:field/:target", (req, res) => {
 app.delete("/api/shared-dimensions/:name/participants/:product", (req, res) => {
   deleteParticipant(req.params.name, req.params.product);
   res.json({ ok: true });
+});
+
+app.delete("/api/shared-dimensions/:name", (req, res) => {
+  deleteSharedDimension(req.params.name);
+  res.json({ ok: true });
+});
+
+// Bulk-activate all dimensions from Economy Domain
+app.post("/api/shared-dimensions/bulk-activate", (_req, res) => {
+  const entities = getEconEntities();
+  const byDim: Record<string, { count: number; source: string }> = {};
+  for (const e of entities) {
+    if (!byDim[e.dimension]) byDim[e.dimension] = { count: 0, source: e.source_system };
+    byDim[e.dimension].count++;
+  }
+  const existing = getAllSharedDimensions().map(d => d.name);
+  const activated: string[] = [];
+  const dimTypeMap: Record<string, string> = { account: "account", org_unit: "hierarchy", project: "flat" };
+  for (const [dim, info] of Object.entries(byDim)) {
+    if (existing.includes(dim)) continue;
+    const label = dim.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+    const dimType = dimTypeMap[dim] || "flat";
+    registerSharedDimension(dim, label, info.source || "erp", "shared", dimType);
+    activated.push(dim);
+  }
+  res.json({ ok: true, activated, skipped: existing });
 });
 
 // ── Shared Dimension Catalog API ──
@@ -696,7 +797,9 @@ app.post("/api/economy/facts", (req, res) => {
 app.post("/api/economy/facts/validate", (req, res) => {
   const batchId = req.body.batch_id;
   const result = validateEconFacts(batchId);
-  res.json(result);
+  // Also report how many are already validated (ready for publish)
+  const summary = getEconFactsSummary();
+  res.json({ ...result, already_validated: summary.validated });
 });
 
 app.post("/api/economy/facts/publish", async (_req, res) => {
@@ -706,10 +809,52 @@ app.post("/api/economy/facts/publish", async (_req, res) => {
   try {
     const producer = kafka.producer();
     await producer.connect();
+
+    // 1. Internal economy topic
     await producer.send({
       topic: "economy.facts.published",
       messages: [{ key: "publish", value: JSON.stringify({ facts, published_at: new Date().toISOString() }) }],
     });
+
+    // 2. Route to platform.gl.out grouped by project so Product B can consume
+    const byProject = new Map<string, any[]>();
+    for (const f of facts) {
+      const key = f.project_id || "_no_project";
+      if (!byProject.has(key)) byProject.set(key, []);
+      byProject.get(key)!.push(f);
+    }
+    for (const [projectId, entries] of byProject) {
+      // Ensure project exists in egress
+      await producer.send({
+        topic: "platform.projects.out",
+        messages: [{ key: projectId, value: JSON.stringify({ source_system: "erp", source_key: projectId, name: projectId }) }],
+      });
+      // Publish GL in the format Product B expects
+      const glEntries = entries.map(e => ({
+        account: e.account, org_unit: e.org_unit, amount: e.amount,
+        currency: e.currency || "SEK", period: e.period,
+        transaction_date: e.transaction_date || null,
+        activity: e.dim1, cost_bearer: e.dim2, counterpart: e.dim3,
+      }));
+      // Apply dim routing rules — without rules, dims are NULL
+      const dimValuesPerEntry = entries.map(e => {
+        const sourceData: Record<string, unknown> = {
+          activity: e.dim1, cost_center: e.dim2, counterpart: e.dim3,
+          dim1: e.dim1, dim2: e.dim2, dim3: e.dim3,
+        };
+        return applyDimRouting(entries[0].source_system || "erp", "prod_b", sourceData);
+      });
+      await producer.send({
+        topic: "platform.gl.out",
+        messages: [{ key: projectId, value: JSON.stringify({
+          source_system: entries[0].source_system || "erp",
+          source_key: projectId,
+          dim_values_per_entry: dimValuesPerEntry,
+          original: { erp_id: projectId, entries: glEntries },
+        }) }],
+      });
+    }
+
     await producer.disconnect();
     const count = publishEconFacts();
     res.json({ published: count });
@@ -740,19 +885,21 @@ app.post("/api/economy/sync-state", (req, res) => {
 const scheduledJobs: Map<string, cron.ScheduledTask> = new Map();
 
 // Sync runner: fetches data from ERP and stages into economy domain
-async function runEconSync(source: string) {
+// scope: "all" = entities+facts, "entities" = structure only, "facts" = transactions only
+async function runEconSync(source: string, scope: "all" | "entities" | "facts" = "all") {
   const t0 = Date.now();
-  console.log(`[SCHEDULER] Starting economy sync for ${source}...`);
+  console.log(`[SCHEDULER] Starting economy sync for ${source} (scope: ${scope})...`);
   try {
-    upsertSyncState(source, "entities", { status: "syncing" });
-    upsertSyncState(source, "facts", { status: "syncing" });
+    if (scope !== "facts") upsertSyncState(source, "entities", { status: "syncing" });
+    if (scope !== "entities") upsertSyncState(source, "facts", { status: "syncing" });
 
     // 1. Sync entities (accounts + org_units)
+    let entityCount = 0, relCount = 0;
+   if (scope !== "facts") {
     const accResp = await fetch(`${ERP_URL}/api/publish-accounts`, { method: "POST" });
     const accData = await accResp.json() as any;
     const accounts = accData.event?.accounts || accData.accounts || [];
     const orgUnits = accData.event?.org_units || accData.org_units || [];
-    let entityCount = 0, relCount = 0;
     for (const acc of accounts) {
       upsertEconEntity({ source_system: source, dimension: "account", code: acc.code, name: acc.name, type: acc.type || "leaf" });
       entityCount++;
@@ -763,10 +910,70 @@ async function runEconSync(source: string) {
       entityCount++;
       if (org.parent) { upsertEconRelation({ source_system: source, dimension: "org_unit", child_code: org.code, parent_code: org.parent, hierarchy_name: "standard" }); relCount++; }
     }
+
+    // Extra hierarchy nodes
+    upsertEconEntity({ source_system: source, dimension: "org_unit", code: "DIV-01", name: "Division South", type: "group" });
+    entityCount++;
+    upsertEconRelation({ source_system: source, dimension: "org_unit", child_code: "OU-100", parent_code: "DIV-01", hierarchy_name: "standard", level: 1 }); relCount++;
+    upsertEconRelation({ source_system: source, dimension: "org_unit", child_code: "OU-200", parent_code: "DIV-01", hierarchy_name: "standard", level: 1 }); relCount++;
+
+    // Flex dimensions from ERP (activity, cost_center, counterpart)
+    const flexDims = [
+      { dim: "activity", codes: [
+        { code: "AKT-100", name: "Design" },
+        { code: "AKT-200", name: "Construction" },
+        { code: "AKT-300", name: "Inspection" },
+      ]},
+      { dim: "cost_center", codes: [
+        { code: "KB-500", name: "Internal" },
+        { code: "KB-600", name: "External" },
+      ]},
+      { dim: "counterpart", codes: [
+        { code: "MP-200", name: "Supplier Alpha" },
+        { code: "MP-300", name: "Supplier Beta" },
+      ]},
+    ];
+    for (const fd of flexDims) {
+      for (const c of fd.codes) {
+        upsertEconEntity({ source_system: source, dimension: fd.dim, code: c.code, name: c.name, type: "leaf" });
+        entityCount++;
+      }
+    }
+
+    // Attribute definitions
+    upsertEconAttributeDef({ dimension: "account", attribute_name: "account_type", attribute_label: "Account Type", source_system: source });
+    upsertEconAttributeDef({ dimension: "account", attribute_name: "account_group", attribute_label: "Account Group", source_system: source });
+    upsertEconAttributeDef({ dimension: "org_unit", attribute_name: "region", attribute_label: "Region", source_system: source });
+    upsertEconAttributeDef({ dimension: "org_unit", attribute_name: "level", attribute_label: "Level", source_system: source });
+
+    // Sample attribute values
+    const accAttrs: Array<[string, string, string]> = [
+      ["4010", "account_type", "expense"], ["4010", "account_group", "personnel"],
+      ["4020", "account_type", "expense"], ["4020", "account_group", "external services"],
+      ["5010", "account_type", "expense"], ["5010", "account_group", "travel"],
+    ];
+    for (const [code, attr, val] of accAttrs) {
+      upsertEconEntityAttribute({ dimension: "account", code, attribute_name: attr, attribute_value: val, source_system: source });
+    }
+    const orgAttrs: Array<[string, string, string]> = [
+      ["OU-100", "region", "Stockholm"], ["OU-100", "level", "department"],
+      ["OU-200", "region", "Stockholm"], ["OU-200", "level", "department"],
+      ["DIV-01", "region", "Stockholm"], ["DIV-01", "level", "division"],
+    ];
+    for (const [code, attr, val] of orgAttrs) {
+      upsertEconEntityAttribute({ dimension: "org_unit", code, attribute_name: attr, attribute_value: val, source_system: source });
+    }
+
+    // Register "project" as a known dimension (projects are created individually later)
+    upsertEconEntity({ source_system: source, dimension: "project", code: "_placeholder", name: "(projects added dynamically)", type: "system" });
+    entityCount++;
+
     upsertSyncState(source, "entities", { last_sync_at: new Date().toISOString(), rows_received: entityCount, rows_validated: entityCount, status: "idle", duration_ms: Date.now() - t0 });
     upsertSyncState(source, "relations", { last_sync_at: new Date().toISOString(), rows_received: relCount, rows_validated: relCount, status: "idle" });
+   } // end scope !== "facts"
 
-    // 2. Sync facts (only if there's a linked ERP project)
+    // 2. Sync facts — either from a linked ERP project or seed sample transactions
+   if (scope !== "entities") {
     if (demoState.erp_id) {
       const glResp = await fetch(`${ERP_URL}/api/publish-gl`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ erp_id: demoState.erp_id }) });
       const glData = await glResp.json() as any;
@@ -784,10 +991,28 @@ async function runEconSync(source: string) {
         upsertSyncState(source, "facts", { status: "idle", duration_ms: Date.now() - t0 });
       }
     } else {
-      upsertSyncState(source, "facts", { status: "idle", duration_ms: Date.now() - t0 });
+      // Seed sample GL transactions so there's data without running demo steps
+      const batchId = `seed-${source}-${Date.now()}`;
+      const sampleFacts = [
+        { source_system: source, source_batch_id: batchId, project_id: "SAMPLE-001", account: "4010", org_unit: "OU-100", period: "2025-01", amount: -125000, currency: "SEK", transaction_date: "2025-01-15", dim1: "AKT-100", dim2: "KB-500", dim3: "MP-200" },
+        { source_system: source, source_batch_id: batchId, project_id: "SAMPLE-001", account: "4020", org_unit: "OU-100", period: "2025-01", amount: -85000,  currency: "SEK", transaction_date: "2025-01-22", dim1: "AKT-200", dim2: "KB-600", dim3: "MP-300" },
+        { source_system: source, source_batch_id: batchId, project_id: "SAMPLE-001", account: "5010", org_unit: "OU-200", period: "2025-01", amount: -12500,  currency: "SEK", transaction_date: "2025-01-28", dim1: "AKT-300", dim2: "KB-500", dim3: "MP-200" },
+        { source_system: source, source_batch_id: batchId, project_id: "SAMPLE-001", account: "4010", org_unit: "OU-100", period: "2025-02", amount: -130000, currency: "SEK", transaction_date: "2025-02-10", dim1: "AKT-100", dim2: "KB-500", dim3: "MP-200" },
+        { source_system: source, source_batch_id: batchId, project_id: "SAMPLE-001", account: "4020", org_unit: "OU-200", period: "2025-02", amount: -92000,  currency: "SEK", transaction_date: "2025-02-18", dim1: "AKT-200", dim2: "KB-600", dim3: "MP-300" },
+        { source_system: source, source_batch_id: batchId, project_id: "SAMPLE-001", account: "3010", org_unit: "OU-100", period: "2025-02", amount: 450000,  currency: "SEK", transaction_date: "2025-02-25", dim1: "AKT-100", dim2: "KB-500", dim3: "MP-200" },
+        { source_system: source, source_batch_id: batchId, project_id: "SAMPLE-001", account: "4010", org_unit: "OU-100", period: "2025-03", amount: -140000, currency: "SEK", transaction_date: "2025-03-12", dim1: "AKT-100", dim2: "KB-500", dim3: "MP-300" },
+        { source_system: source, source_batch_id: batchId, project_id: "SAMPLE-001", account: "5010", org_unit: "OU-200", period: "2025-03", amount: -18000,  currency: "SEK", transaction_date: "2025-03-20", dim1: "AKT-300", dim2: "KB-600", dim3: "MP-200" },
+      ];
+      // Also register SAMPLE-001 as a project entity
+      upsertEconEntity({ source_system: source, dimension: "project", code: "SAMPLE-001", name: "Sample Project (seed data)", type: "leaf" });
+      const ins = insertEconFacts(sampleFacts);
+      const val = validateEconFacts(ins.batch_id);
+      upsertSyncState(source, "facts", { last_sync_at: new Date().toISOString(), rows_received: ins.received, rows_validated: val.validated, rows_rejected: val.rejected, status: "idle", duration_ms: Date.now() - t0 });
+      console.log(`[SCHEDULER] Seeded ${sampleFacts.length} sample GL transactions for ${source}`);
     }
+   } // end scope !== "entities"
 
-    console.log(`[SCHEDULER] Economy sync for ${source} done in ${Date.now() - t0}ms — ${entityCount} entities, ${relCount} relations`);
+    console.log(`[SCHEDULER] Economy sync for ${source} (${scope}) done in ${Date.now() - t0}ms — ${entityCount} entities, ${relCount} relations`);
   } catch (err: any) {
     console.error(`[SCHEDULER] Economy sync for ${source} failed:`, err.message);
     upsertSyncState(source, "entities", { status: "error" });
@@ -811,8 +1036,10 @@ function scheduleEconSync(source: string, cronExpr: string) {
 
 // API: Manual sync trigger
 app.post("/api/economy/sync/:source/run", async (req, res) => {
-  await runEconSync(req.params.source);
-  res.json({ ok: true, source: req.params.source });
+  const scope = (req.query.scope as string) || "all";
+  if (!["all", "entities", "facts"].includes(scope)) { res.status(400).json({ error: "scope must be all, entities, or facts" }); return; }
+  await runEconSync(req.params.source, scope as any);
+  res.json({ ok: true, source: req.params.source, scope });
 });
 
 // API: Schedule sync
@@ -1017,29 +1244,31 @@ app.post("/api/demo/step/2", async (_req, res) => {
   try {
     // Simulate IdP pushing 3 users via SCIM 2.0 (like Microsoft Entra ID would)
     const scimUsers = [
-      { externalId: "entra-a1b2c3", userName: "lisa.berg", displayName: "Lisa Berg", emails: [{ value: "lisa.berg@acme.se", primary: true }], groups: [{ display: "controllers" }], active: true },
-      { externalId: "entra-d4e5f6", userName: "omar.hassan", displayName: "Omar Hassan", emails: [{ value: "omar.hassan@acme.se", primary: true }], groups: [{ display: "analysts" }], active: true },
-      { externalId: "entra-g7h8i9", userName: "maria.silva", displayName: "Maria Silva", emails: [{ value: "maria.silva@acme.se", primary: true }], groups: [{ display: "controllers" }, { display: "prod_a" }], active: true },
+      { externalId: "entra-a1b2c3", userName: "lisa.berg", displayName: "Lisa Berg", emails: [{ value: "lisa.berg@acme.se", primary: true }], groups: [{ display: "role:controller" }, { display: "org:OU-100" }, { display: "product:prod_a" }, { display: "product:prod_b" }, { display: "controllers" }], active: true },
+      { externalId: "entra-d4e5f6", userName: "omar.hassan", displayName: "Omar Hassan", emails: [{ value: "omar.hassan@acme.se", primary: true }], groups: [{ display: "role:analyst" }, { display: "org:OU-200" }, { display: "product:prod_b" }, { display: "analysts" }], active: true },
+      { externalId: "entra-g7h8i9", userName: "maria.silva", displayName: "Maria Silva", emails: [{ value: "maria.silva@acme.se", primary: true }], groups: [{ display: "role:controller" }, { display: "org:OU-300" }, { display: "product:prod_a" }, { display: "controllers" }], active: true },
     ];
     const provisionedUsers: any[] = [];
     for (const scimUser of scimUsers) {
+      const groupNames = scimUser.groups.map(g => g.display);
+      const claims = parseGroupClaims(groupNames);
       const user = upsertUser({
         user_id: "user-" + String(Date.now()).slice(-6) + String(Math.random()).slice(-2),
         external_id: scimUser.externalId,
         username: scimUser.userName,
         name: scimUser.displayName,
         email: scimUser.emails[0]?.value || null,
-        groups: scimUser.groups.map(g => g.display),
+        role: claims.role,
+        org_unit: claims.org_unit,
+        products: claims.products.length ? claims.products : undefined,
+        primary_product: claims.primary_product,
+        groups: claims.plainGroups,
         status: scimUser.active ? "active" : "suspended",
         source: "scim",
-        password_hash: "demo",  // In production: no password, OIDC handles auth
+        password_hash: "demo",
       });
       provisionedUsers.push({ user_id: user.user_id, name: user.name, source: user.source, external_id: user.external_id });
     }
-    // Assign roles and products (platform-side config after SCIM provision)
-    if (provisionedUsers[0]) updateUser(provisionedUsers[0].user_id, { role: "controller", org_unit: "OU-100", products: ["prod_a", "prod_b"], primary_product: "prod_a" });
-    if (provisionedUsers[1]) updateUser(provisionedUsers[1].user_id, { role: "analyst", org_unit: "OU-200", products: ["prod_b"], primary_product: "prod_b" });
-    if (provisionedUsers[2]) updateUser(provisionedUsers[2].user_id, { role: "controller", org_unit: "OU-300", products: ["prod_a"], primary_product: "prod_a" });
 
     demoState.step = 2;
     console.log(`[DEMO] Step 2: SCIM provisioned ${provisionedUsers.length} users from IdP`);
@@ -1124,22 +1353,73 @@ app.post("/api/demo/step/4", async (_req, res) => {
 
 // ── Fetch actuals — callable by products to trigger ERP GL publish ──
 app.post("/api/fetch-actuals", async (_req, res) => {
-  if (!demoState.erp_id) {
-    res.status(400).json({ error: "No ERP project linked yet — run demo steps 1-2 first" });
-    return;
-  }
-  try {
-    const r = await fetch(`${ERP_URL}/api/publish-gl`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ erp_id: demoState.erp_id }),
-    });
-    const data = await r.json() as any;
-    const count = data?.event?.entries?.length || 0;
-    console.log(`[PLATFORM] Fetch actuals: ${count} GL entries from ERP (${demoState.erp_id})`);
-    res.json({ ok: true, entries: count, erp_id: demoState.erp_id });
-  } catch (err) {
-    res.status(500).json({ error: `Could not reach ERP: ${err}` });
+  if (demoState.erp_id) {
+    // Demo flow: fetch live from ERP
+    try {
+      const r = await fetch(`${ERP_URL}/api/publish-gl`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ erp_id: demoState.erp_id }),
+      });
+      const data = await r.json() as any;
+      const count = data?.event?.entries?.length || 0;
+      console.log(`[PLATFORM] Fetch actuals: ${count} GL entries from ERP (${demoState.erp_id})`);
+      res.json({ ok: true, entries: count, erp_id: demoState.erp_id });
+    } catch (err) {
+      res.status(500).json({ error: `Could not reach ERP: ${err}` });
+    }
+  } else {
+    // Non-demo: publish validated facts from Economy Domain directly to Kafka
+    const facts = getEconFactsForPublish();
+    if (facts.length === 0) {
+      res.json({ ok: true, entries: 0, message: "All facts already published — data should be visible in products" });
+      return;
+    }
+    try {
+      const producer = kafka.producer();
+      await producer.connect();
+      // Group by project
+      const byProject = new Map<string, any[]>();
+      for (const f of facts) {
+        const key = f.project_id || "_no_project";
+        if (!byProject.has(key)) byProject.set(key, []);
+        byProject.get(key)!.push(f);
+      }
+      for (const [projectId, entries] of byProject) {
+        await producer.send({
+          topic: "platform.projects.out",
+          messages: [{ key: projectId, value: JSON.stringify({ source_system: "erp", source_key: projectId, name: projectId }) }],
+        });
+        const glEntries = entries.map(e => ({
+          account: e.account, org_unit: e.org_unit, amount: e.amount,
+          currency: e.currency || "SEK", period: e.period,
+          transaction_date: e.transaction_date || null,
+          activity: e.dim1, cost_bearer: e.dim2, counterpart: e.dim3,
+        }));
+        // Apply dim routing rules — without rules, dims are NULL
+        const dimValuesPerEntry = entries.map(e => {
+          const sourceData: Record<string, unknown> = {
+            activity: e.dim1, cost_center: e.dim2, counterpart: e.dim3,
+            dim1: e.dim1, dim2: e.dim2, dim3: e.dim3,
+          };
+          return applyDimRouting(entries[0].source_system || "erp", "prod_b", sourceData);
+        });
+        await producer.send({
+          topic: "platform.gl.out",
+          messages: [{ key: projectId, value: JSON.stringify({
+            source_system: entries[0].source_system || "erp",
+            source_key: projectId,
+            dim_values_per_entry: dimValuesPerEntry,
+            original: { erp_id: projectId, entries: glEntries },
+          }) }],
+        });
+      }
+      await producer.disconnect();
+      const count = publishEconFacts();
+      res.json({ ok: true, entries: count, source: "economy-domain" });
+    } catch (err) {
+      res.status(500).json({ error: `Publish failed: ${err}` });
+    }
   }
 });
 

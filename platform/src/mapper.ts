@@ -232,6 +232,16 @@ db.exec(`
     duration_ms     INTEGER,
     UNIQUE(source_system, entity_type)
   );
+
+  CREATE TABLE IF NOT EXISTS external_tools (
+    id            TEXT PRIMARY KEY,
+    name          TEXT NOT NULL,
+    url           TEXT NOT NULL,
+    icon_url      TEXT,
+    sort_order    INTEGER DEFAULT 0,
+    visible       INTEGER DEFAULT 1,
+    created_at    TEXT DEFAULT (datetime('now'))
+  );
 `);
 
 // ── Schema migrations (add columns to existing tables) ──
@@ -287,6 +297,7 @@ export function resetAllData() {
     'system_config', 'dimension_code_mappings',
     'dimension_participants', 'shared_dimensions',
     'dim_routing', 'dim_models', 'dimension_mappings',
+    'external_tools',
   ];
   for (const t of tables) db.prepare(`DELETE FROM ${t}`).run();
   console.log('[MAPPER] All data reset');
@@ -440,6 +451,13 @@ export function registerSharedDimension(name: string, label: string, ownerSystem
     "INSERT OR REPLACE INTO shared_dimensions (name, label, owner_system, taxonomy_type, dimension_type) VALUES (?, ?, ?, ?, ?)"
   ).run(name, label, ownerSystem, taxonomyType, dimensionType);
   console.log(`[MAPPER] Shared dimension: ${name} (${label}), owner=${ownerSystem}, type=${taxonomyType}, dim_type=${dimensionType}`);
+}
+
+export function deleteSharedDimension(name: string) {
+  db.prepare("DELETE FROM dimension_participants WHERE dimension_name = ?").run(name);
+  db.prepare("DELETE FROM dimension_code_mappings WHERE dimension_name = ?").run(name);
+  db.prepare("DELETE FROM shared_dimensions WHERE name = ?").run(name);
+  console.log(`[MAPPER] Deleted shared dimension: ${name}`);
 }
 
 export function getAllSharedDimensions() {
@@ -635,6 +653,27 @@ export function upsertUser(user: {
   source?: string;
   password_hash?: string;
 }): UserRecord {
+  // Try insert; if user_id or username already exists, update the existing row
+  const existing = db.prepare("SELECT user_id FROM users WHERE username = ?").get(user.username) as any;
+  if (existing) {
+    // Username exists — update that row instead of inserting
+    db.prepare(`
+      UPDATE users SET
+        external_id = ?, name = ?, email = ?, role = ?, org_unit = ?,
+        products = ?, primary_product = ?, groups = ?, status = ?, source = ?,
+        password_hash = CASE WHEN ? IS NOT NULL THEN ? ELSE password_hash END,
+        synced_at = datetime('now'), updated_at = datetime('now')
+      WHERE user_id = ?
+    `).run(
+      user.external_id || null, user.name, user.email || null,
+      user.role || "viewer", user.org_unit || null,
+      JSON.stringify(user.products || []), user.primary_product || null,
+      JSON.stringify(user.groups || []), user.status || "active", user.source || "local",
+      user.password_hash || null, user.password_hash || null,
+      existing.user_id
+    );
+    return getUser(existing.user_id)!;
+  }
   db.prepare(`
     INSERT INTO users (user_id, external_id, username, name, email, role, org_unit, products, primary_product, groups, status, source, password_hash, synced_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
@@ -896,6 +935,39 @@ export function getSyncStates(): any[] {
 
 export function getSyncState(source: string, entityType: string): any {
   return db.prepare("SELECT * FROM sync_state WHERE source_system = ? AND entity_type = ?").get(source, entityType);
+}
+
+// ── External Tools ──
+export function getExternalTools(): any[] {
+  return db.prepare("SELECT * FROM external_tools WHERE visible = 1 ORDER BY sort_order, name").all();
+}
+
+export function getAllExternalTools(): any[] {
+  return db.prepare("SELECT * FROM external_tools ORDER BY sort_order, name").all();
+}
+
+export function createExternalTool(tool: { name: string; url: string; icon_url?: string; sort_order?: number }): any {
+  const id = "tool-" + Date.now();
+  db.prepare("INSERT INTO external_tools (id, name, url, icon_url, sort_order) VALUES (?, ?, ?, ?, ?)").run(
+    id, tool.name, tool.url, tool.icon_url || null, tool.sort_order ?? 0
+  );
+  return db.prepare("SELECT * FROM external_tools WHERE id = ?").get(id);
+}
+
+export function updateExternalTool(id: string, updates: Partial<{ name: string; url: string; icon_url: string; sort_order: number; visible: number }>): any {
+  const fields: string[] = [];
+  const values: any[] = [];
+  for (const [k, v] of Object.entries(updates)) {
+    if (v !== undefined) { fields.push(`${k} = ?`); values.push(v); }
+  }
+  if (!fields.length) return db.prepare("SELECT * FROM external_tools WHERE id = ?").get(id);
+  values.push(id);
+  db.prepare(`UPDATE external_tools SET ${fields.join(", ")} WHERE id = ?`).run(...values);
+  return db.prepare("SELECT * FROM external_tools WHERE id = ?").get(id);
+}
+
+export function deleteExternalTool(id: string): boolean {
+  return db.prepare("DELETE FROM external_tools WHERE id = ?").run(id).changes > 0;
 }
 
 export default db;

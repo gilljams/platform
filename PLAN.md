@@ -322,25 +322,34 @@ Platform serverar `GET /shell.js` — ett litet script som alla vyer inkluderar:
 <script src="http://localhost:3000/shell.js"></script>
 ```
 
-Scriptet renderar en **gemensam header** överst i varje produkt med två lägen:
+Scriptet renderar en **gemensam header** överst i varje produkt:
 
-**Multi-produkt (anna, admin)** — full 48px bar:
+**Pinned (multi-produkt)** — full 32px bar med navigation, inbox och pin/unpin:
 ```
-┌─────────────────────────────────────────────────────────┐
-│  Platform POC   Platform Admin │ Product A │ Product B  │   Anna ▾
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│  Platform POC   Platform Admin │ Product A │ Product B │ Ext ↗    │   Inbox (3)  📌
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-**Singel-produkt (erik, calle)** — minimal 4px accent-remsa, expanderar vid hover:
+**Unpinned** — bar dold, ersatt av en **notch pill** i övre högra hörnet:
 ```
-┌─────────────────────────────────────────────────────────┐
-│▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬│  (4px, expanderar vid hover)
-└─────────────────────────────────────────────────────────┘
+                                                          ┌──────────────┐
+                                                          │ Inbox (3)  📌│
+                                                          └──────┬───────┘
+                                                                 │ (dark tail)
 ```
+- Notch-pill: vit U-formad content (`border-radius: 0 0 10px 10px`) + mörk bakgrund/tail (#0d1822)
+- Notch döljs under peek (mouseenter) — `updateNotchVisibility()` kollar `header.classList.contains("peek")`
+- Hovrar man över toppen visas full baren temporärt (peek-mode)
+
+**Shell-funktioner:**
+- Pin/unpin via knapp — `userHasToggledPin` flag förhindrar auto-toggle vid produktändringar
+- Inbox-dropdown med aktiva tasks, badge döljs vid 0
+- External tools: visas efter produktlänkar med ↗-ikon
 - CSS-variabel `--shell-height` sätts så produkt-baren sticky-positionerar korrekt
 - Navigeringslänkar visas **bara för produkter användaren har tillgång till**
 - Entitlement-check: redirect om ej behörig
-- Logout + användarinfo (namn, roll, org-enhet)
+- Toast-notifikationer: vit bakgrund, färgad vänsterkant (grön/röd), SVG-ikoner
 
 ### Flöde
 1. Användaren öppnar `localhost:3000` → ser login-sida
@@ -395,16 +404,42 @@ Admin-vy på `localhost:3000/admin.html` — åtkomlig via användare `admin/dem
 
 ### Flikstruktur
 
-UI:t är organiserat i **fyra flikar** som speglar arbetsflödet vid kundinstallation:
+UI:t är organiserat i **sju flikar** som speglar arbetsflödet vid kundinstallation:
 
 | Flik | Syfte | Nyckelord |
 |---|---|---|
-| **⚙️ Grundinställning** | Engångskonfiguration per kund | Dimensioner, ekonomimodell, routing |
-| **🔗 Löpande drift** | Daglig administration | Projekt, länkning, planning-dims |
+| **⚙️ Initial Setup** | Engångskonfiguration per kund | Dimensioner, ekonomimodell, routing, externa verktyg |
+| **🔑 Identity & Access** | Användarhantering | SCIM, lokal skapning, roller, grupp-mappning |
+| **📊 Data Operations** | Daglig administration | Projekt, länkning, planning-dims |
+| **🔗 Operations** | Systemstatus | Aktiva system, konfiguration |
 | **📋 Events** | Övervakning | Realtids event-logg |
 | **🎬 Demo** | Testverktyg | 11-stegs demoflöde |
+| **📝 POC & Production** | Arkitektur & dokumentation | Två sub-flikar: *Architecture Vision* och *Production Notes* |
 
 Aktiv flik sparas i `localStorage` och behålls vid sidladdning.
+
+### External Tools
+
+Plattformen stödjer konfigurerbara externa verktyg som visas i shell-barens navigation.
+
+**Databas:**
+```sql
+external_tools (id, name, url, icon_url, sort_order, visible, created_at)
+```
+
+**API:**
+| Endpoint | Beskrivning |
+|---|---|
+| `GET /api/external-tools` | Lista alla verktyg (admin) |
+| `POST /api/external-tools` | Skapa nytt verktyg |
+| `PUT /api/external-tools/:id` | Uppdatera verktyg (namn, url, sort) |
+| `DELETE /api/external-tools/:id` | Ta bort verktyg |
+
+**Shell-rendering:**
+- `/api/navigation` returnerar `{ items: [...], externalTools: [...] }`
+- 1–3 verktyg: visas som direktlänkar med ↗-ikon
+- 4+ verktyg: de två första direkt, resten i "Tools ▾"-dropdown
+- Admin-UI: tabell med Edit/Hide/Show/Delete + formulär för add/edit
 
 ### ⚙️ Grundinställning — "Ny kund? Börja här."
 
@@ -549,8 +584,9 @@ platform-poc/
 │   │   └── router.ts       # Kafka consumer/producer + event log + enrichment + dim routing (GL + budget)
 │   └── public/
 │       ├── login.html       # Login-sida (centrerad, ihopfällbar info)
-│       ├── admin.html       # Platform Admin: 4 flikar (Grundinställning, Löpande drift, Events, Demo)
-│       └── shell.js         # Gemensam header (full/minimal beroende på entitlements)
+│       ├── admin.html       # Platform Admin: 7 flikar (Setup, Identity, Data Ops, Operations, Events, Demo, POC & Production)
+│       ├── shell.js         # Gemensam header (pin/unpin, notch pill, inbox, external tools)
+│       └── architecture.png # Arkitekturbild för Architecture Vision-fliken
 ```
 
 ## Testcase / Demoflöde (11 steg)
@@ -1019,13 +1055,19 @@ När en användare klickar på en budgetuppgift i inboxen öppnas Product A med 
 
 | Endpoint | Beskrivning |
 |---|---|
+| `POST /api/users` | Skapa lokal användare (source: "local") |
 | `GET /api/users?product=X` | Lista användare (från DB), filtrerade per produkt |
 | `GET /api/users/:id` | Enskild användare (utan password_hash) |
 | `PUT /api/users/:id` | Uppdatera användarattribut (roll, org, produkter, etc.) |
 | `DELETE /api/users/:id` | Ta bort användare |
-| `POST /api/scim/v2/Users` | SCIM 2.0: Provisionera ny användare (simulerar IdP-push) |
+| `POST /api/scim/v2/Users` | SCIM 2.0: Provisionera ny användare (simulerar IdP-push). Använder `parseGroupClaims()` för automatisk roll/produkt/org-mappning via group-prefix (`role:X`, `product:X`, `org:X`). Hanterar username-kollision via upsert. |
 | `PATCH /api/scim/v2/Users/:id` | SCIM 2.0: Uppdatera användare (via externalId) |
 | `DELETE /api/scim/v2/Users/:id` | SCIM 2.0: Deprovisionera (soft-delete, status→deprovisioned) |
+| `GET /api/external-tools` | Lista alla externa verktyg |
+| `POST /api/external-tools` | Skapa externt verktyg |
+| `PUT /api/external-tools/:id` | Uppdatera externt verktyg |
+| `DELETE /api/external-tools/:id` | Ta bort externt verktyg |
+| `GET /api/navigation` | Returnerar `{ items, externalTools }` för shell-rendering |
 | `GET /api/inbox` | Inbox med deep links (task_base_url + task_path) |
 | `PATCH /api/inbox/:id` | Markera inbox-item som done |
 | `GET /api/me` | Returnera JWT-payload för inloggad användare |
@@ -1035,6 +1077,7 @@ När en användare klickar på en budgetuppgift i inboxen öppnas Product A med 
 | Tabell | Syfte |
 |---|---|
 | `users` | Användaridentitet (user_id, external_id, username, email, role, org_unit, products, groups, status, source, password_hash, last_login) |
+| `external_tools` | Externa verktyg (id, name, url, icon_url, sort_order, visible, created_at) |
 | `shared_dimensions` | Registrerade delade dimensioner (name, label, owner_system, taxonomy_type) |
 | `dimension_participants` | Vilka produkter som producerar/konsumerar en dimension |
 | `dimension_code_mappings` | Kodöversättning per produkt (local_code ↔ canonical_code) |

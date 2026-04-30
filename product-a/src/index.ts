@@ -47,7 +47,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS budget_lines (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     version_id TEXT NOT NULL REFERENCES budget_versions(id),
-    prod_a_id TEXT NOT NULL REFERENCES projects(id),
+    prod_a_id TEXT REFERENCES projects(id),
     account TEXT NOT NULL,
     org_unit TEXT NOT NULL,
     amount REAL NOT NULL,
@@ -320,12 +320,13 @@ app.post("/api/budget-versions/:id/submit", async (req, res) => {
   }
 
   // Publish to Kafka
+  const prodAId = version.prod_a_id || version.id;
   const event = {
     event_id: uuid(),
     event_type: "BudgetSubmitted",
     timestamp: new Date().toISOString(),
     source_system: "prod_a",
-    prod_a_id: version.prod_a_id,
+    prod_a_id: prodAId,
     version_id: version.id,
     version_name: version.name,
     year: version.year,
@@ -439,12 +440,12 @@ app.post("/api/budget-versions/:id/reopen", (_req, res) => {
 
 // POST /api/budget-versions — create a new budget version (from Process Management)
 app.post("/api/budget-versions", (req, res) => {
-  const { name, year, org_root } = req.body;
+  const { name, year, org_root, prod_a_id } = req.body;
   if (!name || !year) { res.status(400).json({ error: "name and year required" }); return; }
   const id = `bv-${Date.now()}`;
   db.prepare(
     "INSERT INTO budget_versions (id, prod_a_id, name, year, status, org_root, created_at) VALUES (?, ?, ?, ?, 'draft', ?, ?)"
-  ).run(id, "", name, year, org_root || null, new Date().toISOString());
+  ).run(id, prod_a_id || null, name, year, org_root || null, new Date().toISOString());
   console.log(`[PROD-A] Budget version created: ${id} "${name}" year=${year} org_root=${org_root}`);
   res.json({ ok: true, id, name, year, status: "draft", org_root });
 });
@@ -457,6 +458,30 @@ app.get("/api/budget-versions/:id/assignments", (req, res) => {
     "SELECT * FROM budget_assignments WHERE version_id = ? ORDER BY org_unit, user_name"
   ).all(req.params.id);
   res.json(assignments);
+});
+
+// GET /api/budget-versions/:id/lines — get budget lines for version
+app.get("/api/budget-versions/:id/lines", (req, res) => {
+  const lines = db.prepare("SELECT * FROM budget_lines WHERE version_id = ?").all(req.params.id);
+  res.json(lines);
+});
+
+// POST /api/budget-versions/:id/lines — add/replace budget lines on a version
+app.post("/api/budget-versions/:id/lines", (req, res) => {
+  const version = db.prepare("SELECT * FROM budget_versions WHERE id = ?").get(req.params.id) as any;
+  if (!version) { res.status(404).json({ error: "Version not found" }); return; }
+  if (version.status === "published") { res.status(400).json({ error: "Version is published and locked" }); return; }
+  const { lines } = req.body;
+  if (!lines?.length) { res.status(400).json({ error: "lines required" }); return; }
+  db.prepare("DELETE FROM budget_lines WHERE version_id = ?").run(version.id);
+  const stmt = db.prepare(
+    "INSERT INTO budget_lines (version_id, prod_a_id, account, org_unit, amount, currency, period, dim1, dim2, dim3) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+  );
+  for (const line of lines) {
+    stmt.run(version.id, version.prod_a_id || null, line.account, line.org_unit, line.amount, line.currency || "SEK", line.period, line.dim1 || null, line.dim2 || null, line.dim3 || null);
+  }
+  console.log(`[PROD-A] Budget lines saved on version ${version.id} — ${lines.length} lines`);
+  res.json({ ok: true, lines_count: lines.length });
 });
 
 // PUT /api/budget-versions/:id/org-root — set org_root on existing version

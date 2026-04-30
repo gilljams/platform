@@ -36,6 +36,11 @@ export function getEventLog(limit = 100) {
 }
 
 async function publishEgress(topic: string, message: Record<string, unknown>) {
+  // Stamp each egress message with a unique event_id to avoid idempotency collisions
+  // when the same original event is published to multiple egress topics
+  if (!message.event_id) {
+    message.event_id = require("uuid").v4();
+  }
   const key = (message.source_key as string) || (message.event_id as string) || "unknown";
   await producer.send({
     topic,
@@ -101,15 +106,23 @@ async function handleMessage(topic: string, rawValue: string) {
           original: event,
         });
       } else if (event.event_type === "BudgetUpdated" || event.event_type === "BudgetSubmitted") {
+        const sourceKey = event.prod_a_id;
         const enriched: Record<string, unknown> = {
           source_system: "prod_a",
-          source_key: event.prod_a_id,
+          source_key: sourceKey,
           original: event,
         };
         if (event.event_type === "BudgetSubmitted" && event.version_name && event.year) {
           enriched.planning_dimensions = getOrCreateDimensionMapping(
-            "prod_a", event.prod_a_id, event.version_name, event.year, event.version_id
+            "prod_a", sourceKey, event.version_name, event.year, event.version_id
           );
+          // Ensure a project exists in downstream consumers for this source_key
+          await publishEgress(EGRESS.PROJECTS_OUT, {
+            source_system: "prod_a",
+            source_key: sourceKey,
+            name: event.version_name || sourceKey,
+            original: event,
+          });
         }
         // Apply dim routing to each budget line
         const lines = event.lines || [];

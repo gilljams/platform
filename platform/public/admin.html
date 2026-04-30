@@ -68,13 +68,17 @@
     }
     .toast {
       position: fixed; top: 70px; right: 20px; z-index: 10000;
-      padding: 10px 20px; border-radius: 3px; font-size: 12px; font-weight: 600;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.15); transform: translateX(120%);
+      padding: 10px 16px 10px 14px; border-radius: 4px; font-size: 12px; font-weight: 500;
+      background: #fff; color: #333; border: 1px solid #e0e0e0;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.10); transform: translateX(120%);
       transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+      display: flex; align-items: center; gap: 8px;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     }
     .toast.show { transform: translateX(0); }
-    .toast-success { background: #2e7d32; color: #fff; }
-    .toast-error { background: #c62828; color: #fff; }
+    .toast-success { border-left: 3px solid #2e7d32; }
+    .toast-error { border-left: 3px solid #c62828; }
+    .toast-icon { font-size: 14px; flex-shrink: 0; }
     .link-result {
       margin-top: 10px; padding: 8px 12px; border-radius: 3px;
       font-size: 12px; display: none; animation: fadeIn 0.3s;
@@ -386,10 +390,11 @@
       <div class="sidebar-section">Tabs</div>
       <a href="#" class="active" onclick="switchTab('setup');toggleSidebar();return false">Initial Setup</a>
       <a href="#" onclick="switchTab('users');toggleSidebar();return false">Identity & Access</a>
-      <a href="#" onclick="switchTab('economy');toggleSidebar();return false">Master Data</a>
+      <a href="#" onclick="switchTab('economy');toggleSidebar();return false">Data Operations</a>
       <a href="#" onclick="switchTab('operations');toggleSidebar();return false">Operations</a>
       <a href="#" onclick="switchTab('events');toggleSidebar();return false">Events</a>
       <a href="#" onclick="switchTab('demo');toggleSidebar();return false">Demo</a>
+      <a href="#" onclick="switchTab('notes');toggleSidebar();return false">POC & Production</a>
     </nav>
     <div class="sidebar-footer">
       <button onclick="doLogout()">Log out</button>
@@ -409,10 +414,11 @@
   <div class="tab-bar">
     <button class="tab-btn active" onclick="switchTab('setup')">Initial Setup</button>
     <button class="tab-btn" onclick="switchTab('users')">Identity & Access</button>
-    <button class="tab-btn" onclick="switchTab('economy')">Master Data</button>
+    <button class="tab-btn" onclick="switchTab('economy')">Data Operations</button>
     <button class="tab-btn" onclick="switchTab('operations')">Operations</button>
     <button class="tab-btn" onclick="switchTab('events')">Events</button>
     <button class="tab-btn" onclick="switchTab('demo')">Demo</button>
+    <button class="tab-btn" onclick="switchTab('notes')">POC & Production</button>
   </div>
 
   <!-- --------------------------------------------------------------- -->
@@ -465,10 +471,20 @@
           <h2>Economy Domain</h2>
           <span class="card-step-badge">Data Foundation</span>
         </div>
+        <div id="econDomainStatus" style="display:flex;align-items:center;gap:12px;margin-bottom:12px;padding:8px 14px;border-radius:6px;border:1px solid #ced4da;background:#fff;">
+          <span style="font-weight:700;font-size:12px;color:#0d1822;">ERP Adapter</span>
+          <span style="font-size:11px;color:#888;">Chart of accounts, org units, projects, GL</span>
+          <span id="econDomainEnableBtn"></span>
+        </div>
         <p style="font-size:13px;color:#666;margin-bottom:12px;">
           The Economy Domain contains <strong>standardized reference data</strong> (chart of accounts, org units, projects, flex dimensions)
           independent of any specific source system. Adapters are responsible for loading data here.
         </p>
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+          <button class="btn btn-primary btn-sm" id="btnSyncErp" onclick="syncFromErp()" style="padding:5px 14px;">Sync Structure from ERP</button>
+          <span id="syncStatus" style="font-size:12px;color:#888;"></span>
+          <span style="font-size:11px;color:#888;">(dimensions, codes, hierarchies, attributes — no transactions)</span>
+        </div>
         <div id="econOverviewPanel" style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px;">
           <div style="text-align:center;padding:12px 20px;background:#f8f9fa;border-radius:8px;min-width:120px;">
             <div style="font-size:24px;font-weight:700;color:#1f64a4;" id="econEntityCount">—</div>
@@ -511,7 +527,7 @@
         </div>
 
         <!-- Internal Products -->
-        <h3 style="font-size:12px;color:#555;margin:0 0 8px;">Internal Products</h3>
+        <h3 style="font-size:12px;color:#555;margin:14px 0 8px;padding-top:14px;border-top:1px solid #e8e9ef;">Products</h3>
         <p style="font-size:12px;color:#888;margin-bottom:10px;">
           Enable the products included in this installation.
         </p>
@@ -544,6 +560,44 @@
         </div>
       </div>
 
+      <!-- External Tools -->
+      <div class="card">
+        <div class="card-header">
+          <h2>External Tools</h2>
+          <span class="card-step-badge">Optional</span>
+        </div>
+        <p style="font-size:13px;color:#666;margin-bottom:12px;">
+          Add links to external systems (ERP, CRM, BI tools, etc.) that appear in the platform shell header for quick access.
+          Up to 3 links are shown directly; more appear in a dropdown.
+        </p>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>URL</th>
+              <th>Sort</th>
+              <th style="width:60px"></th>
+            </tr>
+          </thead>
+          <tbody id="extToolsBody">
+            <tr><td colspan="4" style="color:#999;text-align:center;">No external tools</td></tr>
+          </tbody>
+        </table>
+
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid #e8e9ef;">
+          <h4 style="font-size:12px;color:#555;margin-bottom:8px;" id="extToolFormTitle">+ Add Tool</h4>
+          <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+            <div class="form-group"><label>Name</label><input type="text" id="extToolName" placeholder="Agresso" style="width:120px"></div>
+            <div class="form-group"><label>URL</label><input type="text" id="extToolUrl" placeholder="https://agresso.acme.se" style="width:220px"></div>
+            <div class="form-group"><label>Sort</label><input type="number" id="extToolSort" value="0" style="width:50px"></div>
+            <button class="btn btn-primary btn-sm" onclick="saveExternalTool()" id="extToolSaveBtn">Add</button>
+            <button class="btn btn-sm" onclick="cancelEditTool()" id="extToolCancelBtn" style="display:none">Cancel</button>
+          </div>
+          <div id="extToolStatus" style="font-size:11px;margin-top:4px;min-height:16px;"></div>
+        </div>
+      </div>
+
       <!-- STEP 2: Shared dimensions -->
       <div class="card">
         <div class="card-header">
@@ -558,6 +612,10 @@
           Specify which source <em>owns</em> the code list and whether all systems share the same codes ("shared")
           or if code translation is needed ("mapped").
         </p>
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+          <button class="btn btn-primary btn-sm" onclick="bulkActivateDimensions()" style="padding:5px 14px;">Activate all from Economy Domain</button>
+          <span id="bulkActivateStatus" style="font-size:12px;color:#888;"></span>
+        </div>
         <table>
           <thead>
             <tr>
@@ -568,6 +626,7 @@
               <th>Taxonomy</th>
               <th>Codes</th>
               <th>Participants</th>
+              <th style="width:28px"></th>
             </tr>
           </thead>
           <tbody id="sharedDimsBody">
@@ -578,9 +637,11 @@
         <!-- Dimension + Participant forms side by side -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px;">
           <div style="padding:12px;background:#f8f9fa;border-radius:8px;">
-            <h4 style="font-size:12px;color:#555;margin-bottom:8px;">+ Register New Dimension</h4>
+            <h4 style="font-size:12px;color:#555;margin-bottom:8px;">+ Activate Shared Dimension</h4>
             <div class="form-row" style="margin-bottom:0;flex-wrap:wrap">
-              <div class="form-group"><label>Name</label><input type="text" id="dimName" placeholder="account" style="width:100px"></div>
+              <div class="form-group"><label>Dimension</label>
+                <select id="dimName" style="width:130px" onchange="onDimNameChange()"><option value="">Select…</option></select>
+              </div>
               <div class="form-group"><label>Label</label><input type="text" id="dimLabel" placeholder="Account" style="width:100px"></div>
               <div class="form-group"><label>Owner</label>
                 <select id="dimOwner" style="width:110px"><option value="">Select…</option></select>
@@ -591,7 +652,7 @@
                   <option value="mapped">mapped</option>
                 </select>
               </div>
-              <button class="btn btn-primary btn-sm" onclick="addDimension()">Add</button>
+              <button class="btn btn-primary btn-sm" onclick="addDimension()">Activate</button>
             </div>
           </div>
           <div style="padding:12px;background:#f8f9fa;border-radius:8px;">
@@ -857,13 +918,13 @@ Enriched on BudgetSubmitted event when routing to platform.budget.out</pre>
   </div>
 
   <!-- --------------------------------------------------------------- -->
-  <!-- TAB: MASTER DATA -->
+  <!-- TAB: DATA OPERATIONS -->
   <!-- --------------------------------------------------------------- -->
   <div class="tab-panel" id="tab-economy">
     <div class="container">
       <div class="setup-intro">
-        <h2>Master Data</h2>
-        <p>Staging layer for financial master data from external sources. Entities (dimensions) and facts (GL) are received, validated, and published to downstream products.</p>
+        <h2>Data Operations</h2>
+        <p>Sync, validate, and publish financial data (entities &amp; GL transactions) from external sources to downstream products.</p>
       </div>
 
       <!-- Pipeline Summary -->
@@ -893,7 +954,7 @@ Enriched on BudgetSubmitted event when routing to platform.budget.out</pre>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <button class="btn" onclick="econValidate()">✓ Validate pending facts</button>
           <button class="btn" onclick="econPublish()" style="background:#27ae60;color:#fff;">▶ Publish validated</button>
-          <button class="btn" onclick="econManualSync('erp')" style="background:#e67e22;color:#fff;">↻ Manual sync (ERP)</button>
+          <button class="btn" onclick="econManualSync('erp')" style="background:#e67e22;color:#fff;">↻ Full sync (ERP)</button>
         </div>
         <div id="econActionResult" style="margin-top:12px;font-size:13px;"></div>
       </div>
@@ -928,8 +989,8 @@ Enriched on BudgetSubmitted event when routing to platform.budget.out</pre>
       <div class="info-block" style="margin-top:16px">
         <div class="info-trigger" onclick="toggleInfo(this)">Show details ▸</div>
         <div class="info-content">
-          <div class="info-title">Master Data architecture</div>
-          <p>The Master Data layer (Economy Domain) is a <strong>source-agnostic staging layer</strong> that decouples the platform from specific ERP connectors.</p>
+          <div class="info-title">Data Operations architecture</div>
+          <p>The Data Operations layer (Economy Domain) is a <strong>source-agnostic staging layer</strong> that decouples the platform from specific ERP connectors.</p>
           <p><strong>Pipeline:</strong> External source → <code>econ_entities</code> / <code>econ_facts</code> → validate → publish → Kafka → downstream products.</p>
           <p><strong>Tables:</strong> econ_entities, econ_entity_attributes, econ_attribute_defs, econ_relations, econ_facts, sync_state.</p>
           <p><strong>API:</strong> <code>/api/economy/entities</code>, <code>/api/economy/facts</code>, <code>/api/economy/relations</code>, <code>/api/economy/sync-state</code></p>
@@ -1228,7 +1289,7 @@ Fördelar:
           <div class="form-group"><label>Username</label><input type="text" id="scimUsername" placeholder="new.user" style="width:120px"></div>
           <div class="form-group"><label>Display Name</label><input type="text" id="scimName" placeholder="New User" style="width:140px"></div>
           <div class="form-group"><label>Email</label><input type="text" id="scimEmail" placeholder="new@example.com" style="width:160px"></div>
-          <div class="form-group"><label>Groups</label><input type="text" id="scimGroups" placeholder="controllers, prod_a" style="width:160px"></div>
+          <div class="form-group"><label>Groups</label><input type="text" id="scimGroups" placeholder="role:editor, product:prod_a, org:OU-100" style="width:260px"></div>
           <button class="btn btn-primary btn-sm" onclick="provisionScimUser()">▶ Provision via SCIM</button>
           <span id="scimStatus" style="font-size:12px;color:#888;"></span>
         </div>
@@ -1260,9 +1321,21 @@ Fördelar:
     "userName": "new.user",
     "displayName": "New User",
     "emails": [{ "value": "new@example.com", "primary": true }],
-    "groups": [{ "display": "controllers" }],
+    "groups": [
+      { "display": "role:editor" },
+      { "display": "product:prod_a" },
+      { "display": "product:prod_b" },
+      { "display": "org:OU-100" },
+      { "display": "controllers" }
+    ],
     "active": true
   }
+
+Group claim mapping (automatic):
+  "role:X"    → sets role = X
+  "product:X" → adds X to products list (first = primary)
+  "org:X"     → sets org_unit = X
+  other       → stored as plain group name
 
 Update (IdP → Platform):
   PATCH /api/scim/v2/Users/:externalId
@@ -1319,6 +1392,363 @@ In production:
     </div>
   </div>
 
+  <!-- --------------------------------------------------------------- -->
+  <!-- TAB: POC & PRODUCTION NOTES -->
+  <!-- --------------------------------------------------------------- -->
+  <div class="tab-panel" id="tab-notes">
+    <div class="container" style="max-width:860px">
+
+      <!-- Sub-tab toggle -->
+      <div style="display:flex;gap:0;margin-bottom:24px;border-bottom:2px solid #e8e9ef">
+        <button class="notes-subtab active" id="subtab-arch" onclick="switchNotesSubtab('arch')" style="padding:8px 20px;font-size:12px;font-weight:600;color:#1f64a4;background:none;border:none;border-bottom:2px solid #1f64a4;margin-bottom:-2px;cursor:pointer;font-family:inherit">Architecture Vision</button>
+        <button class="notes-subtab" id="subtab-prod" onclick="switchNotesSubtab('prod')" style="padding:8px 20px;font-size:12px;font-weight:600;color:#888;background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:inherit">Production Notes</button>
+      </div>
+
+      <!-- ═══ SUB-TAB: Architecture Vision ═══ -->
+      <div id="notes-arch">
+
+        <div style="margin-bottom:28px">
+          <h2 style="font-size:18px;font-weight:700;color:#0d1822;margin:0 0 6px 0">Architecture Vision</h2>
+          <p style="color:#888;font-size:13px;margin:0">The foundational thinking behind this POC and the platform model it explores.</p>
+        </div>
+
+        <!-- Architecture diagram -->
+        <div class="card" style="margin-bottom:20px;text-align:center;padding:20px">
+          <img src="/architecture.png" alt="Platform architecture overview" style="max-width:100%;height:auto;border-radius:4px">
+        </div>
+
+        <!-- Core philosophy -->
+        <div class="card" style="margin-bottom:20px;border-left:3px solid #1f64a4">
+          <h3 style="font-size:14px;font-weight:700;margin:0 0 12px 0;color:#1f64a4">Core Philosophy</h3>
+          <p style="font-size:13px;color:#555;line-height:1.7;margin:0">
+            A loosely coupled, event-driven platform model where shared cross-product capabilities are centralized in a <strong>platform layer</strong>, while individual products remain <strong>autonomous</strong>, independently deployable, and free to evolve their own internal models.
+          </p>
+        </div>
+
+        <!-- Platform layer -->
+        <div class="card" style="margin-bottom:20px">
+          <h3 style="font-size:14px;font-weight:700;margin:0 0 12px 0">The Platform Layer</h3>
+          <p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 12px 0">
+            The platform centralizes capabilities that would otherwise be duplicated across products:
+          </p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+            <div style="padding:10px 14px;background:#f8f9fb;border-radius:4px;border:1px solid #e8e9ef">
+              <div style="font-size:11px;font-weight:700;color:#1f64a4;text-transform:uppercase;letter-spacing:0.3px;margin-bottom:4px">Identity & Access</div>
+              <div style="font-size:12px;color:#555;line-height:1.5">Centralized user lifecycle, SSO, SCIM provisioning, and role-based access across all products.</div>
+            </div>
+            <div style="padding:10px 14px;background:#f8f9fb;border-radius:4px;border:1px solid #e8e9ef">
+              <div style="font-size:11px;font-weight:700;color:#1f64a4;text-transform:uppercase;letter-spacing:0.3px;margin-bottom:4px">Master Data & Mappings</div>
+              <div style="font-size:12px;color:#555;line-height:1.5">Shared entity registry and canonical ID mappings. Each product keeps its own identifiers, the platform bridges them.</div>
+            </div>
+            <div style="padding:10px 14px;background:#f8f9fb;border-radius:4px;border:1px solid #e8e9ef">
+              <div style="font-size:11px;font-weight:700;color:#1f64a4;text-transform:uppercase;letter-spacing:0.3px;margin-bottom:4px">Integration Layer</div>
+              <div style="font-size:12px;color:#555;line-height:1.5">Unified interface toward external domains and source systems (ERP, HR, CRM). Normalizes data into consistent domain models.</div>
+            </div>
+            <div style="padding:10px 14px;background:#f8f9fb;border-radius:4px;border:1px solid #e8e9ef">
+              <div style="font-size:11px;font-weight:700;color:#1f64a4;text-transform:uppercase;letter-spacing:0.3px;margin-bottom:4px">Event-Driven APIs</div>
+              <div style="font-size:12px;color:#555;line-height:1.5">Ingress/egress event bus for asynchronous communication. Products subscribe to domain events rather than calling each other.</div>
+            </div>
+            <div style="padding:10px 14px;background:#f8f9fb;border-radius:4px;border:1px solid #e8e9ef">
+              <div style="font-size:11px;font-weight:700;color:#1f64a4;text-transform:uppercase;letter-spacing:0.3px;margin-bottom:4px">Observability & Governance</div>
+              <div style="font-size:12px;color:#555;line-height:1.5">Shared tracing, audit logging, configuration management, and operational monitoring across the product portfolio.</div>
+            </div>
+            <div style="padding:10px 14px;background:#f8f9fb;border-radius:4px;border:1px solid #e8e9ef">
+              <div style="font-size:11px;font-weight:700;color:#1f64a4;text-transform:uppercase;letter-spacing:0.3px;margin-bottom:4px">Shared UX Shell</div>
+              <div style="font-size:12px;color:#555;line-height:1.5">Injected navigation, inbox, and branding that creates a unified experience across independent product frontends.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Domain model -->
+        <div class="card" style="margin-bottom:20px">
+          <h3 style="font-size:14px;font-weight:700;margin:0 0 12px 0">Domain-Oriented Integration</h3>
+          <p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 10px 0">
+            The platform acts as a unified interaction layer toward domains such as <strong>Finance</strong>, <strong>HR</strong>, and <strong>CRM</strong>. Data originating from multiple upstream systems is normalized and exposed through consistent domain-oriented models and contracts.
+          </p>
+          <p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 10px 0">
+            External domains remain <strong>systems of record</strong> and publish business entities and events into the platform. Products consume these events, maintain their own internal identifiers and relations, and stay decoupled from each other through shared contracts and event-driven communication.
+          </p>
+          <div style="background:#f8f9fb;border:1px solid #e8e9ef;border-radius:4px;padding:14px 18px;font-size:12px;color:#555;line-height:1.8;font-family:'Consolas','Courier New',monospace">
+            <div style="text-align:center;margin-bottom:6px;color:#888">Data flow</div>
+            <div style="text-align:center">
+              ERP / HR / CRM &nbsp;→&nbsp; <strong style="color:#1f64a4">Platform</strong> (normalize + route) &nbsp;→&nbsp; Product A, Product B, ...
+            </div>
+            <div style="text-align:center;margin-top:4px">
+              Product A &nbsp;→&nbsp; <strong style="color:#1f64a4">Platform</strong> (event bus) &nbsp;→&nbsp; Product B
+            </div>
+          </div>
+        </div>
+
+        <!-- Product autonomy -->
+        <div class="card" style="margin-bottom:20px">
+          <h3 style="font-size:14px;font-weight:700;margin:0 0 12px 0">Product Autonomy</h3>
+          <p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 10px 0">
+            Each product in the portfolio is a self-contained unit with its own:
+          </p>
+          <ul style="font-size:13px;color:#555;line-height:1.8;margin:0 0 10px 0;padding-left:20px">
+            <li><strong>Database and data model</strong> — no shared schemas between products.</li>
+            <li><strong>Technology stack</strong> — free to choose frameworks, languages, and storage.</li>
+            <li><strong>Deployment lifecycle</strong> — independent releases, scaling, and versioning.</li>
+            <li><strong>Internal identifiers</strong> — products don't need to know each other's IDs. The platform provides entity mapping.</li>
+          </ul>
+          <p style="font-size:13px;color:#555;line-height:1.6;margin:0">
+            Products communicate exclusively through the platform's event bus and shared contracts — never through direct database access or synchronous inter-product calls.
+          </p>
+        </div>
+
+        <!-- What this enables -->
+        <div class="card" style="margin-bottom:20px;border-left:3px solid #2e7d32">
+          <h3 style="font-size:14px;font-weight:700;margin:0 0 12px 0;color:#2e7d32">What This Approach Enables</h3>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div style="font-size:13px;color:#555;padding:6px 0;display:flex;align-items:flex-start;gap:8px">
+              <span style="color:#2e7d32;font-weight:700;flex-shrink:0">&#x2714;</span>
+              <span><strong>Strong domain ownership</strong> — each team owns its product's data and logic completely.</span>
+            </div>
+            <div style="font-size:13px;color:#555;padding:6px 0;display:flex;align-items:flex-start;gap:8px">
+              <span style="color:#2e7d32;font-weight:700;flex-shrink:0">&#x2714;</span>
+              <span><strong>Scalable integrations</strong> — new source systems added at the platform level, not per product.</span>
+            </div>
+            <div style="font-size:13px;color:#555;padding:6px 0;display:flex;align-items:flex-start;gap:8px">
+              <span style="color:#2e7d32;font-weight:700;flex-shrink:0">&#x2714;</span>
+              <span><strong>Loose coupling</strong> — products evolve independently without breaking each other.</span>
+            </div>
+            <div style="font-size:13px;color:#555;padding:6px 0;display:flex;align-items:flex-start;gap:8px">
+              <span style="color:#2e7d32;font-weight:700;flex-shrink:0">&#x2714;</span>
+              <span><strong>Easier onboarding</strong> — new products integrate via standard event contracts, not custom APIs.</span>
+            </div>
+            <div style="font-size:13px;color:#555;padding:6px 0;display:flex;align-items:flex-start;gap:8px">
+              <span style="color:#2e7d32;font-weight:700;flex-shrink:0">&#x2714;</span>
+              <span><strong>Consistent data handling</strong> — cross-domain mappings managed centrally, not scattered across products.</span>
+            </div>
+            <div style="font-size:13px;color:#555;padding:6px 0;display:flex;align-items:flex-start;gap:8px">
+              <span style="color:#2e7d32;font-weight:700;flex-shrink:0">&#x2714;</span>
+              <span><strong>Independent evolution</strong> — products and integrations evolve on their own timelines.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- POC scope -->
+        <div class="card" style="margin-bottom:20px">
+          <h3 style="font-size:14px;font-weight:700;margin:0 0 12px 0">POC Scope</h3>
+          <p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 10px 0">
+            This proof of concept implements a vertical slice through the architecture to validate the model end-to-end:
+          </p>
+          <ul style="font-size:13px;color:#555;line-height:1.8;margin:0;padding-left:20px">
+            <li><strong>7 Docker containers</strong> — platform, 2 products, Kafka (Redpanda), console, Jaeger, ERP mock.</li>
+            <li><strong>Event-driven data flow</strong> — ERP publishes projects/accounts → platform routes to products via Kafka.</li>
+            <li><strong>Shared shell</strong> — injected header with navigation, inbox, and pin/unpin across all products.</li>
+            <li><strong>SCIM provisioning</strong> — automated user lifecycle from IdP with group-to-role mapping.</li>
+            <li><strong>Budget workflow</strong> — full create → edit → submit → publish → cross-product sync lifecycle.</li>
+            <li><strong>Process management</strong> — assignment matrix, task inbox, status tracking.</li>
+            <li><strong>External tools</strong> — configurable third-party links in the unified navigation.</li>
+          </ul>
+        </div>
+
+      </div>
+
+      <!-- ═══ SUB-TAB: Production Notes ═══ -->
+      <div id="notes-prod" style="display:none">
+
+      <div style="margin-bottom:32px">
+        <h2 style="font-size:18px;font-weight:700;color:#0d1822;margin:0 0 6px 0">Production Notes</h2>
+        <p style="color:#888;font-size:13px;margin:0">Shortcuts taken in this POC and considerations for a real deployment.</p>
+      </div>
+
+      <!-- Multi-tenancy -->
+      <div class="card" style="margin-bottom:20px">
+        <h3 style="font-size:14px;font-weight:700;margin:0 0 12px 0">Multi-tenancy</h3>
+        <p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 10px 0">
+          <strong>POC:</strong> Single-tenant — one database, one Kafka cluster, no tenant isolation.
+        </p>
+        <p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 10px 0">
+          <strong>Production approach:</strong> The platform layer (shell, router, SCIM gateway) can be shared across tenants since it's largely stateless. Key requirements:
+        </p>
+        <ul style="font-size:13px;color:#555;line-height:1.8;margin:0 0 10px 0;padding-left:20px">
+          <li><strong>Tenant-ID propagation</strong> — every request carries a tenant identifier (JWT claim or header), validated at the gateway. Misssing this on a single query = data leak.</li>
+          <li><strong>Kafka topic isolation</strong> — prefix all topics with tenant ID (<code>tenant-a.projects.in</code>) and enforce ACLs so consumers only read their own topics.</li>
+          <li><strong>Config DB</strong> — shared database with a <code>tenant_id</code> column + Row-Level Security (Postgres RLS) so the app can never accidentally cross tenants.</li>
+          <li><strong>Product instances</strong> — always per-tenant (separate pods/DBs). This is already how the POC works with isolated containers.</li>
+          <li><strong>Dedicated tenant option</strong> — some customers (banking, healthcare) require fully isolated infrastructure. Support this as a deployment variant using the same codebase.</li>
+        </ul>
+      </div>
+
+      <!-- Authentication & Authorization -->
+      <div class="card" style="margin-bottom:20px">
+        <h3 style="font-size:14px;font-weight:700;margin:0 0 12px 0">Authentication & Authorization</h3>
+        <p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 10px 0">
+          <strong>POC:</strong> Simplified login with plaintext passwords in SQLite. SCIM provisioning works but tokens aren't validated cryptographically.
+        </p>
+        <ul style="font-size:13px;color:#555;line-height:1.8;margin:0 0 10px 0;padding-left:20px">
+          <li><strong>Real SSO</strong> — OpenID Connect with the customer's IdP (Entra ID, Okta, etc.). Platform issues a signed JWT after IdP authentication.</li>
+          <li><strong>Token validation</strong> — products validate JWT signature via JWKS endpoint. No shared secrets in environment variables.</li>
+          <li><strong>SCIM bearer tokens</strong> — should be rotatable, scoped per tenant, stored hashed.</li>
+          <li><strong>Session management</strong> — token refresh, expiry handling, secure cookie flags (HttpOnly, SameSite, Secure).</li>
+          <li><strong>RBAC enforcement</strong> — the POC has roles but doesn't enforce them in product APIs. Production needs middleware that checks role claims on every endpoint.</li>
+        </ul>
+      </div>
+
+      <!-- Data & Event Pipeline -->
+      <div class="card" style="margin-bottom:20px">
+        <h3 style="font-size:14px;font-weight:700;margin:0 0 12px 0">Data & Event Pipeline</h3>
+        <p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 10px 0">
+          <strong>POC:</strong> Redpanda single-node, no replication, no persistence across restarts. Events are JSON with basic schema.
+        </p>
+        <ul style="font-size:13px;color:#555;line-height:1.8;margin:0 0 10px 0;padding-left:20px">
+          <li><strong>Schema registry</strong> — enforce event schemas (Avro/Protobuf) so producers can't send malformed data. Breaking changes require schema evolution.</li>
+          <li><strong>Dead letter queues</strong> — failed events should go to a DLQ for inspection, not be silently dropped.</li>
+          <li><strong>Delivery guarantees</strong> — the POC uses at-least-once with idempotency keys. Production should formalize this with transactional producers and exactly-once semantics where critical.</li>
+          <li><strong>Backpressure & rate limiting</strong> — protect downstream products from event floods (noisy neighbor problem).</li>
+          <li><strong>Event versioning</strong> — events need a <code>version</code> field and consumers must handle old versions gracefully.</li>
+        </ul>
+      </div>
+
+      <!-- Shell & Micro-frontend -->
+      <div class="card" style="margin-bottom:20px">
+        <h3 style="font-size:14px;font-weight:700;margin:0 0 12px 0">Shell & Micro-frontend Architecture</h3>
+        <p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 10px 0">
+          <strong>POC:</strong> Shell injected via <code>&lt;script&gt;</code> tag. Products are separate HTML apps loaded in full-page navigations.
+        </p>
+        <ul style="font-size:13px;color:#555;line-height:1.8;margin:0 0 10px 0;padding-left:20px">
+          <li><strong>Module federation</strong> — consider Webpack Module Federation or import maps for seamless product loading without full-page reloads.</li>
+          <li><strong>Shell versioning</strong> — the CDN-served shell.js needs cache-busting and rollback capability. A broken shell breaks all products.</li>
+          <li><strong>CSS isolation</strong> — shadow DOM or strict naming conventions to prevent style leaks between products and shell.</li>
+          <li><strong>Cross-product communication</strong> — the POC uses page navigation. Production may need a lightweight event bus (postMessage / custom events) for in-page coordination.</li>
+          <li><strong>Performance</strong> — shell.js should be < 20KB gzipped. Currently it's small, but monitor as features grow.</li>
+        </ul>
+      </div>
+
+      <!-- Infrastructure -->
+      <div class="card" style="margin-bottom:20px">
+        <h3 style="font-size:14px;font-weight:700;margin:0 0 12px 0">Infrastructure & Operations</h3>
+        <p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 10px 0">
+          <strong>POC:</strong> Docker Compose on a single machine. SQLite in-memory databases. No monitoring, no backups, no TLS.
+        </p>
+        <ul style="font-size:13px;color:#555;line-height:1.8;margin:0 0 10px 0;padding-left:20px">
+          <li><strong>Orchestration</strong> — Kubernetes with Helm charts per product. Platform services as a shared namespace, product instances as tenant-scoped namespaces.</li>
+          <li><strong>Database</strong> — PostgreSQL (or managed equivalent) with connection pooling, backups, and point-in-time recovery.</li>
+          <li><strong>TLS everywhere</strong> — not just ingress; mTLS between services (service mesh like Istio or Linkerd).</li>
+          <li><strong>Observability</strong> — the POC has Jaeger for tracing. Add structured logging (ELK/Loki), metrics (Prometheus/Grafana), and alerting.</li>
+          <li><strong>Audit logging</strong> — who changed what, when. Required for compliance. Per-tenant audit streams.</li>
+          <li><strong>Secrets management</strong> — Vault or cloud KMS for API keys, DB credentials, encryption keys. Not environment variables.</li>
+        </ul>
+      </div>
+
+      <!-- Data Privacy -->
+      <div class="card" style="margin-bottom:20px">
+        <h3 style="font-size:14px;font-weight:700;margin:0 0 12px 0">Data Privacy & Compliance</h3>
+        <p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 10px 0">
+          <strong>POC:</strong> No encryption at rest, no data classification, no retention policies.
+        </p>
+        <ul style="font-size:13px;color:#555;line-height:1.8;margin:0 0 10px 0;padding-left:20px">
+          <li><strong>Encryption at rest</strong> — all databases and Kafka logs encrypted. Per-tenant keys (envelope encryption) so one key compromise doesn't affect all tenants.</li>
+          <li><strong>GDPR</strong> — right to deletion, data portability, consent tracking. Platform needs a "delete tenant" operation that cascades across all products.</li>
+          <li><strong>Data residency</strong> — some customers require data in specific regions. Multi-region deployment support.</li>
+          <li><strong>PII handling</strong> — user data (names, emails) must be identified and treated differently from operational data. Minimize PII in event payloads.</li>
+        </ul>
+      </div>
+
+      <!-- Platform Admin: Customer vs Operations -->
+      <div class="card" style="margin-bottom:20px">
+        <h3 style="font-size:14px;font-weight:700;margin:0 0 12px 0">Platform Admin: Customer vs Operations</h3>
+        <p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 10px 0">
+          <strong>POC:</strong> All administration in a single portal. No separation between what the customer's admin does and what the vendor's operations team does.
+        </p>
+        <p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 10px 0">
+          <strong>Production approach:</strong> Two distinct admin experiences, potentially role-gated within the same app or as separate portals:
+        </p>
+        <table style="width:100%;font-size:12px;border-collapse:collapse;margin:0 0 12px 0">
+          <thead>
+            <tr style="border-bottom:2px solid #e0e0e0;text-align:left">
+              <th style="padding:6px 8px;color:#888;font-weight:600"></th>
+              <th style="padding:6px 8px;color:#888;font-weight:600">Tenant Admin (customer)</th>
+              <th style="padding:6px 8px;color:#888;font-weight:600">Ops Portal (vendor)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-bottom:1px solid #f0f0f0">
+              <td style="padding:6px 8px;font-weight:600;color:#555">Who</td>
+              <td style="padding:6px 8px;color:#555">Customer's own admins</td>
+              <td style="padding:6px 8px;color:#555">Internal operations / SRE team</td>
+            </tr>
+            <tr style="border-bottom:1px solid #f0f0f0">
+              <td style="padding:6px 8px;font-weight:600;color:#555">Scope</td>
+              <td style="padding:6px 8px;color:#555">External tools, users &amp; roles, branding, notifications</td>
+              <td style="padding:6px 8px;color:#555">Tenant provisioning, product setup, data routes, Kafka topics, monitoring</td>
+            </tr>
+            <tr style="border-bottom:1px solid #f0f0f0">
+              <td style="padding:6px 8px;font-weight:600;color:#555">POC tabs</td>
+              <td style="padding:6px 8px;color:#555">External Tools, Identity &amp; Access</td>
+              <td style="padding:6px 8px;color:#555">Initial Setup, Data Operations, Operations, Events</td>
+            </tr>
+            <tr>
+              <td style="padding:6px 8px;font-weight:600;color:#555">Access</td>
+              <td style="padding:6px 8px;color:#555">Normal login with admin role</td>
+              <td style="padding:6px 8px;color:#555">Separate portal, VPN/IP-restricted, or super-admin role</td>
+            </tr>
+          </tbody>
+        </table>
+        <p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 4px 0">
+          <strong>Implementation options:</strong>
+        </p>
+        <ul style="font-size:13px;color:#555;line-height:1.8;margin:0;padding-left:20px">
+          <li><strong>Role-gated tabs</strong> — same admin app, but tabs/sections shown based on role claims. Simplest to build and maintain.</li>
+          <li><strong>Separate portals</strong> — distinct deployments for customer admin vs ops. Better security boundary but more to maintain.</li>
+          <li><strong>Hybrid</strong> — single codebase, ops-portal deployed on internal network with elevated role scope.</li>
+        </ul>
+      </div>
+
+      <!-- Product Configuration from Platform -->
+      <div class="card" style="margin-bottom:20px">
+        <h3 style="font-size:14px;font-weight:700;margin:0 0 12px 0">Product Configuration via Platform</h3>
+        <p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 10px 0">
+          <strong>Today:</strong> Products are configured via YAML files deployed alongside the application. Changing a setting requires a code change, PR, and redeploy.
+        </p>
+        <p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 10px 0">
+          <strong>Opportunity:</strong> The platform can serve as a central configuration plane for "moving parts" — settings that change more often than code deploys.
+        </p>
+        <p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 6px 0"><strong>Candidates for platform-managed config:</strong></p>
+        <ul style="font-size:13px;color:#555;line-height:1.8;margin:0 0 12px 0;padding-left:20px">
+          <li><strong>Feature flags</strong> — toggle features per tenant without redeploying the product.</li>
+          <li><strong>Display settings</strong> — currency format, decimal precision, fiscal year start, language.</li>
+          <li><strong>Data mapping rules</strong> — which ERP fields map to which product fields. Already partially in the platform router.</li>
+          <li><strong>Notification templates</strong> — email/in-app notification content and triggers.</li>
+          <li><strong>Workflow rules</strong> — approval thresholds, budget lock dates, submission deadlines.</li>
+          <li><strong>Integration credentials</strong> — API keys for external systems (stored encrypted).</li>
+        </ul>
+        <p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 6px 0"><strong>Should stay in YAML / code:</strong></p>
+        <ul style="font-size:13px;color:#555;line-height:1.8;margin:0 0 12px 0;padding-left:20px">
+          <li><strong>Schema definitions</strong> — database migrations, event schemas. Too risky to change at runtime.</li>
+          <li><strong>Infrastructure config</strong> — resource limits, replica counts, network policies. Managed by IaC (Terraform/Helm).</li>
+          <li><strong>Security policies</strong> — CORS origins, CSP headers, auth providers. Change requires deliberate review.</li>
+        </ul>
+        <p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 6px 0"><strong>Architecture pattern:</strong></p>
+        <ul style="font-size:13px;color:#555;line-height:1.8;margin:0;padding-left:20px">
+          <li>Platform exposes a <strong>Config API</strong> — products fetch their config at startup and poll/subscribe for changes.</li>
+          <li><strong>Config hierarchy</strong> — defaults → product-level → tenant-level overrides. Tenant admin can change their tier, ops can change defaults.</li>
+          <li><strong>Audit trail</strong> — every config change logged with who, when, old value, new value.</li>
+          <li><strong>Validation</strong> — platform validates config against a product-defined JSON schema before accepting changes. Prevents broken configs.</li>
+          <li><strong>Rollback</strong> — config versioned so any change can be instantly reverted.</li>
+        </ul>
+      </div>
+
+      <!-- What the POC demonstrates well -->
+      <div class="card" style="margin-bottom:20px;border-left:3px solid #2e7d32">
+        <h3 style="font-size:14px;font-weight:700;margin:0 0 12px 0;color:#2e7d32">What This POC Validates</h3>
+        <ul style="font-size:13px;color:#555;line-height:1.8;margin:0;padding-left:20px">
+          <li><strong>Shared shell pattern</strong> — injected header with navigation, inbox, and pin/unpin works well across independent products.</li>
+          <li><strong>Event-driven data routing</strong> — ERP data flows through the platform to multiple products via Kafka with canonical mapping.</li>
+          <li><strong>SCIM provisioning</strong> — automated user lifecycle from IdP, including group-to-role mapping.</li>
+          <li><strong>Product independence</strong> — each product has its own tech stack, database, and deployment. The platform doesn't dictate internals.</li>
+          <li><strong>External tools integration</strong> — lightweight linking to third-party tools in the unified navigation.</li>
+          <li><strong>Admin as a product</strong> — platform administration through the same UX patterns as any other product.</li>
+        </ul>
+      </div>
+
+      </div><!-- end notes-prod -->
+
+    </div>
+  </div>
+
   <!-- JAVASCRIPT -->
   <script>
     var API = '';
@@ -1343,13 +1773,25 @@ In production:
       document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
       document.getElementById('tab-' + tabId).classList.add('active');
       var btns = document.querySelectorAll('.tab-btn');
-      var tabMap = ['setup', 'users', 'economy', 'operations', 'events', 'demo'];
+      var tabMap = ['setup', 'users', 'economy', 'operations', 'events', 'demo', 'notes'];
       var idx = tabMap.indexOf(tabId);
       if (idx >= 0 && btns[idx]) btns[idx].classList.add('active');
       localStorage.setItem('activeTab', tabId);
     }
     var savedTab = localStorage.getItem('activeTab');
     if (savedTab) setTimeout(function() { switchTab(savedTab); }, 0);
+
+    // Notes sub-tab switching
+    function switchNotesSubtab(id) {
+      document.getElementById('notes-arch').style.display = id === 'arch' ? '' : 'none';
+      document.getElementById('notes-prod').style.display = id === 'prod' ? '' : 'none';
+      var archBtn = document.getElementById('subtab-arch');
+      var prodBtn = document.getElementById('subtab-prod');
+      archBtn.style.color = id === 'arch' ? '#1f64a4' : '#888';
+      archBtn.style.borderBottomColor = id === 'arch' ? '#1f64a4' : 'transparent';
+      prodBtn.style.color = id === 'prod' ? '#1f64a4' : '#888';
+      prodBtn.style.borderBottomColor = id === 'prod' ? '#1f64a4' : 'transparent';
+    }
 
     // Info-block collapse
     function toggleInfo(trigger) {
@@ -1385,7 +1827,10 @@ In production:
       var toast = document.getElementById('toast');
       if (!toast) { toast = document.createElement('div'); toast.id = 'toast'; document.body.appendChild(toast); }
       toast.className = 'toast toast-' + type;
-      toast.textContent = (type === 'success' ? '✅ ' : '❌ ') + msg;
+      var icon = type === 'success'
+        ? '<svg class="toast-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2e7d32" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>'
+        : '<svg class="toast-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#c62828" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
+      toast.innerHTML = icon + '<span>' + msg + '</span>';
       requestAnimationFrame(function() {
         toast.classList.add('show');
         setTimeout(function() { toast.classList.remove('show'); }, 4000);
@@ -1966,7 +2411,7 @@ In production:
       try {
         cachedDims = await (await fetch(API + '/api/shared-dimensions')).json();
         var body = document.getElementById('sharedDimsBody');
-        if (!cachedDims.length) { body.innerHTML = '<tr><td colspan="7" style="color:#999;text-align:center;">No dimensions registered yet</td></tr>'; return; }
+        if (!cachedDims.length) { body.innerHTML = '<tr><td colspan="8" style="color:#999;text-align:center;">No dimensions registered yet</td></tr>'; return; }
         body.innerHTML = cachedDims.map(function(d) {
           var participants = (d.participants || []).map(function(p) {
             return '<span class="tag tag-' + p.role + '" style="margin:1px;cursor:default" onclick="event.stopPropagation();confirmDeleteParticipant(\'' + d.name + '\',\'' + p.product + '\')" title="Click to remove">' + p.product + ' (' + p.role + ') &times;</span>';
@@ -1981,12 +2426,14 @@ In production:
             '<td><span class="tag tag-' + d.taxonomy_type + '">' + d.taxonomy_type + '</span></td>' +
             '<td>' + d.code_count + (d.hierarchy_count > 0 ? ' <span style="color:#888;font-size:0.85em">(' + d.hierarchy_count + ')</span>' : '') + '</td>' +
             '<td>' + participants + '</td>' +
+            '<td><button onclick="event.stopPropagation();confirmDeleteDimension(\'' + d.name + '\')" style="background:none;border:none;color:#c62828;cursor:pointer;font-size:14px;padding:2px 6px;" title="Remove dimension">&times;</button></td>' +
           '</tr>';
         }).join('');
         if (selectedDimension) showDimDetail(selectedDimension, true);
         // Update setup checklist + form dropdowns
         updateSetupChecklist(cachedDims, cachedModels, cachedRouting);
         populateFormSelects();
+        populateEconDimSelect();
       } catch(e) {}
     }
 
@@ -2010,7 +2457,7 @@ In production:
         // === Unified member table ===
         var attrHeaders = attrDefs.map(function(a) { return '<th>' + a.attribute_label + '</th>'; }).join('');
         var systemHeaders = systems.map(function(s) {
-          return '<th><span class="tag tag-' + (s.startsWith('prod') ? s : 'erp') + '" style="font-size:0.85em">' + s + '</span><br><span style="font-size:10px;color:#999;">lokal kod / source key</span></th>';
+          return '<th><span class="tag tag-' + (s.startsWith('prod') ? s : 'erp') + '" style="font-size:0.85em">' + s + '</span><br><span style="font-size:10px;color:#999;">lokal mappning</span></th>';
         }).join('');
         var totalCols = 3 + attrDefs.length + systems.length; // code + name + actions + attrs + systems
 
@@ -2022,9 +2469,8 @@ In production:
 
           var sysCells = systems.map(function(s) {
             var xref = m.xrefs.find(function(x) { return x.product === s; });
-            if (!xref) return '<td style="color:#ccc;font-size:11px;">\u2014 (kanonisk)</td>';
-            var srcKey = xref.source_key ? '<br><span style="font-size:10px;color:#999;" title="Source key">\uD83D\uDD11 ' + xref.source_key + '</span>' : '';
-            return '<td><code style="font-size:12px;">' + xref.local_code + '</code>' + srcKey + '</td>';
+            if (!xref) return '<td><span style="color:#2e7d32;font-size:11px;">\u2714 direkt</span></td>';
+            return '<td><code style="font-size:12px;">' + xref.local_code + '</code></td>';
           }).join('');
 
           var esc = function(s) { return s.replace(/'/g, "\\'").replace(/"/g, '&quot;'); };
@@ -2085,23 +2531,22 @@ In production:
           '</div>' +
         '</div>';
 
-        // === Mapping form ===
+        // === Mapping form (for products with a different local code) ===
         var mapForm = '<div style="margin-top:12px;border-top:1px solid #eee;padding-top:12px;">' +
-          '<h4 style="font-size:12px;color:#666;margin-bottom:6px;">+ Add Code Mapping</h4>' +
+          '<h4 style="font-size:12px;color:#666;margin-bottom:6px;">+ Add Local Mapping <span style="font-weight:normal;color:#999">(only if a product uses a different local code)</span></h4>' +
           '<div class="form-row" style="margin-bottom:0">' +
             '<div class="form-group"><label>System</label><input type="text" id="mapProduct" placeholder="prod_a" style="width:90px"></div>' +
             '<div class="form-group"><label>Local Code</label><input type="text" id="mapLocal" placeholder="BUD-4010" style="width:100px"></div>' +
-            '<div class="form-group"><label>Canonical</label><input type="text" id="mapCanonical" placeholder="4010" style="width:80px"></div>' +
-            '<div class="form-group"><label>Source key</label><input type="text" id="mapSourceKey" placeholder="GL-ACC-42" style="width:110px"></div>' +
+            '<div class="form-group"><label>Shared Code</label><input type="text" id="mapCanonical" placeholder="4010" style="width:80px"></div>' +
             '<button class="btn btn-primary btn-sm" onclick="addCodeMapping(\'' + name + '\')">Add</button>' +
           '</div>' +
         '</div>';
 
         panel.innerHTML = '<div class="dim-detail">' +
           '<h3>' + name + ' \u2014 Members <span style="font-weight:normal;font-size:12px;color:#888">(' + members.length + ' codes)</span> <button class="btn btn-sm" style="float:right;background:#eee;color:#555" onclick="closeDimDetail()">Close</button></h3>' +
-          '<p style="font-size:12px;color:#888;margin:0 0 8px;">Canonical codes with attributes and cross-references per connected system.</p>' +
+          '<p style="font-size:12px;color:#888;margin:0 0 8px;">Shared codes from the Economy Domain. Products use these directly unless they have a local mapping.</p>' +
           '<div style="overflow-x:auto;">' +
-            '<table><thead><tr><th>Canonical Code</th><th>Name</th>' + attrHeaders + systemHeaders + '<th></th></tr></thead><tbody>' + membersHtml + '</tbody></table>' +
+            '<table><thead><tr><th>Code</th><th>Name</th>' + attrHeaders + systemHeaders + '<th></th></tr></thead><tbody>' + membersHtml + '</tbody></table>' +
           '</div>' +
           hierarchyHtml +
           addCodeForm +
@@ -2171,6 +2616,59 @@ In production:
       } catch(e) { showToast('Network error', 'error'); }
     }
 
+    // Auto-fill label when selecting a dimension from economy domain
+    function onDimNameChange() {
+      var sel = document.getElementById('dimName');
+      var opt = sel.options[sel.selectedIndex];
+      if (opt && opt.dataset.label) {
+        document.getElementById('dimLabel').value = opt.dataset.label;
+      }
+      if (opt && opt.dataset.owner) {
+        var ownerSel = document.getElementById('dimOwner');
+        ownerSel.value = opt.dataset.owner;
+      }
+    }
+
+    async function bulkActivateDimensions() {
+      var status = document.getElementById('bulkActivateStatus');
+      status.textContent = 'Activating...';
+      try {
+        var data = await (await fetch(API + '/api/shared-dimensions/bulk-activate', {
+          method: 'POST', credentials: 'include'
+        })).json();
+        if (data.ok) {
+          var msg = data.activated.length > 0
+            ? '\u2713 Activated: ' + data.activated.join(', ')
+            : 'All dimensions already activated';
+          status.innerHTML = '<span style="color:#2e7d32;">' + msg + '</span>';
+          showToast(msg);
+          refreshAll();
+          populateEconDimSelect();
+        } else {
+          status.innerHTML = '<span style="color:#c62828;">Error</span>';
+        }
+      } catch(e) {
+        status.innerHTML = '<span style="color:#c62828;">Network error</span>';
+      }
+    }
+
+    async function confirmDeleteDimension(name) {
+      if (!confirm('Remove shared dimension "' + name + '"?\n\nThis deletes the dimension, its participants and code mappings.\nEconomy Domain data is NOT affected.')) return;
+      try {
+        var data = await (await fetch(API + '/api/shared-dimensions/' + encodeURIComponent(name), {
+          method: 'DELETE', credentials: 'include'
+        })).json();
+        if (data.ok) {
+          showToast('Dimension removed: ' + name);
+          if (selectedDimension === name) selectedDimension = null;
+          refreshAll();
+          populateEconDimSelect();
+        } else {
+          showToast('Error removing dimension', 'error');
+        }
+      } catch(e) { showToast('Network error', 'error'); }
+    }
+
     async function addDimension() {
       var name = document.getElementById('dimName').value.trim();
       var label = document.getElementById('dimLabel').value.trim();
@@ -2186,6 +2684,7 @@ In production:
           showToast('Dimension registered: ' + name);
           document.getElementById('dimName').value = '';
           document.getElementById('dimLabel').value = '';
+          populateEconDimSelect();
           refreshAll();
         } else showToast('Error: ' + data.error, 'error');
       } catch(e) { showToast('Network error', 'error'); }
@@ -2214,6 +2713,62 @@ In production:
       { system_name: 'prod_a', label: 'Product A' },
       { system_name: 'prod_b', label: 'Product B' },
     ];
+
+    // Populate dimension name select from Economy Domain entities (exclude already-activated)
+    var _econDimensions = []; // cached from economy domain
+
+    async function populateEconDimSelect() {
+      try {
+        var entities = await (await fetch(API + '/api/economy/entities')).json();
+        var byDim = {};
+        entities.forEach(function(e) {
+          if (!byDim[e.dimension]) byDim[e.dimension] = { count: 0, source: e.source_system };
+          byDim[e.dimension].count++;
+          if (e.source_system) byDim[e.dimension].source = e.source_system;
+        });
+        _econDimensions = Object.keys(byDim).sort().map(function(d) {
+          // Generate a nice label: account → Account, org_unit → Org Unit
+          var label = d.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+          return { name: d, label: label, count: byDim[d].count, source: byDim[d].source };
+        });
+      } catch(e) { _econDimensions = []; }
+
+      var activatedSet = {};
+      cachedDims.forEach(function(d) { activatedSet[d.name] = true; });
+
+      var sel = document.getElementById('dimName');
+      if (!sel) return;
+      var prev = sel.value;
+      var available = _econDimensions.filter(function(d) { return !activatedSet[d.name]; });
+      sel.innerHTML = '<option value="">Select\u2026</option>' +
+        available.map(function(d) {
+          return '<option value="' + d.name + '" data-label="' + d.label + '" data-owner="' + d.source + '">' +
+            d.name + ' (' + d.count + ' codes)</option>';
+        }).join('');
+      if (prev) sel.value = prev;
+    }
+
+    async function syncFromErp() {
+      var btn = document.getElementById('btnSyncErp');
+      var status = document.getElementById('syncStatus');
+      btn.disabled = true; btn.textContent = 'Syncing...';
+      status.textContent = '';
+      try {
+        var res = await fetch(API + '/api/economy/sync/erp/run?scope=entities', { method: 'POST', credentials: 'include' });
+        var data = await res.json();
+        if (data.ok) {
+          status.innerHTML = '<span style="color:#2e7d32;">\u2713 Synced</span>';
+          showToast('Economy Domain synced from ERP');
+          refreshAll();
+          populateEconDimSelect();
+        } else {
+          status.innerHTML = '<span style="color:#c62828;">Error: ' + (data.error || 'Unknown') + '</span>';
+        }
+      } catch(e) {
+        status.innerHTML = '<span style="color:#c62828;">Network error</span>';
+      }
+      btn.disabled = false; btn.textContent = 'Sync Structure from ERP';
+    }
 
     function populateFormSelects() {
       var sysOpts = KNOWN_SYSTEMS.map(function(s) {
@@ -2267,6 +2822,10 @@ In production:
 
     // ── Connected Systems ──
 
+    var DOMAINS = [
+      { system_name: 'erp', display_name: 'Economy Domain (ERP)', system_type: 'erp', description: 'Chart of accounts, org units, projects, GL' },
+    ];
+
     var INTERNAL_PRODUCTS = [
       { system_name: 'prod_a', display_name: 'Product A', system_type: 'budgeting', task_url: 'http://localhost:3002' },
       { system_name: 'prod_b', display_name: 'Product B', system_type: 'analytics', task_url: 'http://localhost:3003' },
@@ -2276,6 +2835,20 @@ In production:
     async function loadSystems() {
       try {
         cachedSystemConfig = await (await fetch(API + '/api/system-config')).json();
+
+        // Render Economy Domain enable status inside its own card
+        var erpActive = cachedSystemConfig['erp'] && cachedSystemConfig['erp'].system_type;
+        var econBtn = document.getElementById('econDomainEnableBtn');
+        if (econBtn) {
+          econBtn.innerHTML = erpActive
+            ? '<span style="color:#1f64a4;font-weight:600;font-size:11px;">\u2713 Enabled</span>'
+            : '<button class="btn btn-sm" style="background:#1f64a4;color:#fff;border:none;font-size:11px;padding:3px 10px;border-radius:4px;cursor:pointer" onclick="enableDomain(\'erp\')">Enable</button>';
+          var wrapper = document.getElementById('econDomainStatus');
+          if (wrapper) {
+            wrapper.style.border = erpActive ? '2px solid #1f64a4' : '1px solid #ced4da';
+            wrapper.style.background = erpActive ? '#eef4fb' : '#fff';
+          }
+        }
 
         // Render internal product cards
         var intPanel = document.getElementById('internalProducts');
@@ -2337,6 +2910,19 @@ In production:
       } catch(e) { console.error('loadSystems error:', e); }
     }
 
+    async function enableDomain(systemName) {
+      var d = DOMAINS.find(function(dom) { return dom.system_name === systemName; });
+      if (!d) return;
+      try {
+        await fetch(API + '/api/system-config/' + systemName, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ system_type: d.system_type })
+        });
+        showToast(d.display_name + ' enabled');
+        refreshAll();
+      } catch(e) { showToast('Failed to enable ' + d.display_name, 'error'); }
+    }
+
     async function enableInternalProduct(systemName) {
       var ip = INTERNAL_PRODUCTS.find(function(p) { return p.system_name === systemName; });
       if (!ip) return;
@@ -2351,7 +2937,13 @@ In production:
     }
 
     async function confirmDeactivateSystem(system, label) {
-      if (!confirm('Deactivate "' + label + '"? This removes all config for this system.')) return;
+      var ok = await showConfirm({
+        title: 'Deactivate system?',
+        body: '<strong>' + label + '</strong> (' + system + ') will be deactivated and removed from the platform.',
+        impact: 'All configuration for this system (navigation, routing rules, dimension model entries) will be deleted. Data already delivered to products is not affected.',
+        action: 'Deactivate'
+      });
+      if (!ok) return;
       try {
         await fetch(API + '/api/systems/' + system, { method: 'DELETE' });
         showToast(label + ' deactivated');
@@ -2455,16 +3047,11 @@ In production:
         if (data.ok) { showToast('Updated: ' + name); cancelEditUser(); loadUsers(); }
         else { statusEl.textContent = 'Error: ' + (data.error || 'failed'); statusEl.style.color = '#c62828'; }
       } else {
-        // Create new via SCIM-like endpoint (internal)
-        var userId = 'user-' + String(Date.now()).slice(-6);
-        var body = { externalId: userId, userName: username, displayName: name, emails: email ? [{ value: email, primary: true }] : [], groups: [], active: true, password: password || 'demo' };
-        var res = await fetch(API + '/api/scim/v2/Users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        // Create new local user
+        var body = { username: username, name: name, email: email || undefined, role: role, org_unit: orgUnit || undefined, products: products, primary_product: products[0] || undefined, password: password || 'demo' };
+        var res = await fetch(API + '/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
         var data = await res.json();
-        if (data.user_id) {
-          // Set role, products, org via platform update
-          var updateBody = { role: role, org_unit: orgUnit || undefined, products: products, primary_product: products[0] || undefined };
-          await fetch(API + '/api/users/' + data.user_id, { method: 'PUT', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(updateBody) });
+        if (data.ok) {
           showToast('Created: ' + name + ' (password: ' + (password || 'demo') + ')'); cancelEditUser(); loadUsers();
         } else { statusEl.textContent = 'Error: ' + (data.error || 'failed'); statusEl.style.color = '#c62828'; }
       }
@@ -2510,7 +3097,13 @@ In production:
         });
         var data = await res.json();
         if (res.ok) {
-          statusEl.textContent = '\u2713 Provisioned: ' + data.user_id + ' (source: SCIM)';
+          var mapped = [];
+          if (data.role && data.role !== 'viewer') mapped.push('role=' + data.role);
+          var prods = Array.isArray(data.products) ? data.products : JSON.parse(data.products || '[]');
+          if (prods.length) mapped.push('products=' + prods.join(', '));
+          if (data.org_unit) mapped.push('org=' + data.org_unit);
+          var extra = mapped.length ? ' — ' + mapped.join(', ') : '';
+          statusEl.textContent = '\u2713 Provisioned: ' + data.user_id + ' (source: SCIM)' + extra;
           statusEl.style.color = '#2e7d32';
           showToast('SCIM provisioned: ' + name);
           // Clear form
@@ -2610,7 +3203,14 @@ In production:
       el.innerHTML = '<span style="color:#888;">Validating...</span>';
       try {
         const r = await fetch('/api/economy/facts/validate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).then(r => r.json());
-        el.innerHTML = '<span style="color:#27ae60;">✓ Validated: ' + r.validated + ', Rejected: ' + r.rejected + (r.errors?.length ? ' — ' + r.errors.slice(0, 5).join('; ') : '') + '</span>';
+        var parts = [];
+        if (r.validated > 0) parts.push(r.validated + ' validated now');
+        if (r.rejected > 0) parts.push(r.rejected + ' rejected');
+        if (r.already_validated > 0) parts.push(r.already_validated + ' ready to publish');
+        if (parts.length === 0 && r.already_validated === 0) parts.push('No facts staged yet');
+        var msg = parts.join(', ');
+        if (r.errors?.length) msg += ' — ' + r.errors.slice(0, 5).join('; ');
+        el.innerHTML = '<span style="color:#27ae60;">✓ ' + msg + '</span>';
         loadEconomyDomain();
       } catch (e) { el.innerHTML = '<span style="color:#e74c3c;">Validation failed: ' + e.message + '</span>'; }
     }
@@ -2629,7 +3229,7 @@ In production:
       const el = document.getElementById('econActionResult');
       el.innerHTML = '<span style="color:#888;">Syncing ' + source + '...</span>';
       try {
-        const r = await fetch('/api/economy/sync/' + source + '/run', { method: 'POST' }).then(r => r.json());
+        const r = await fetch('/api/economy/sync/' + source + '/run?scope=all', { method: 'POST' }).then(r => r.json());
         el.innerHTML = '<span style="color:#27ae60;">✓ Sync complete for ' + source + '</span>';
         loadEconomyDomain();
       } catch (e) { el.innerHTML = '<span style="color:#e74c3c;">Sync failed: ' + e.message + '</span>'; }
@@ -2655,12 +3255,119 @@ In production:
       } catch (e) { el.innerHTML = '<span style="color:#e74c3c;">Stop failed</span>'; }
     }
 
+    // ── External Tools ──
+    var editingToolId = null;
+
+    async function loadExternalTools() {
+      try {
+        var tools = await (await fetch(API + '/api/external-tools')).json();
+        var body = document.getElementById('extToolsBody');
+        if (!tools.length) {
+          body.innerHTML = '<tr><td colspan="4" style="color:#999;text-align:center;">No external tools</td></tr>';
+          return;
+        }
+        body.innerHTML = tools.map(function(t) {
+          var vis = t.visible ? '' : ' style="opacity:0.4"';
+          var eName = t.name.replace(/'/g, "\\'");
+          var eUrl = t.url.replace(/'/g, "\\'");
+          return '<tr' + vis + '>' +
+            '<td><strong>' + t.name + '</strong></td>' +
+            '<td><a href="' + t.url + '" target="_blank" rel="noopener" style="color:#1f64a4;font-size:12px;">' + t.url + '</a></td>' +
+            '<td style="text-align:center">' + (t.sort_order || 0) + '</td>' +
+            '<td><div style="display:flex;gap:4px;justify-content:flex-end;white-space:nowrap">' +
+              '<button class="btn btn-sm" style="font-size:10px;padding:1px 6px;color:#1f64a4;border-color:#c0d4eb" onclick="editExternalTool(\'' + t.id + '\',\'' + eName + '\',\'' + eUrl + '\',' + (t.sort_order || 0) + ')">Edit</button>' +
+              '<button class="btn btn-sm" style="font-size:10px;padding:1px 6px;color:#888;border-color:#ddd" onclick="toggleExternalTool(\'' + t.id + '\',' + (t.visible ? 0 : 1) + ')">' + (t.visible ? 'Hide' : 'Show') + '</button>' +
+              '<button class="btn btn-sm" style="font-size:10px;padding:1px 6px;color:#c62828;border-color:#e0c0c0" onclick="deleteExternalTool(\'' + t.id + '\',\'' + eName + '\')">&times;</button>' +
+            '</div></td></tr>';
+        }).join('');
+      } catch {}
+    }
+
+    function editExternalTool(id, name, url, sort) {
+      editingToolId = id;
+      document.getElementById('extToolName').value = name;
+      document.getElementById('extToolUrl').value = url;
+      document.getElementById('extToolSort').value = sort;
+      document.getElementById('extToolFormTitle').textContent = 'Edit: ' + name;
+      document.getElementById('extToolSaveBtn').textContent = 'Save';
+      document.getElementById('extToolCancelBtn').style.display = '';
+      document.getElementById('extToolStatus').textContent = '';
+    }
+
+    function cancelEditTool() {
+      editingToolId = null;
+      document.getElementById('extToolName').value = '';
+      document.getElementById('extToolUrl').value = '';
+      document.getElementById('extToolSort').value = '0';
+      document.getElementById('extToolFormTitle').textContent = '+ Add Tool';
+      document.getElementById('extToolSaveBtn').textContent = 'Add';
+      document.getElementById('extToolCancelBtn').style.display = 'none';
+      document.getElementById('extToolStatus').textContent = '';
+    }
+
+    async function saveExternalTool() {
+      var name = document.getElementById('extToolName').value.trim();
+      var url = document.getElementById('extToolUrl').value.trim();
+      var sort = parseInt(document.getElementById('extToolSort').value) || 0;
+      var statusEl = document.getElementById('extToolStatus');
+      if (!name || !url) { statusEl.textContent = 'Name and URL required'; statusEl.style.color = '#c62828'; return; }
+      try {
+        if (editingToolId) {
+          var res = await fetch(API + '/api/external-tools/' + editingToolId, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name, url: url, sort_order: sort }) });
+          var data = await res.json();
+          if (data.ok) { showToast('Updated: ' + name); cancelEditTool(); loadExternalTools(); if (typeof window.__platformShellReloadNav === 'function') window.__platformShellReloadNav(); }
+          else { statusEl.textContent = 'Error: ' + (data.error || 'failed'); statusEl.style.color = '#c62828'; }
+        } else {
+          var res = await fetch(API + '/api/external-tools', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name, url: url, sort_order: sort }) });
+          var data = await res.json();
+          if (data.ok) {
+            showToast('Added: ' + name);
+            cancelEditTool();
+            loadExternalTools();
+            if (typeof window.__platformShellReloadNav === 'function') window.__platformShellReloadNav();
+          } else { statusEl.textContent = 'Error: ' + (data.error || 'failed'); statusEl.style.color = '#c62828'; }
+        }
+      } catch { statusEl.textContent = 'Network error'; statusEl.style.color = '#c62828'; }
+    }
+
+    async function toggleExternalTool(id, visible) {
+      await fetch(API + '/api/external-tools/' + id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ visible: visible }) });
+      loadExternalTools();
+      if (typeof window.__platformShellReloadNav === 'function') window.__platformShellReloadNav();
+    }
+
+    async function deleteExternalTool(id, name) {
+      var ok = await showConfirm({ title: 'Remove tool?', body: '<strong>' + name + '</strong> will be removed from the shell navigation.', impact: 'Users will no longer see this link. No external data is affected.', action: 'Remove' });
+      if (!ok) return;
+      await fetch(API + '/api/external-tools/' + id, { method: 'DELETE' });
+      showToast('Removed: ' + name);
+      loadExternalTools();
+      if (typeof window.__platformShellReloadNav === 'function') window.__platformShellReloadNav();
+    }
+
     function refreshAll() {
-      loadProjects(); loadEventLog(); loadDimensionMappings(); loadDimModel(); loadSharedDimensions(); loadEconOverview(); loadSystems(); loadUsers(); loadTokenPayload(); loadEconomyDomain();
+      // Skip refresh of sections where user is actively typing (to avoid clearing inputs)
+      var active = document.activeElement;
+      var isTyping = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT');
+      var typingSection = isTyping ? active.closest('.card, .dim-detail') : null;
+
+      loadEventLog();
+      if (!typingSection || !typingSection.querySelector('#projectsBody')) loadProjects();
+      if (!typingSection || !typingSection.querySelector('#dimMappingsBody')) loadDimensionMappings();
+      if (!typingSection || !typingSection.querySelector('[id^="dimModel"]')) loadDimModel();
+      if (!typingSection || !typingSection.querySelector('#sharedDimsBody, #dimDetailPanel')) loadSharedDimensions();
+      if (!typingSection || !typingSection.querySelector('#econOverviewBody')) loadEconOverview();
+      if (!typingSection || !typingSection.querySelector('#systemsBody')) loadSystems();
+      if (!typingSection || !typingSection.querySelector('#usersBody')) loadUsers();
+      if (!typingSection || !typingSection.querySelector('#extToolsBody')) loadExternalTools();
+      loadTokenPayload();
+      if (!typingSection || !typingSection.querySelector('[id^="econ"]')) loadEconomyDomain();
       if (typeof window.__platformShellReloadNav === 'function') window.__platformShellReloadNav();
     }
 
     // Init
+    populateFormSelects();
+    populateEconDimSelect();
     refreshAll(); initDemo();
     setInterval(refreshAll, 3000);
   </script>

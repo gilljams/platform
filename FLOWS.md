@@ -231,22 +231,38 @@ Alla har lösenord `demo`. Användare lagras i Platform SQLite (`users`-tabell),
 
 1. `POST /api/login` → validerar mot `users`-tabellen → JWT-token i cookie `platform_token` (8h TTL)
 2. JWT innehåller: `user_id`, `name`, `role`, `org_unit`, `products`, `primary_product`
-3. `GET /api/navigation` → returnerar meny-items filtrerade på användarens `products` + anslutna system
+3. `GET /api/navigation` → returnerar `{ items: [...], externalTools: [...] }` filtrerade på användarens `products` + anslutna system + synliga externa verktyg
 4. Shell-baren (injicerad via `shell.js`) renderar navigationen dynamiskt
 
 **Produktionsmodell (simulerad i POC):**
 - Autentisering via **OIDC/SAML2** → redirect till extern IdP (Zitadel, Azure AD)
 - Användarprovisionering via **SCIM 2.0**: `POST /api/scim/v2/Users` (IdP pushar create/update/deactivate)
+- **Grupp-claimsmappning**: `parseGroupClaims()` tolkar IdP-grupper med prefix: `role:editor` → roll, `product:prod_a` → produkttillgång, `org:OU-100` → organisationsenhet
+- **Lokal skapning**: `POST /api/users` (source: "local") för manuellt skapade användare
+- **Username-kollisionshantering**: SCIM upsert vid existerande username (uppdaterar istället för krasch)
 - Auktorisering: produkttillgång + org-tillhörighet i `users`-tabell, produkter frågar via `GET /api/users`
 
 ### Shell-bar (Cross-product)
 
 Shell-baren laddas via `<script src="http://localhost:3000/shell.js">` på alla produktsidor.
 Den hanterar:
-- Pinning/unpinning (göms om bara en produkt)
-- Navigation mellan produkter
-- Inbox med uppgifter (deep links till rätt produkt med kontext)
-- Utloggning
+- **Pin/unpin** — användaren väljer om baren ska vara synlig eller dold (sparas i localStorage)
+- **Notch pill** — när baren är unpinned visas en liten notch i övre högra hörnet med inbox-knapp och pin-knapp. Notch döljs under peek (hover) via `updateNotchVisibility()`
+- **Navigation** — produktlänkar + externa verktyg med ↗-ikon
+- **Inbox** — dropdown med aktiva uppgifter, deep links, badge (döljs vid 0)
+- **Peek-mode** — hover över toppkanten visar baren tillfälligt
+- **External tools** — 1–3 som direktlänkar, 4+ med dropdown
+- Toast-notifikationer med enhetlig design
+
+### External Tools-flöde
+
+Externa verktyg konfigureras av admin och visas i shell-barens navigation:
+
+1. Admin skapar verktyg via `POST /api/external-tools` (namn, URL, sort_order)
+2. `GET /api/navigation` inkluderar `externalTools`-array med synliga verktyg
+3. Shell.js renderar: ≤3 verktyg som direktlänkar med ↗-ikon, >3 med dropdown
+4. Klick öppnar extern URL i ny flik (`target="_blank"`)
+5. Admin kan edit/hide/show/delete verktyg — shell uppdateras direkt via `__platformShellReloadNav()`
 
 ### Inbox & Deep Linking
 

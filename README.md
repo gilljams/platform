@@ -9,7 +9,7 @@ ERP Mock  ──►  Platform Router  ──►  Product A (Budgeting)
                                 ──►  Product B (Analytics)
 ```
 
-- **Platform** — central router, admin UI, auth, shell-bar, inbox
+- **Platform** — central router, admin UI, auth, shell-bar, inbox, SCIM-provisionering, externa verktyg
 - **Product A** — budgetering, processhantering, uppgiftsflöde
 - **Product B** — analys, P&L-rapportering (budget vs utfall)
 - **ERP Mock** — simulerat källsystem (kontoplan, org, GL-data)
@@ -66,3 +66,5 @@ docker compose up -d --build
 - [FLOWS.md](FLOWS.md) — dataflöden, Kafka-topics, routing
 - [DESIGN-SYSTEM.md](DESIGN-SYSTEM.md) — UI-konventioner och komponenter
 - [ARCHITECTURE-REVIEW.md](ARCHITECTURE-REVIEW.md) — arkitekturgenomgång och branschjämförelse
+
+Arkitekturvision och produktionsöverväganden finns även integrerade i admin-UI:t under fliken **POC & Production**.

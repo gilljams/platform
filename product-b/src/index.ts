@@ -203,7 +203,7 @@ const kafka = new Kafka({
   clientId: "product-b",
   brokers: [process.env.KAFKA_BROKER || "localhost:19092"],
 });
-const consumer = kafka.consumer({ groupId: "product-b-consumer" });
+const consumer = kafka.consumer({ groupId: "product-b-consumer-v2" });
 
 const CONSUME_TOPICS = [
   "platform.accounts.out",

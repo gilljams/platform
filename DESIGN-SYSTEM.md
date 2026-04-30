@@ -312,3 +312,85 @@ När shell-baren är unpinned visas en tunn reveal-zon:
 - Höjd: 3px → 6px vid hover
 - Gradient: `linear-gradient(to right, transparent 20%, rgba(31,100,164,0.25) 50%, transparent 80%)`
 - Hover-gradient: `rgba(31,100,164,0.45)`
+
+---
+
+## Notch Pill (Shell unpinned)
+
+När shell-baren är unpinned visas en notch i övre högra hörnet:
+
+| Egenskap          | Värde                        |
+|-------------------|------------------------------|
+| Position          | `fixed`, `top: 0`, `right: 0` |
+| Höjd              | 32px                         |
+| Bakgrund (yttre)  | `#0d1822` (dark)             |
+| Z-index           | 100001                       |
+| Content-area      | `background: #fff`, `border-radius: 0 0 10px 10px` |
+| Tail              | 18px bred, `#0d1822`        |
+| Inbox-knapp       | 11px, `border: 1px solid #ddd`, `border-radius: 3px` |
+| Badge             | `#1f64a4`, `border-radius: 3px`, 9px / 700 |
+| Pin-knapp         | 16×16px SVG, `#bbb` → `#666` hover |
+| Peek-beteende     | Döljs via `classList.remove("visible")` när header har `.peek` |
+
+---
+
+## External Tools (Nav-länkar)
+
+| Egenskap          | Värde                        |
+|-------------------|------------------------------|
+| Font              | 11px / 500, `color: #888`   |
+| Hover             | `color: #555`, `background: #f0f0f0` |
+| Extern-ikon (↗)   | 9×9px SVG, `opacity: 0.5`, `margin-left: 3px` |
+| Dropdown-trigger  | `.shell-ext-more`: 11px, `color: #888`, inline-flex |
+| Dropdown-panel    | `background: #fff`, `border-radius: 4px`, `box-shadow: 0 4px 16px rgba(0,0,0,0.15)`, `min-width: 180px` |
+| Dropdown-item     | 12px / 500, `padding: 6px 14px`, `color: #555` |
+| Positionering     | Dropdown wrappas i `position: relative`-container |
+
+---
+
+## Toast (Notification)
+
+| Egenskap          | Värde                        |
+|-------------------|------------------------------|
+| Position          | `fixed`, `top: 70px`, `right: 20px` |
+| Z-index           | 10000                        |
+| Bakgrund          | `#fff`                       |
+| Border            | `1px solid #e0e0e0`         |
+| Border-left       | `3px solid #2e7d32` (success) / `3px solid #c62828` (error) |
+| Border-radius     | `4px`                        |
+| Box-shadow        | `0 4px 16px rgba(0,0,0,0.10)` |
+| Font              | 12px / 500, `color: #333`   |
+| Ikon              | 16×16px SVG, stroke `#2e7d32` (success) / `#c62828` (error) |
+| Layout            | `display: flex`, `align-items: center`, `gap: 8px` |
+| Animation         | `transform: translateX(120%)` → `translateX(0)`, 0.3s cubic-bezier |
+| Duration          | 4s (auto-dismiss)            |
+
+---
+
+## Confirm Dialog (Modal)
+
+| Egenskap          | Värde                        |
+|-------------------|------------------------------|
+| Overlay           | `rgba(0,0,0,0.4)`, `z-index: 100010` |
+| Dialog-box        | `background: #fff`, `border-radius: 6px`, `max-width: 400px`, centrerad |
+| Box-shadow        | `0 8px 32px rgba(0,0,0,0.18)` |
+| Titel             | 15px / 700, `color: #0d1822`, med ⚠️-ikon |
+| Body-text         | 13px, `color: #555`, `line-height: 1.6` |
+| Impact-text       | 13px, `color: #555`, `border-left: 3px solid #e65100`, `background: #fff3e0` |
+| Bekräfta-knapp    | `background: #c62828`, `color: #fff` (destruktiv) |
+| Avbryt-knapp      | `background: #f5f5f5`, `color: #555` |
+
+---
+
+## Assignment Matrix Select (.pv-user-select)
+
+| Egenskap          | Värde                        |
+|-------------------|------------------------------|
+| Höjd              | 26px                         |
+| Font              | 12px, `color: #333`         |
+| Border            | `1px solid #ced4da`, `border-radius: 3px` |
+| Bakgrund          | `#fff`                       |
+| Min-bredd         | 200px                        |
+| Chevron           | SVG nedåtpil via `background-image`, `right: 8px` |
+| Focus             | `border-color: #1f64a4`, `box-shadow: 0 0 0 2px rgba(31,100,164,0.12)` |
+| Appearance        | `none` / `-webkit-appearance: none` |

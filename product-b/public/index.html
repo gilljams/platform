@@ -435,16 +435,6 @@
     </div>
   </div>
 
-  <!-- Dimension switcher -->
-  <div class="dim-switcher" id="dimSwitcher">
-    <button class="dim-btn active" data-dim="account" onclick="setDim('account',this)">Account</button>
-    <button class="dim-btn" data-dim="org_unit" onclick="setDim('org_unit',this)">Org Unit</button>
-    <button class="dim-btn" data-dim="project" onclick="setDim('project',this)">Project</button>
-    <button class="dim-btn" data-dim="dim1" onclick="setDim('dim1',this)" id="dimBtn1">Dim1</button>
-    <button class="dim-btn" data-dim="dim2" onclick="setDim('dim2',this)" id="dimBtn2">Dim2</button>
-    <button class="dim-btn" data-dim="dim3" onclick="setDim('dim3',this)" id="dimBtn3">Dim3</button>
-  </div>
-
   <!-- Tab bar -->
   <div class="tab-bar">
     <button class="tab-btn active" onclick="switchTab('overview',this)">Overview</button>
@@ -501,6 +491,15 @@
 
       <!-- Overview table (grouped by selected dimension) -->
       <div class="card">
+        <!-- Dimension switcher -->
+        <div class="dim-switcher" id="dimSwitcher" style="margin-bottom:12px;">
+          <button class="dim-btn active" data-dim="account" onclick="setDim('account',this)">Account</button>
+          <button class="dim-btn" data-dim="org_unit" onclick="setDim('org_unit',this)">Org Unit</button>
+          <button class="dim-btn" data-dim="project" onclick="setDim('project',this)">Project</button>
+          <button class="dim-btn" data-dim="dim1" onclick="setDim('dim1',this)" id="dimBtn1">Dim1</button>
+          <button class="dim-btn" data-dim="dim2" onclick="setDim('dim2',this)" id="dimBtn2">Dim2</button>
+          <button class="dim-btn" data-dim="dim3" onclick="setDim('dim3',this)" id="dimBtn3">Dim3</button>
+        </div>
         <h2 id="overviewTableTitle">Budget vs Actuals per Account</h2>
         <table>
           <thead>
@@ -605,7 +604,7 @@ At-least-once delivery + INSERT OR REPLACE = idempotent.</pre>
               <tr>
                 <th>Account</th>
                 <th>Org Unit</th>
-                <th>Project</th>
+                <th>Version</th>
                 <th id="plDimHead1">Dim1</th>
                 <th id="plDimHead2">Dim2</th>
                 <th id="plDimHead3">Dim3</th>
@@ -1459,7 +1458,7 @@ API:
         return `<tr>
           <td>${r.account}${accMap[r.account] ? ' <span style="color:#888">' + accMap[r.account] + '</span>' : ''}</td>
           <td>${r.org_unit}${orgMap[r.org_unit] ? ' <span style="color:#888">' + orgMap[r.org_unit] + '</span>' : ''}</td>
-          <td>${r.project_name || r.group_key}</td>
+          <td>${r.planning_type ? r.planning_type + (r.planning_version ? ' v' + r.planning_version : '') : (r.project_name || r.group_key)}</td>
           <td>${dim1}</td>
           <td>${dim2}</td>
           <td>${dim3}</td>
