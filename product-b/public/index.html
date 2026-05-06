@@ -344,12 +344,10 @@
       <a href="#"><span class="nav-icon">&#x1f4cb;</span> Reports</a>
       <div class="sidebar-section">Administration</div>
       <a href="#" data-view="admin" onclick="openReport('admin','Admin');toggleSidebar()"><span class="nav-icon">&#x2699;&#xfe0f;</span> Admin</a>
-      <div class="sidebar-section">Settings</div>
-      <div style="padding:6px 18px;display:flex;align-items:center;justify-content:space-between">
-        <span style="font-size:12px;color:rgba(255,255,255,0.6)">Explanation mode</span>
+      <div class="sidebar-section" style="display:flex;align-items:center;justify-content:space-between;padding-right:18px">Explain
         <div class="info-toggle" id="globalToggle">
           <button class="active" onclick="setMode('simple')">Simple</button>
-          <button onclick="setMode('tech')">Technical</button>
+          <button onclick="setMode('tech')">Tech</button>
         </div>
       </div>
     </nav>
@@ -693,6 +691,7 @@ At-least-once delivery + INSERT OR REPLACE = idempotent.</pre>
               <option value="dim3">dim3</option>
               <option value="dim4">dim4</option>
               <option value="dim5">dim5</option>
+              <optgroup label="── Member Attributes ──" id="rCondFieldAttrs"></optgroup>
             </select>
           </div>
           <div class="filter-group" style="flex-direction:column;align-items:start">
@@ -767,29 +766,12 @@ This separation means:
           <span id="adminDimSummary" style="font-size:12px;color:#888"></span>
           <button onclick="loadAdminDimensions()" style="padding:0 10px;height:24px;border:1px solid #1f64a4;border-radius:3px;background:#1f64a4;color:#fff;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">↻ Refresh</button>
         </div>
-        <div id="adminDimTabs" style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap"></div>
-        <div id="adminDimAccounts">
+        <div id="adminDimTabs" style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap"></div>
+        <div id="adminDimBreadcrumb" style="font-size:12px;margin-bottom:8px;color:#555"></div>
+        <div id="adminDimContent">
           <table>
-            <thead><tr><th>Code</th><th>Name</th><th>Parent</th><th>Type</th></tr></thead>
-            <tbody id="adminDimAccountsBody"></tbody>
-          </table>
-        </div>
-        <div id="adminDimOrgunits" style="display:none">
-          <table>
-            <thead><tr><th>Code</th><th>Name</th><th>Parent</th><th>Type</th></tr></thead>
-            <tbody id="adminDimOrgunitsBody"></tbody>
-          </table>
-        </div>
-        <div id="adminDimProjects" style="display:none">
-          <table>
-            <thead><tr><th>Name</th><th>Source</th></tr></thead>
-            <tbody id="adminDimProjectsBody"></tbody>
-          </table>
-        </div>
-        <div id="adminDimFlex" style="display:none">
-          <table>
-            <thead><tr><th>Code</th><th>Name</th></tr></thead>
-            <tbody id="adminDimFlexBody"></tbody>
+            <thead id="adminDimHead"><tr><th style="width:35%">Code</th><th>Name</th><th style="width:70px">Type</th><th style="width:50px">Children</th></tr></thead>
+            <tbody id="adminDimBody"></tbody>
           </table>
         </div>
         <div class="info-block">
@@ -878,6 +860,7 @@ API:
       if (view === 'report' && typeof renderChart === 'function') {
         requestAnimationFrame(function() { renderChart(getFiltered()); });
       }
+      if (view === 'admin') loadAdminDimensions();
       // Update sidebar active state
       document.querySelectorAll('.sidebar-nav a[data-view]').forEach(a => a.classList.remove('active'));
       if (navLink) { navLink.classList.add('active'); }
@@ -1540,10 +1523,27 @@ API:
     // ── Ingestion Rules ──
     async function loadRules() {
       try {
-        const res = await fetch(API + '/api/ingestion-rules');
-        const rules = await res.json();
+        const [rulesRes, attrsRes] = await Promise.all([
+          fetch(API + '/api/ingestion-rules'),
+          fetch(API + '/api/dim-member-attributes')
+        ]);
+        const rules = await rulesRes.json();
+        const attrs = await attrsRes.json();
         renderRules(rules);
+        populateCondFieldAttrs(attrs);
       } catch {}
+    }
+
+    function populateCondFieldAttrs(attrs) {
+      // Build unique dimension:attribute_name pairs
+      var seen = {};
+      attrs.forEach(function(a) { seen[a.dimension + ':' + a.attribute_name] = true; });
+      var optgroup = document.getElementById('rCondFieldAttrs');
+      if (!optgroup) return;
+      optgroup.innerHTML = Object.keys(seen).sort().map(function(key) {
+        var parts = key.split(':');
+        return '<option value="member_attr:' + key + '">' + parts[1] + ' (' + parts[0] + ')</option>';
+      }).join('');
     }
 
     function renderRules(rules) {
@@ -1610,115 +1610,208 @@ API:
       loadRules();
     }
 
-    // ═══ Admin: Dimensions ═══
-    var _dimActiveDim = 'accounts';
-    var _dimMembers = [];
+    // ═══ Admin: Dimensions (drill-down) ═══
+    var _dimActiveDim = 'account';
+    var _dimEntityMap = {};   // { dim:code → { code, name, type, isSystem, dimension, attributes: {} } }
+    var _dimChildrenOf = {};  // { dim:parentCode → [childCode, ...] }
+    var _dimBreadcrumb = [];  // [{ code, name }]
+    var _dimAllDims = [];
+    var _dimAttrDefs = {};    // { dim → [attr_name, ...] }
+
     async function loadAdminDimensions() {
       try {
-        var [accRes, projRes, dimRes] = await Promise.all([
+        var [accRes, projRes, dimRes, relRes, attrRes] = await Promise.all([
           fetch(API + '/api/accounts'),
           fetch(API + '/api/projects'),
-          fetch(API + '/api/dim-members')
+          fetch(API + '/api/dim-members'),
+          fetch(API + '/api/dim-relations'),
+          fetch(API + '/api/dim-member-attributes')
         ]);
         var accData = await accRes.json();
         var projects = await projRes.json();
-        _dimMembers = await dimRes.json();
+        var dimMembers = await dimRes.json();
+        var dimRelations = await relRes.json();
+        var dimAttributes = await attrRes.json();
         var accounts = accData.accounts || [];
         var orgUnits = accData.org_units || [];
 
-        // Group dim_members by dimension
-        var dimGroups = {};
-        _dimMembers.forEach(function(m) {
-          if (!dimGroups[m.dimension]) dimGroups[m.dimension] = [];
-          dimGroups[m.dimension].push(m);
+        // Build attribute map: { dim:code → { attr_name: attr_value } }
+        var attrMap = {};
+        var attrNames = {}; // { dim → Set(attr_name) }
+        dimAttributes.forEach(function(a) {
+          var key = a.dimension + ':' + a.code;
+          if (!attrMap[key]) attrMap[key] = {};
+          attrMap[key][a.attribute_name] = a.attribute_value;
+          if (!attrNames[a.dimension]) attrNames[a.dimension] = {};
+          attrNames[a.dimension][a.attribute_name] = true;
+        });
+        _dimAttrDefs = {};
+        Object.keys(attrNames).forEach(function(d) { _dimAttrDefs[d] = Object.keys(attrNames[d]).sort(); });
+
+        // Build unified entity map
+        _dimEntityMap = {};
+        accounts.forEach(function(a) { _dimEntityMap['account:' + a.code] = { code: a.code, name: a.name, type: a.type || 'leaf', dimension: 'account', attributes: attrMap['account:' + a.code] || {} }; });
+        orgUnits.forEach(function(o) { _dimEntityMap['org_unit:' + o.code] = { code: o.code, name: o.name, type: o.type || 'leaf', dimension: 'org_unit', attributes: attrMap['org_unit:' + o.code] || {} }; });
+        projects.forEach(function(p) { var k = p.source_key || p.name; _dimEntityMap['project:' + k] = { code: k, name: p.name, type: 'leaf', dimension: 'project', attributes: attrMap['project:' + k] || {} }; });
+        dimMembers.forEach(function(m) {
+          var key = m.dimension + ':' + m.code;
+          if (!_dimEntityMap[key]) _dimEntityMap[key] = { code: m.code, name: m.name || m.code, type: 'system', isSystem: true, dimension: m.dimension, attributes: attrMap[key] || {} };
         });
 
-        // Build summary
-        var parts = [accounts.length + ' accounts', orgUnits.length + ' org units', projects.length + ' projects'];
-        Object.keys(dimGroups).sort().forEach(function(d) {
-          parts.push(dimGroups[d].length + ' ' + d);
+        // Build children-of map
+        _dimChildrenOf = {};
+        dimRelations.forEach(function(r) {
+          var key = r.dimension + ':' + r.parent_code;
+          if (!_dimChildrenOf[key]) _dimChildrenOf[key] = [];
+          _dimChildrenOf[key].push(r.child_code);
         });
-        document.getElementById('adminDimSummary').textContent = parts.join(', ');
 
-        // Build tab buttons dynamically
-        var activeStyle = 'padding:0 10px;height:24px;border:1px solid #1f64a4;border-radius:3px;background:#1f64a4;color:#fff;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit';
-        var inactiveStyle = 'padding:0 10px;height:24px;border:1px solid #ced4da;border-radius:3px;background:#fff;color:#333;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit';
+        // Collect dimension names
+        var dimSet = {};
+        Object.values(_dimEntityMap).forEach(function(e) { dimSet[e.dimension] = true; });
+        _dimAllDims = Object.keys(dimSet).sort(function(a, b) {
+          var order = { account: 0, org_unit: 1, project: 2 };
+          return (order[a] != null ? order[a] : 10) - (order[b] != null ? order[b] : 10) || a.localeCompare(b);
+        });
+
+        // Count
+        var dimCount = {};
+        Object.values(_dimEntityMap).forEach(function(e) { dimCount[e.dimension] = (dimCount[e.dimension] || 0) + 1; });
+
+        // Summary
+        document.getElementById('adminDimSummary').textContent = _dimAllDims.map(function(d) { return (dimCount[d] || 0) + ' ' + d; }).join(', ');
+
+        // Dimension tabs
         var tabBar = document.getElementById('adminDimTabs');
-        var fixedTabs = [
-          { id: 'accounts', label: 'Accounts (' + accounts.length + ')' },
-          { id: 'orgunits', label: 'Org Units (' + orgUnits.length + ')' },
-          { id: 'projects', label: 'Projects (' + projects.length + ')' }
-        ];
-        var flexTabs = Object.keys(dimGroups).sort().map(function(d) {
-          return { id: 'flex_' + d, label: d + ' (' + dimGroups[d].length + ')', dim: d };
-        });
-        var allTabs = fixedTabs.concat(flexTabs);
-        tabBar.innerHTML = allTabs.map(function(t) {
-          var style = t.id === _dimActiveDim ? activeStyle : inactiveStyle;
-          return '<button style="' + style + '" onclick="showDimTab(\'' + t.id + '\')">' + t.label + '</button>';
+        tabBar.innerHTML = _dimAllDims.map(function(d) {
+          var label = d + ' (' + (dimCount[d] || 0) + ')';
+          var active = d === _dimActiveDim;
+          var style = active
+            ? 'padding:0 10px;height:24px;border:1px solid #1f64a4;border-radius:3px;background:#1f64a4;color:#fff;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit'
+            : 'padding:0 10px;height:24px;border:1px solid #ced4da;border-radius:3px;background:#fff;color:#333;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit';
+          return '<button style="' + style + '" onclick="selectDimension(\'' + d + '\')">' + label + '</button>';
         }).join('');
 
-        // Accounts table
-        var accBody = document.getElementById('adminDimAccountsBody');
-        accBody.innerHTML = accounts.length === 0 ? '<tr><td colspan="4" style="color:#999;text-align:center">No accounts yet</td></tr>' :
-          accounts.map(function(a) {
-            return '<tr><td style="font-family:monospace;font-size:12px">' + a.code + '</td><td>' + a.name + '</td><td style="font-family:monospace;font-size:12px;color:#888">' + (a.parent || '\u2014') + '</td><td>' + (a.type || 'leaf') + '</td></tr>';
-          }).join('');
-
-        // Org units table
-        var ouBody = document.getElementById('adminDimOrgunitsBody');
-        ouBody.innerHTML = orgUnits.length === 0 ? '<tr><td colspan="4" style="color:#999;text-align:center">No org units yet</td></tr>' :
-          orgUnits.map(function(o) {
-            return '<tr><td style="font-family:monospace;font-size:12px">' + o.code + '</td><td>' + o.name + '</td><td style="font-family:monospace;font-size:12px;color:#888">' + (o.parent || '\u2014') + '</td><td>' + (o.type || 'leaf') + '</td></tr>';
-          }).join('');
-
-        // Projects table
-        var projBody = document.getElementById('adminDimProjectsBody');
-        projBody.innerHTML = projects.length === 0 ? '<tr><td colspan="2" style="color:#999;text-align:center">No projects yet</td></tr>' :
-          projects.map(function(p) {
-            return '<tr><td>' + p.name + '</td><td>' + p.source + '</td></tr>';
-          }).join('');
-
-        // Show active tab
-        showDimTab(_dimActiveDim);
-      } catch {
+        _dimBreadcrumb = [];
+        renderDimLevel();
+      } catch(e) {
+        console.error('loadAdminDimensions error', e);
         document.getElementById('adminDimSummary').textContent = 'Could not load';
       }
     }
-    function showDimTab(tab) {
-      _dimActiveDim = tab;
-      var activeStyle = 'padding:0 10px;height:24px;border:1px solid #1f64a4;border-radius:3px;background:#1f64a4;color:#fff;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit';
-      var inactiveStyle = 'padding:0 10px;height:24px;border:1px solid #ced4da;border-radius:3px;background:#fff;color:#333;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit';
-      // Hide all panels
-      ['adminDimAccounts', 'adminDimOrgunits', 'adminDimProjects', 'adminDimFlex'].forEach(function(id) {
-        document.getElementById(id).style.display = 'none';
-      });
-      // Update button styles
+
+    function selectDimension(dim) {
+      _dimActiveDim = dim;
+      _dimBreadcrumb = [];
       var tabBar = document.getElementById('adminDimTabs');
-      if (tabBar) {
-        Array.from(tabBar.children).forEach(function(btn) {
-          btn.style.cssText = inactiveStyle;
-        });
-        Array.from(tabBar.children).forEach(function(btn) {
-          if (btn.getAttribute('onclick') && btn.getAttribute('onclick').indexOf("'" + tab + "'") >= 0) {
-            btn.style.cssText = activeStyle;
+      Array.from(tabBar.children).forEach(function(btn) {
+        var isActive = btn.getAttribute('onclick').indexOf("'" + dim + "'") >= 0;
+        btn.style.cssText = isActive
+          ? 'padding:0 10px;height:24px;border:1px solid #1f64a4;border-radius:3px;background:#1f64a4;color:#fff;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit'
+          : 'padding:0 10px;height:24px;border:1px solid #ced4da;border-radius:3px;background:#fff;color:#333;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit';
+      });
+      renderDimLevel();
+    }
+
+    function dimDrill(code, name) {
+      _dimBreadcrumb.push({ code: code, name: name });
+      renderDimLevel();
+    }
+
+    function dimBack(index) {
+      _dimBreadcrumb = _dimBreadcrumb.slice(0, index);
+      renderDimLevel();
+    }
+
+    function renderDimLevel() {
+      var dim = _dimActiveDim;
+
+      // Breadcrumb
+      var bcEl = document.getElementById('adminDimBreadcrumb');
+      if (_dimBreadcrumb.length === 0) {
+        bcEl.innerHTML = '<span style="color:#999">Root level</span>';
+      } else {
+        var bc = '<a href="#" onclick="dimBack(0);return false" style="color:#1f64a4;text-decoration:none;font-weight:600">&#x1f3e0; Root</a>';
+        _dimBreadcrumb.forEach(function(b, i) {
+          bc += ' <span style="color:#ccc">&#x25b8;</span> ';
+          if (i < _dimBreadcrumb.length - 1) {
+            bc += '<a href="#" onclick="dimBack(' + (i + 1) + ');return false" style="color:#1f64a4;text-decoration:none">' + b.code + '</a>';
+          } else {
+            bc += '<strong>' + b.code + '</strong> <span style="color:#888">(' + b.name + ')</span>';
           }
         });
+        bcEl.innerHTML = bc;
       }
-      if (tab === 'accounts') { document.getElementById('adminDimAccounts').style.display = ''; return; }
-      if (tab === 'orgunits') { document.getElementById('adminDimOrgunits').style.display = ''; return; }
-      if (tab === 'projects') { document.getElementById('adminDimProjects').style.display = ''; return; }
-      // Flex dimension tab
-      if (tab.indexOf('flex_') === 0) {
-        var dim = tab.replace('flex_', '');
-        var members = _dimMembers.filter(function(m) { return m.dimension === dim; });
-        var flexBody = document.getElementById('adminDimFlexBody');
-        flexBody.innerHTML = members.length === 0 ? '<tr><td colspan="2" style="color:#999;text-align:center">No members yet</td></tr>' :
-          members.map(function(m) {
-            return '<tr><td style="font-family:monospace;font-size:12px">' + m.code + '</td><td>' + (m.name || '\u2014') + '</td></tr>';
-          }).join('');
-        document.getElementById('adminDimFlex').style.display = '';
+
+      // Get items at this level
+      var items;
+      if (_dimBreadcrumb.length === 0) {
+        // Root: entities with no parent in this dimension
+        var allChildren = {};
+        Object.keys(_dimChildrenOf).forEach(function(k) {
+          if (k.indexOf(dim + ':') === 0) _dimChildrenOf[k].forEach(function(c) { allChildren[c] = true; });
+        });
+        items = [];
+        Object.values(_dimEntityMap).forEach(function(e) {
+          if (e.dimension === dim && !allChildren[e.code]) items.push(e);
+        });
+      } else {
+        var parentCode = _dimBreadcrumb[_dimBreadcrumb.length - 1].code;
+        var childCodes = _dimChildrenOf[dim + ':' + parentCode] || [];
+        items = childCodes.map(function(c) { return _dimEntityMap[dim + ':' + c]; }).filter(Boolean);
       }
+
+      // Sort: system → groups → leaves, then alphabetically
+      items.sort(function(a, b) {
+        var aSys = (a.isSystem || a.type === 'system') ? 0 : 1;
+        var bSys = (b.isSystem || b.type === 'system') ? 0 : 1;
+        if (aSys !== bSys) return aSys - bSys;
+        var aGrp = a.type === 'group' ? 0 : 1;
+        var bGrp = b.type === 'group' ? 0 : 1;
+        if (aGrp !== bGrp) return aGrp - bGrp;
+        return a.code.localeCompare(b.code);
+      });
+
+      // Render
+      var attrCols = _dimAttrDefs[dim] || [];
+      // Update table header dynamically
+      var thead = document.getElementById('adminDimHead');
+      thead.innerHTML = '<tr><th style="width:25%">Code</th><th>Name</th><th style="width:70px">Type</th>' +
+        attrCols.map(function(a) { return '<th style="font-size:11px">' + a.replace(/_/g, ' ') + '</th>'; }).join('') +
+        '<th style="width:50px">Children</th></tr>';
+
+      var tbody = document.getElementById('adminDimBody');
+      var colSpan = 4 + attrCols.length;
+      if (items.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="' + colSpan + '" style="color:#999;text-align:center;padding:20px">No entities at this level</td></tr>';
+        return;
+      }
+      tbody.innerHTML = items.map(function(e) {
+        var childCount = (_dimChildrenOf[dim + ':' + e.code] || []).length;
+        var hasChildren = childCount > 0;
+        var isSys = e.isSystem || e.type === 'system';
+        var rowStyle = isSys ? 'background:#f0f7ff' : '';
+        var typeBadge = isSys
+          ? '<span style="background:#e3f2fd;padding:1px 6px;border-radius:3px;font-size:10px;color:#1565c0">system</span>'
+          : e.type === 'group'
+            ? '<span style="background:#fff3e0;padding:1px 6px;border-radius:3px;font-size:10px;color:#e65100">group</span>'
+            : '<span style="font-size:10px;color:#888">leaf</span>';
+
+        var codeHtml;
+        if (hasChildren) {
+          codeHtml = '<a href="#" onclick="dimDrill(\'' + e.code.replace(/'/g, "\\'") + '\',\'' + (e.name || e.code).replace(/'/g, "\\'") + '\');return false" style="font-family:monospace;font-size:12px;color:#1f64a4;font-weight:600;text-decoration:none">&#x25b6; ' + e.code + '</a>';
+        } else {
+          codeHtml = '<span style="font-family:monospace;font-size:12px;' + (isSys ? 'color:#1f64a4;font-weight:600' : '') + '">&nbsp;&nbsp;&nbsp;' + e.code + '</span>';
+        }
+        var childBadge = hasChildren ? '<span style="background:#f0f0f0;padding:1px 6px;border-radius:3px;font-size:10px;color:#555">' + childCount + '</span>' : '';
+
+        var attrCells = attrCols.map(function(a) {
+          var val = (e.attributes || {})[a] || '';
+          return '<td style="font-size:11px;color:#555">' + val + '</td>';
+        }).join('');
+
+        return '<tr style="' + rowStyle + '"><td>' + codeHtml + '</td><td>' + (e.name || '\u2014') + '</td><td>' + typeBadge + '</td>' + attrCells + '<td style="text-align:center">' + childBadge + '</td></tr>';
+      }).join('');
     }
 
     loadData();

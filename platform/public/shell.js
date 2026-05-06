@@ -99,6 +99,13 @@
       margin-right: 24px;
       color: #0d1822;
       letter-spacing: 0.2px;
+      display: inline-flex;
+      align-items: center;
+    }
+    .platform-shell-header .logo img {
+      height: 22px;
+      max-width: 180px;
+      object-fit: contain;
     }
     .platform-shell-header nav {
       display: flex;
@@ -194,6 +201,87 @@
     .shell-pin-btn svg { width: 16px; height: 16px; }
     .shell-pin-btn:hover { color: #666; background: #f0f0f0; }
     .shell-pin-btn.pinned { color: #555; }
+    .shell-ai-btn {
+      background: none;
+      border: 1px solid #ddd;
+      cursor: pointer;
+      padding: 3px 7px;
+      border-radius: 3px;
+      line-height: 1;
+      color: #666;
+      transition: all 0.15s;
+      margin-left: 6px;
+      display: inline-flex;
+      align-items: center;
+      font-family: inherit;
+    }
+    .shell-ai-btn svg { width: 14px; height: 14px; vertical-align: middle; }
+    .shell-ai-btn:hover { color: #7c3aed; border-color: #c4b5fd; background: #f5f3ff; }
+    .shell-ai-btn.active { color: #7c3aed; border-color: #c4b5fd; background: #f5f3ff; }
+    .shell-ai-panel {
+      position: fixed;
+      top: 38px;
+      right: 12px;
+      width: 360px;
+      max-height: calc(100vh - 60px);
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.08);
+      z-index: 100001;
+      display: none;
+      flex-direction: column;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    .shell-ai-panel.open { display: flex; }
+    .shell-ai-panel-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 13px;
+      font-weight: 600;
+      color: #333;
+    }
+    .shell-ai-panel-header svg { width: 16px; height: 16px; color: #7c3aed; }
+    .shell-ai-panel-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      font-size: 13px;
+      color: #555;
+      min-height: 200px;
+      max-height: calc(100vh - 160px);
+    }
+    .shell-ai-panel-body .ai-msg { margin-bottom: 12px; line-height: 1.5; }
+    .shell-ai-panel-body .ai-msg.assistant { background: #f5f3ff; border-radius: 8px; padding: 10px 12px; }
+    .shell-ai-panel-body .ai-msg.user { background: #f0f9ff; border-radius: 8px; padding: 10px 12px; text-align: right; }
+    .shell-ai-panel-input {
+      display: flex;
+      gap: 8px;
+      padding: 12px 16px;
+      border-top: 1px solid #f0f0f0;
+    }
+    .shell-ai-panel-input input {
+      flex: 1;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 13px;
+      outline: none;
+    }
+    .shell-ai-panel-input input:focus { border-color: #7c3aed; }
+    .shell-ai-panel-input button {
+      background: #7c3aed;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .shell-ai-panel-input button:hover { background: #6d28d9; }
     .shell-hover-zone {
       position: fixed;
       top: 0;
@@ -464,11 +552,11 @@
   header.className = "platform-shell-header";
   header.innerHTML = `
     <div class="shell-inner" style="display:flex;align-items:center;width:100%">
-      <span class="logo">Platform POC</span>
+      <span class="logo" id="platform-shell-logo" title="Platform Shell — shared navigation injected into all products via shell.js. Products remain independent; the shell provides unified navigation, inbox and external tools.">Platform POC</span>
       <nav id="platform-shell-nav"><span style="color:#aaa;font-weight:500;font-size:11px">Loading...</span></nav>
       <div class="spacer"></div>
       <div style="position:relative">
-        <button class="shell-inbox-btn" id="platform-inbox-btn">
+        <button class="shell-inbox-btn" id="platform-inbox-btn" title="Master Inbox — aggregated tasks from all products. Items arrive when a product assigns work (e.g. budget approval). Click an item to navigate directly to its source product.">
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3l8 -8"></path><path d="M20 12v6a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h9"></path></svg>
           Inbox <span class="shell-inbox-badge" id="platform-inbox-count" style="display:none">0</span>
         </button>
@@ -482,10 +570,89 @@
           </div>
         </div>
       </div>
-      <button class="shell-pin-btn" id="platform-pin-btn" title="Pin/unpin navigation bar"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4.5l-4 4l-4 1.5l-1.5 1.5l7 7l1.5 -1.5l1.5 -4l4 -4"/><line x1="9" y1="15" x2="4.5" y2="19.5"/><line x1="14.5" y1="4" x2="20" y2="9.5"/></svg></button>
+      <button class="shell-ai-btn" id="platform-ai-btn" title="AI Assistant — ask questions about your data, get help with tasks, or explore platform capabilities."><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3z"/><path d="M19 2l.5 1.5L21 4l-1.5.5L19 6l-.5-1.5L17 4l1.5-.5L19 2z"/></svg></button>
+      <button class="shell-pin-btn" id="platform-pin-btn" title="Pin/unpin the shell bar. When unpinned, the bar hides to give products more space. Hover the top edge or use the notch pill to access inbox and navigation."><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4.5l-4 4l-4 1.5l-1.5 1.5l7 7l1.5 -1.5l1.5 -4l4 -4"/><line x1="9" y1="15" x2="4.5" y2="19.5"/><line x1="14.5" y1="4" x2="20" y2="9.5"/></svg></button>
     </div>
   `;
   document.body.prepend(header);
+
+  // ── AI Chat Panel ──
+  var aiPanel = document.createElement("div");
+  aiPanel.className = "shell-ai-panel";
+  aiPanel.id = "platform-ai-panel";
+  aiPanel.innerHTML = `
+    <div class="shell-ai-panel-header">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M16 18a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2m0 -12a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2m-7 12a6 6 0 0 1 6 -6a6 6 0 0 1 -6 -6a6 6 0 0 1 -6 6a6 6 0 0 1 6 6"></path></svg>
+      AI Assistant
+      <span style="flex:1"></span>
+      <button onclick="document.getElementById('platform-ai-panel').classList.remove('open');document.getElementById('platform-ai-btn').classList.remove('active')" style="background:none;border:none;cursor:pointer;color:#999;font-size:16px;padding:2px 6px;">&times;</button>
+    </div>
+    <div class="shell-ai-panel-body" id="platform-ai-messages">
+      <div class="ai-msg assistant">Hi! I'm the platform AI assistant. I can help you explore data, understand configurations, or answer questions about your integration setup. What would you like to know?</div>
+    </div>
+    <div class="shell-ai-panel-input">
+      <input type="text" id="platform-ai-input" placeholder="Ask something..." onkeydown="if(event.key==='Enter')document.getElementById('platform-ai-send').click()">
+      <button id="platform-ai-send" onclick="shellAiSend()">Send</button>
+    </div>
+  `;
+  document.body.appendChild(aiPanel);
+
+  // AI button toggle
+  var aiBtn = document.getElementById("platform-ai-btn");
+  aiBtn.addEventListener("click", function() {
+    var panel = document.getElementById("platform-ai-panel");
+    var isOpen = panel.classList.toggle("open");
+    aiBtn.classList.toggle("active", isOpen);
+    if (isOpen) document.getElementById("platform-ai-input").focus();
+  });
+
+  // Close AI panel when clicking outside
+  document.addEventListener("click", function(e) {
+    var panel = document.getElementById("platform-ai-panel");
+    if (!panel.classList.contains("open")) return;
+    var notchAi = document.getElementById("platform-notch-ai-btn");
+    if (panel.contains(e.target) || aiBtn.contains(e.target) || (notchAi && notchAi.contains(e.target))) return;
+    panel.classList.remove("open");
+    aiBtn.classList.remove("active");
+  });
+
+  // Simple echo-style AI send (placeholder for real LLM integration)
+  window.shellAiSend = function() {
+    var input = document.getElementById("platform-ai-input");
+    var msg = input.value.trim();
+    if (!msg) return;
+    input.value = "";
+    var container = document.getElementById("platform-ai-messages");
+    container.innerHTML += '<div class="ai-msg user">' + msg.replace(/</g, "&lt;") + '</div>';
+    container.innerHTML += '<div class="ai-msg assistant" style="opacity:0.6">Thinking...</div>';
+    container.scrollTop = container.scrollHeight;
+    // Simulate AI response (replace with real endpoint later)
+    setTimeout(function() {
+      var msgs = container.querySelectorAll(".ai-msg");
+      var last = msgs[msgs.length - 1];
+      last.style.opacity = "1";
+      last.textContent = "This is a placeholder response. Connect me to an LLM endpoint to enable real AI assistance over your platform data.";
+      container.scrollTop = container.scrollHeight;
+    }, 800);
+  };
+
+  // ── Try loading a custom logo image (if enabled in platform config) ──
+  (function() {
+    fetch(PLATFORM_URL + "/api/shell-config", { credentials: "include" })
+      .then(function(r) { return r.json(); })
+      .then(function(cfg) {
+        if (!cfg.use_custom_logo) return;
+        var logoSpan = document.getElementById("platform-shell-logo");
+        var img = new Image();
+        img.onload = function() {
+          logoSpan.textContent = "";
+          img.alt = "Logo";
+          logoSpan.appendChild(img);
+        };
+        img.src = PLATFORM_URL + "/shell-logo.png";
+      })
+      .catch(function() {});
+  })();
 
   // ── Notch pill — shows inbox count when shell is unpinned ──
   const notchPill = document.createElement("div");
@@ -493,11 +660,14 @@
   notchPill.id = "platform-notch-pill";
   notchPill.innerHTML = `
     <div class="notch-content">
-      <button class="notch-inbox-btn" id="platform-notch-inbox-btn">
+      <button class="notch-inbox-btn" id="platform-notch-inbox-btn" title="Master Inbox — aggregated tasks from all products.">
         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3l8 -8"></path><path d="M20 12v6a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h9"></path></svg>
         Inbox <span class="notch-count" id="platform-notch-count">0</span>
       </button>
-      <button class="notch-pin-btn" id="platform-notch-pin-btn" title="Pin navigation bar">
+      <button class="notch-inbox-btn" id="platform-notch-ai-btn" title="AI Assistant" style="gap:0;padding:3px 7px;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3z"/><path d="M19 2l.5 1.5L21 4l-1.5.5L19 6l-.5-1.5L17 4l1.5-.5L19 2z"/></svg>
+      </button>
+      <button class="notch-pin-btn" id="platform-notch-pin-btn" title="Pin the shell bar back to the top of the page.">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4.5l-4 4l-4 1.5l-1.5 1.5l7 7l1.5 -1.5l1.5 -4l4 -4"/><line x1="9" y1="15" x2="4.5" y2="19.5"/><line x1="14.5" y1="4" x2="20" y2="9.5"/></svg>
       </button>
     </div>
@@ -527,6 +697,15 @@
     e.stopPropagation();
     userHasToggledPin = true;
     applyPinState(true);
+  });
+  // Notch AI button → toggle AI panel
+  var notchAiBtn = document.getElementById("platform-notch-ai-btn");
+  notchAiBtn.addEventListener("click", function(e) {
+    e.stopPropagation();
+    var panel = document.getElementById("platform-ai-panel");
+    var isOpen = panel.classList.toggle("open");
+    aiBtn.classList.toggle("active", isOpen);
+    if (isOpen) document.getElementById("platform-ai-input").focus();
   });
   document.addEventListener("click", function(e) {
     var dd = document.getElementById("platform-notch-dropdown");
@@ -640,10 +819,16 @@
       var multiProduct = navItems.length > 1;
 
       if (multiProduct || extTools.length > 0) {
+        var tooltips = {
+          platform: 'Platform Admin — system configuration, economy domain, sync, dimension policies, external tools, and user management.',
+          prod_a: 'Product A (Budget & Planning) — standalone container with its own backend and database. Receives shared dimensions and facts from the platform layer via Kafka. SSO via shared platform token.',
+          prod_b: 'Product B (Analytics) — standalone container with its own backend and database. Receives shared dimensions and facts from the platform layer via Kafka. SSO via shared platform token.'
+        };
         var html = navItems.map(function(item) {
           var href = resolveUrl(item);
           var isActive = item.key === currentKey;
-          return '<a href="' + href + '" class="' + (isActive ? 'active' : '') + '">' + item.label + '</a>';
+          var tip = tooltips[item.key] || 'Navigate to ' + item.label + '. Same login session via shared platform token.';
+          return '<a href="' + href + '" class="' + (isActive ? 'active' : '') + '" title="' + tip + '">' + item.label + '</a>';
         }).join("");
 
         // External tools
@@ -652,18 +837,18 @@
           if (extTools.length <= 3) {
             // Direct links
             html += extTools.map(function(t) {
-              return '<a href="' + t.url + '" target="_blank" rel="noopener" class="shell-ext-link">' + t.label + '<svg class="ext-icon" viewBox="0 0 12 12"><path d="M3.5 1.5H1.5v9h9v-2M6.5 1.5h4v4M10.5 1.5L5 7" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></a>';
+              return '<a href="' + t.url + '" target="_blank" rel="noopener" class="shell-ext-link" title="External tool: ' + t.label + '. Opens in a new tab. Configured per customer in Platform Admin → External Tools.">' + t.label + '<svg class="ext-icon" viewBox="0 0 12 12"><path d="M3.5 1.5H1.5v9h9v-2M6.5 1.5h4v4M10.5 1.5L5 7" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></a>';
             }).join("");
           } else {
             // First 2 direct, rest in dropdown
             html += extTools.slice(0, 2).map(function(t) {
-              return '<a href="' + t.url + '" target="_blank" rel="noopener" class="shell-ext-link">' + t.label + '<svg class="ext-icon" viewBox="0 0 12 12"><path d="M3.5 1.5H1.5v9h9v-2M6.5 1.5h4v4M10.5 1.5L5 7" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></a>';
+              return '<a href="' + t.url + '" target="_blank" rel="noopener" class="shell-ext-link" title="External tool: ' + t.label + '. Opens in a new tab. Configured per customer in Platform Admin → External Tools.">' + t.label + '<svg class="ext-icon" viewBox="0 0 12 12"><path d="M3.5 1.5H1.5v9h9v-2M6.5 1.5h4v4M10.5 1.5L5 7" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></a>';
             }).join("");
             html += '<span style="position:relative;display:inline-flex;align-items:center">';
             html += '<span class="shell-ext-more" id="platform-ext-more-btn">Tools <svg viewBox="0 0 10 6" style="width:8px;height:6px;margin-left:2px;vertical-align:middle"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>';
             html += '<div class="shell-ext-dropdown" id="platform-ext-dropdown">';
             html += extTools.slice(2).map(function(t) {
-              return '<a href="' + t.url + '" target="_blank" rel="noopener">' + t.label + '<svg class="ext-icon" viewBox="0 0 12 12"><path d="M3.5 1.5H1.5v9h9v-2M6.5 1.5h4v4M10.5 1.5L5 7" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></a>';
+              return '<a href="' + t.url + '" target="_blank" rel="noopener" title="External tool: ' + t.label + '. Opens in a new tab.">' + t.label + '<svg class="ext-icon" viewBox="0 0 12 12"><path d="M3.5 1.5H1.5v9h9v-2M6.5 1.5h4v4M10.5 1.5L5 7" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></a>';
             }).join("");
             html += '</div>';
             html += '</span>';

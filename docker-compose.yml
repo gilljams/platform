@@ -66,6 +66,8 @@ services:
     container_name: platform
     ports:
       - "3000:3000"
+    volumes:
+      - ./platform/public:/app/public
     environment:
       KAFKA_BROKER: redpanda:9092
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
@@ -80,6 +82,8 @@ services:
     container_name: product-a
     ports:
       - "3002:3002"
+    volumes:
+      - ./product-a/public:/app/public
     environment:
       KAFKA_BROKER: redpanda:9092
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
@@ -94,6 +98,8 @@ services:
     container_name: product-b
     ports:
       - "3003:3003"
+    volumes:
+      - ./product-b/public:/app/public
     environment:
       KAFKA_BROKER: redpanda:9092
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318

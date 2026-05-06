@@ -5,8 +5,8 @@ import jwt from "jsonwebtoken";
 import { Kafka } from "kafkajs";
 import path from "path";
 
-import { getOrCreateDimensionMapping, getAllDimensionMappings, updateDimensionMapping, configureDimModel, getDimModel, getAllDimModels, configureDimRouting, getAllDimRouting, registerSharedDimension, deleteSharedDimension, getAllSharedDimensions, upsertDimensionCode, getDimensionCodes, deleteDimensionCode, registerParticipant, getParticipants, upsertCodeMapping, getCodeMappings, registerDimensionAttribute, getDimensionAttributes, setCodeAttribute, getCodeAttributes, getAllCodeAttributes, setHierarchy, getHierarchy, resetAllData, getInboxItems, addInboxItem, updateInboxItem, setSystemConfig, getSystemConfig, getAllSystemConfigs, deleteDimModel, deleteDimRouting, deleteSystem, deleteParticipant, getAllUsers, getUser, getUserByUsername, getUserByExternalId, upsertUser, updateUser, deleteUser, updateLastLogin, getUserCount, getAuditEvents, getAuditEventCount, upsertEconEntity, getEconEntities, deleteEconEntity, upsertEconEntityAttribute, getEconEntityAttributes, upsertEconAttributeDef, getEconAttributeDefs, upsertEconRelation, getEconRelations, insertEconFacts, validateEconFacts, getEconFacts, getEconFactsSummary, publishEconFacts, getEconFactsForPublish, upsertSyncState, getSyncStates, getSyncState, applyDimRouting, getExternalTools, getAllExternalTools, createExternalTool, updateExternalTool, deleteExternalTool } from "./mapper";
-import { startRouter, publishEntityLinked, getEventLog } from "./router";
+import { getOrCreateDimensionMapping, getAllDimensionMappings, updateDimensionMapping, configureDimModel, getDimModel, getAllDimModels, configureDimRouting, getAllDimRouting, registerSharedDimension, deleteSharedDimension, getAllSharedDimensions, upsertDimensionCode, getDimensionCodes, deleteDimensionCode, registerParticipant, getParticipants, upsertCodeMapping, getCodeMappings, registerDimensionAttribute, getDimensionAttributes, setCodeAttribute, getCodeAttributes, getAllCodeAttributes, setHierarchy, getHierarchy, resetAllData, getInboxItems, addInboxItem, updateInboxItem, setSystemConfig, getSystemConfig, getAllSystemConfigs, deleteDimModel, deleteDimRouting, deleteSystem, deleteParticipant, getAllUsers, getUser, getUserByUsername, getUserByExternalId, upsertUser, updateUser, deleteUser, updateLastLogin, getUserCount, getAuditEvents, getAuditEventCount, upsertEconEntity, getEconEntities, getEconDimensions, deleteEconEntity, upsertEconEntityAttribute, getEconEntityAttributes, upsertEconAttributeDef, getEconAttributeDefs, upsertEconRelation, getEconRelations, insertEconFacts, validateEconFacts, getEconFacts, getEconFactsSummary, publishEconFacts, getEconFactsForPublish, evaluateErrorPolicy, upsertSyncState, getSyncStates, getSyncState, applyDimRouting, getExternalTools, getAllExternalTools, createExternalTool, updateExternalTool, deleteExternalTool, getDimensionPolicies, upsertDimensionPolicy, deleteDimensionPolicy, applyStructuralPolicies, upsertAttributePublishRule, getAttributePublishRules, deleteAttributePublishRule, deleteEconFactsByPeriods, getEventSubscriptions, setEventSubscription, getDLQItems, getDLQCount, markDLQRetried, insertAuditEvent, computeContentHash, getSyncContentHash, setSyncContentHash, getPipelineHealth, revalidateEconFacts, resetSyncWatermark } from "./mapper";
+import { startRouter, publishEntityLinked, publishDimensionSnapshot, getEventLog } from "./router";
 import cron from "node-cron";
 
 // ── Config ──
@@ -92,7 +92,7 @@ function requireAuth(req: AuthenticatedRequest, res: express.Response, next: exp
 
 // Apply auth to all /api/* except public endpoints
 // Public paths: auth endpoints, SCIM (IdP service account), health, and system-to-system discovery
-const PUBLIC_PATHS = ["/api/login", "/api/logout", "/api/scim/v2", "/health"];
+const PUBLIC_PATHS = ["/api/login", "/api/logout", "/api/scim/v2", "/health", "/api/economy/policies", "/api/economy/dimensions"];
 
 app.use((req: AuthenticatedRequest, res, next) => {
   // Only protect /api/ routes (static files, HTML pages pass through)
@@ -293,6 +293,35 @@ app.delete("/api/external-tools/:id", (req, res) => {
   res.json({ ok: true });
 });
 
+// Shell config — lightweight endpoint for shell.js to read display settings
+app.get("/api/shell-config", (_req, res) => {
+  const useLogo = getSystemConfig("platform", "use_custom_logo");
+  res.json({ use_custom_logo: useLogo === "true" });
+});
+
+// ── Sync pipeline config (error policy + auto-publish) ──
+app.get("/api/economy/pipeline-config/:source", (req, res) => {
+  const source = req.params.source;
+  res.json({
+    error_policy: getSystemConfig(source, "error_policy") || "skip_invalid",
+    auto_publish: getSystemConfig(source, "auto_publish") === "true",
+  });
+});
+
+app.put("/api/economy/pipeline-config/:source", (req, res) => {
+  const source = req.params.source;
+  const { error_policy, auto_publish } = req.body;
+  if (error_policy !== undefined) {
+    const valid = ["skip_invalid", "abort_on_error"].includes(error_policy) || error_policy.match(/^threshold:\d+$/);
+    if (!valid) { res.status(400).json({ error: "Invalid error_policy. Use: skip_invalid, abort_on_error, or threshold:N" }); return; }
+    setSystemConfig(source, "error_policy", error_policy);
+  }
+  if (auto_publish !== undefined) {
+    setSystemConfig(source, "auto_publish", auto_publish ? "true" : "false");
+  }
+  res.json({ ok: true });
+});
+
 // Navigation: dynamic product list based on system config + user entitlements
 app.get("/api/navigation", (req, res) => {
   const token = req.cookies?.platform_token;
@@ -386,6 +415,24 @@ app.get("/api/events", (req, res) => {
 app.get("/api/audit-events", (req, res) => {
   const limit = Math.min(parseInt(req.query?.limit as string) || 100, 1000);
   res.json({ total: getAuditEventCount(), events: getAuditEvents(limit) });
+});
+
+// ── Pipeline Health API ──
+
+app.get("/api/pipeline-health", (_req, res) => {
+  res.json(getPipelineHealth());
+});
+
+// ── Dead Letter Queue API ──
+
+app.get("/api/dlq", (_req, res) => {
+  res.json({ ...getDLQCount(), items: getDLQItems(50) });
+});
+
+app.post("/api/dlq/:id/retry", (req, res) => {
+  const id = parseInt(req.params.id);
+  markDLQRetried(id);
+  res.json({ ok: true });
 });
 
 // ── Dimension mappings API ──
@@ -711,7 +758,25 @@ app.delete("/api/systems/:system", (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Event Subscriptions ──
+
+app.get("/api/subscriptions", (_req, res) => {
+  res.json(getEventSubscriptions());
+});
+
+app.put("/api/subscriptions", (req, res) => {
+  const { product, event_type, enabled } = req.body;
+  if (!product || !event_type) { res.status(400).json({ error: "product and event_type required" }); return; }
+  setEventSubscription(product, event_type, !!enabled);
+  res.json({ ok: true });
+});
+
 // ── Economy Domain API ──
+
+// Dimensions (distinct dimensions from econ_entities)
+app.get("/api/economy/dimensions", (_req, res) => {
+  res.json(getEconDimensions());
+});
 
 // Entities (dimension members)
 app.get("/api/economy/entities", (req, res) => {
@@ -760,6 +825,26 @@ app.post("/api/economy/attribute-defs", (req, res) => {
   res.json({ ok: true, upserted: items.length });
 });
 
+// Attribute Publish Rules
+app.get("/api/economy/attribute-publish-rules", (req, res) => {
+  const dimension = req.query.dimension as string | undefined;
+  res.json(getAttributePublishRules(dimension));
+});
+
+app.post("/api/economy/attribute-publish-rules", (req, res) => {
+  const { dimension, source_attribute, publish_as, transform, enabled } = req.body;
+  if (!dimension || !source_attribute || !publish_as) {
+    res.status(400).json({ error: "dimension, source_attribute, publish_as required" }); return;
+  }
+  upsertAttributePublishRule({ dimension, source_attribute, publish_as, transform: transform ? JSON.stringify(transform) : undefined, enabled: enabled ?? 1 });
+  res.json({ ok: true });
+});
+
+app.delete("/api/economy/attribute-publish-rules/:id", (req, res) => {
+  const ok = deleteAttributePublishRule(parseInt(req.params.id));
+  res.json({ ok });
+});
+
 // Relations (hierarchies)
 app.get("/api/economy/relations", (req, res) => {
   const { dimension, hierarchy } = req.query as { dimension?: string; hierarchy?: string };
@@ -802,62 +887,68 @@ app.post("/api/economy/facts/validate", (req, res) => {
   res.json({ ...result, already_validated: summary.validated });
 });
 
-app.post("/api/economy/facts/publish", async (_req, res) => {
+// ── Reusable fact publish logic ──
+async function executeFactPublish(): Promise<{ published: number }> {
   const facts = getEconFactsForPublish();
-  if (facts.length === 0) { res.json({ published: 0 }); return; }
-  // Publish to Kafka
-  try {
-    const producer = kafka.producer();
-    await producer.connect();
+  if (facts.length === 0) return { published: 0 };
 
-    // 1. Internal economy topic
+  const producer = kafka.producer();
+  await producer.connect();
+
+  // 1. Internal economy topic
+  await producer.send({
+    topic: "economy.facts.published",
+    messages: [{ key: "publish", value: JSON.stringify({ facts, published_at: new Date().toISOString() }) }],
+  });
+
+  // 2. Route to platform.gl.out grouped by project so Product B can consume
+  const byProject = new Map<string, any[]>();
+  for (const f of facts) {
+    const key = f.project_id || "_no_project";
+    if (!byProject.has(key)) byProject.set(key, []);
+    byProject.get(key)!.push(f);
+  }
+  for (const [projectId, entries] of byProject) {
     await producer.send({
-      topic: "economy.facts.published",
-      messages: [{ key: "publish", value: JSON.stringify({ facts, published_at: new Date().toISOString() }) }],
+      topic: "platform.projects.out",
+      messages: [{ key: projectId, value: JSON.stringify({ source_system: "erp", source_key: projectId, name: projectId }) }],
     });
-
-    // 2. Route to platform.gl.out grouped by project so Product B can consume
-    const byProject = new Map<string, any[]>();
-    for (const f of facts) {
-      const key = f.project_id || "_no_project";
-      if (!byProject.has(key)) byProject.set(key, []);
-      byProject.get(key)!.push(f);
-    }
-    for (const [projectId, entries] of byProject) {
-      // Ensure project exists in egress
-      await producer.send({
-        topic: "platform.projects.out",
-        messages: [{ key: projectId, value: JSON.stringify({ source_system: "erp", source_key: projectId, name: projectId }) }],
-      });
-      // Publish GL in the format Product B expects
-      const glEntries = entries.map(e => ({
-        account: e.account, org_unit: e.org_unit, amount: e.amount,
-        currency: e.currency || "SEK", period: e.period,
-        transaction_date: e.transaction_date || null,
+    const glEntries = entries.map(e => ({
+      account: e.account, org_unit: e.org_unit, amount: e.amount,
+      currency: e.currency || "SEK", period: e.period,
+      transaction_date: e.transaction_date || null,
+      dim1: e.dim1, dim2: e.dim2, dim3: e.dim3,
+    }));
+    const dimValuesPerEntry = entries.map(e => {
+      const sourceData: Record<string, unknown> = {
         activity: e.dim1, cost_bearer: e.dim2, counterpart: e.dim3,
-      }));
-      // Apply dim routing rules — without rules, dims are NULL
-      const dimValuesPerEntry = entries.map(e => {
-        const sourceData: Record<string, unknown> = {
-          activity: e.dim1, cost_center: e.dim2, counterpart: e.dim3,
-          dim1: e.dim1, dim2: e.dim2, dim3: e.dim3,
-        };
-        return applyDimRouting(entries[0].source_system || "erp", "prod_b", sourceData);
-      });
-      await producer.send({
-        topic: "platform.gl.out",
-        messages: [{ key: projectId, value: JSON.stringify({
-          source_system: entries[0].source_system || "erp",
-          source_key: projectId,
-          dim_values_per_entry: dimValuesPerEntry,
-          original: { erp_id: projectId, entries: glEntries },
-        }) }],
-      });
-    }
+        dim1: e.dim1, dim2: e.dim2, dim3: e.dim3,
+      };
+      return applyDimRouting(entries[0].source_system || "erp", "prod_b", sourceData);
+    });
+    const batchPeriods = [...new Set(entries.map((e: any) => e.period))].sort();
+    await producer.send({
+      topic: "platform.gl.out",
+      messages: [{ key: projectId, value: JSON.stringify({
+        source_system: entries[0].source_system || "erp",
+        source_key: projectId,
+        sync_mode: "replace_by_period",
+        periods: batchPeriods,
+        dim_values_per_entry: dimValuesPerEntry,
+        original: { erp_id: projectId, entries: glEntries },
+      }) }],
+    });
+  }
 
-    await producer.disconnect();
-    const count = publishEconFacts();
-    res.json({ published: count });
+  await producer.disconnect();
+  const count = publishEconFacts();
+  return { published: count };
+}
+
+app.post("/api/economy/facts/publish", async (_req, res) => {
+  try {
+    const result = await executeFactPublish();
+    res.json(result);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -880,13 +971,61 @@ app.post("/api/economy/sync-state", (req, res) => {
   res.json({ ok: true });
 });
 
+// Dimension Policies
+app.get("/api/economy/policies", (req, res) => {
+  const dimension = req.query.dimension as string | undefined;
+  res.json(getDimensionPolicies(dimension));
+});
+
+app.post("/api/economy/policies", (req, res) => {
+  const { dimension, policy_type, config, enabled } = req.body;
+  if (!dimension || !policy_type) { res.status(400).json({ error: "dimension, policy_type required" }); return; }
+  upsertDimensionPolicy(dimension, policy_type, config || {}, enabled ?? 1);
+  res.json({ ok: true });
+});
+
+app.delete("/api/economy/policies/:dimension/:policyType", (req, res) => {
+  const ok = deleteDimensionPolicy(req.params.dimension, req.params.policyType);
+  res.json({ ok });
+});
+
+app.post("/api/economy/policies/apply", async (req, res) => {
+  const { dimension } = req.body;
+  if (!dimension) { res.status(400).json({ error: "dimension required" }); return; }
+  const result = applyStructuralPolicies(dimension);
+  // Publish dimension snapshot to downstream products
+  if (result.applied > 0) {
+    try {
+      await publishDimensionSnapshot(dimension, getEconEntities(dimension), getEconRelations(dimension), getEconAttributeDefs(dimension), getEconEntityAttributes(dimension));
+    } catch (e) { console.error("[POLICIES] Failed to publish dimension snapshot:", e); }
+  }
+  res.json(result);
+});
+
+app.post("/api/economy/policies/apply-all", async (_req, res) => {
+  const dims = (getEconEntities() as any[]).reduce((acc: Set<string>, e: any) => { acc.add(e.dimension); return acc; }, new Set<string>());
+  const results: Record<string, any> = {};
+  for (const dim of dims) {
+    results[dim] = applyStructuralPolicies(dim);
+  }
+  // Publish dimension snapshots for every dimension that had policies applied
+  for (const dim of dims) {
+    if (results[dim]?.applied > 0) {
+      try {
+        await publishDimensionSnapshot(dim as string, getEconEntities(dim as string), getEconRelations(dim as string), getEconAttributeDefs(dim as string), getEconEntityAttributes(dim as string));
+      } catch (e) { console.error(`[POLICIES] Failed to publish ${dim} snapshot:`, e); }
+    }
+  }
+  res.json({ results, dimensions: [...dims] });
+});
+
 // ── Economy Scheduler ──
 
 const scheduledJobs: Map<string, cron.ScheduledTask> = new Map();
 
 // Sync runner: fetches data from ERP and stages into economy domain
 // scope: "all" = entities+facts, "entities" = structure only, "facts" = transactions only
-async function runEconSync(source: string, scope: "all" | "entities" | "facts" = "all") {
+async function runEconSync(source: string, scope: "all" | "entities" | "facts" = "all", req?: any) {
   const t0 = Date.now();
   console.log(`[SCHEDULER] Starting economy sync for ${source} (scope: ${scope})...`);
   try {
@@ -896,19 +1035,54 @@ async function runEconSync(source: string, scope: "all" | "entities" | "facts" =
     // 1. Sync entities (accounts + org_units)
     let entityCount = 0, relCount = 0;
    if (scope !== "facts") {
+    // Discover attribute metadata from ERP capabilities (self-describing API)
+    const capResp = await fetch(`${ERP_URL}/api/capabilities`);
+    const capabilities = await capResp.json() as any;
+    const memberAttrDefs: Record<string, Array<{ attribute_name: string; attribute_label: string; data_type?: string; allowed_values?: string[] }>> = capabilities.member_attributes || {};
+
+    // Register attribute definitions from ERP
+    const knownAttrs: Record<string, string[]> = {}; // dimension → [attr_name, ...]
+    for (const [dim, defs] of Object.entries(memberAttrDefs)) {
+      knownAttrs[dim] = [];
+      for (const def of defs as any[]) {
+        upsertEconAttributeDef({
+          dimension: dim,
+          attribute_name: def.attribute_name,
+          attribute_label: def.attribute_label,
+          data_type: def.data_type || "string",
+          source_system: source,
+          allowed_values: def.allowed_values ? JSON.stringify(def.allowed_values) : undefined,
+        });
+        knownAttrs[dim].push(def.attribute_name);
+      }
+    }
+
     const accResp = await fetch(`${ERP_URL}/api/publish-accounts`, { method: "POST" });
     const accData = await accResp.json() as any;
     const accounts = accData.event?.accounts || accData.accounts || [];
     const orgUnits = accData.event?.org_units || accData.org_units || [];
+
+    // Helper: extract attribute values from a member object based on known attribute names
+    function extractAttributes(member: Record<string, any>, dimension: string) {
+      const attrNames = knownAttrs[dimension] || [];
+      for (const attr of attrNames) {
+        if (member[attr] != null) {
+          upsertEconEntityAttribute({ dimension, code: member.code, attribute_name: attr, attribute_value: String(member[attr]), source_system: source });
+        }
+      }
+    }
+
     for (const acc of accounts) {
       upsertEconEntity({ source_system: source, dimension: "account", code: acc.code, name: acc.name, type: acc.type || "leaf" });
       entityCount++;
       if (acc.parent) { upsertEconRelation({ source_system: source, dimension: "account", child_code: acc.code, parent_code: acc.parent, hierarchy_name: "standard" }); relCount++; }
+      extractAttributes(acc, "account");
     }
     for (const org of orgUnits) {
       upsertEconEntity({ source_system: source, dimension: "org_unit", code: org.code, name: org.name, type: org.type || "leaf" });
       entityCount++;
       if (org.parent) { upsertEconRelation({ source_system: source, dimension: "org_unit", child_code: org.code, parent_code: org.parent, hierarchy_name: "standard" }); relCount++; }
+      extractAttributes(org, "org_unit");
     }
 
     // Extra hierarchy nodes
@@ -917,18 +1091,19 @@ async function runEconSync(source: string, scope: "all" | "entities" | "facts" =
     upsertEconRelation({ source_system: source, dimension: "org_unit", child_code: "OU-100", parent_code: "DIV-01", hierarchy_name: "standard", level: 1 }); relCount++;
     upsertEconRelation({ source_system: source, dimension: "org_unit", child_code: "OU-200", parent_code: "DIV-01", hierarchy_name: "standard", level: 1 }); relCount++;
 
-    // Flex dimensions from ERP (activity, cost_center, counterpart)
+    // Flex dimensions use platform dim-slots (dim1–dim5), not ERP-specific names.
+    // The adapter maps ERP fields to slots; dim_routing tells products what each slot means.
     const flexDims = [
-      { dim: "activity", codes: [
+      { dim: "dim1", codes: [
         { code: "AKT-100", name: "Design" },
         { code: "AKT-200", name: "Construction" },
         { code: "AKT-300", name: "Inspection" },
       ]},
-      { dim: "cost_center", codes: [
+      { dim: "dim2", codes: [
         { code: "KB-500", name: "Internal" },
         { code: "KB-600", name: "External" },
       ]},
-      { dim: "counterpart", codes: [
+      { dim: "dim3", codes: [
         { code: "MP-200", name: "Supplier Alpha" },
         { code: "MP-300", name: "Supplier Beta" },
       ]},
@@ -940,75 +1115,125 @@ async function runEconSync(source: string, scope: "all" | "entities" | "facts" =
       }
     }
 
-    // Attribute definitions
-    upsertEconAttributeDef({ dimension: "account", attribute_name: "account_type", attribute_label: "Account Type", source_system: source });
-    upsertEconAttributeDef({ dimension: "account", attribute_name: "account_group", attribute_label: "Account Group", source_system: source });
-    upsertEconAttributeDef({ dimension: "org_unit", attribute_name: "region", attribute_label: "Region", source_system: source });
-    upsertEconAttributeDef({ dimension: "org_unit", attribute_name: "level", attribute_label: "Level", source_system: source });
-
-    // Sample attribute values
-    const accAttrs: Array<[string, string, string]> = [
-      ["4010", "account_type", "expense"], ["4010", "account_group", "personnel"],
-      ["4020", "account_type", "expense"], ["4020", "account_group", "external services"],
-      ["5010", "account_type", "expense"], ["5010", "account_group", "travel"],
-    ];
-    for (const [code, attr, val] of accAttrs) {
-      upsertEconEntityAttribute({ dimension: "account", code, attribute_name: attr, attribute_value: val, source_system: source });
-    }
-    const orgAttrs: Array<[string, string, string]> = [
-      ["OU-100", "region", "Stockholm"], ["OU-100", "level", "department"],
-      ["OU-200", "region", "Stockholm"], ["OU-200", "level", "department"],
-      ["DIV-01", "region", "Stockholm"], ["DIV-01", "level", "division"],
-    ];
-    for (const [code, attr, val] of orgAttrs) {
-      upsertEconEntityAttribute({ dimension: "org_unit", code, attribute_name: attr, attribute_value: val, source_system: source });
-    }
-
     // Register "project" as a known dimension (projects are created individually later)
     upsertEconEntity({ source_system: source, dimension: "project", code: "_placeholder", name: "(projects added dynamically)", type: "system" });
     entityCount++;
 
     upsertSyncState(source, "entities", { last_sync_at: new Date().toISOString(), rows_received: entityCount, rows_validated: entityCount, status: "idle", duration_ms: Date.now() - t0 });
     upsertSyncState(source, "relations", { last_sync_at: new Date().toISOString(), rows_received: relCount, rows_validated: relCount, status: "idle" });
+    insertAuditEvent("in", `economy.sync.entities`, "EntitiesSync", undefined, source, `Synced ${entityCount} entities, ${relCount} relations from ${source}`);
+
+    // Apply structural policies to all synced dimensions (dynamic — reads from DB)
+    const syncedDims = getEconDimensions().map(d => d.dimension);
+    for (const dim of syncedDims) {
+      const result = applyStructuralPolicies(dim);
+      if (result.applied > 0) console.log(`[SCHEDULER] Structural policies for ${dim}: ${result.applied} applied, ${result.created_entities} entities created, ${result.created_relations} relations created`);
+    }
+    // Publish dimension snapshots to downstream products (with change detection)
+    for (const dim of syncedDims) {
+      try {
+        const entities = getEconEntities(dim);
+        const relations = getEconRelations(dim);
+        const attrDefs = getEconAttributeDefs(dim);
+        const attrs = getEconEntityAttributes(dim);
+        // Compute content hash to detect changes
+        const hash = computeContentHash({ entities, relations, attrs });
+        const prevHash = getSyncContentHash(source, `dim:${dim}`);
+        if (hash === prevHash) {
+          console.log(`[SCHEDULER] Dimension ${dim}: unchanged (hash ${hash}), skipping publish`);
+          continue;
+        }
+        await publishDimensionSnapshot(dim, entities, relations, attrDefs, attrs);
+        setSyncContentHash(source, `dim:${dim}`, hash);
+        console.log(`[SCHEDULER] Dimension ${dim}: changed (${prevHash || 'new'} → ${hash}), published`);
+        insertAuditEvent("out", `economy.${dim}.snapshot`, "DimensionPublished", undefined, source, `Published ${dim} snapshot (${entities.length} entities, hash: ${hash})`);
+      } catch (e) { console.error(`[SCHEDULER] Failed to publish ${dim} snapshot:`, e); }
+    }
    } // end scope !== "facts"
 
-    // 2. Sync facts — either from a linked ERP project or seed sample transactions
+    // 2. Sync facts — pull from ERP with period filtering and idempotent upsert
    if (scope !== "entities") {
-    if (demoState.erp_id) {
-      const glResp = await fetch(`${ERP_URL}/api/publish-gl`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ erp_id: demoState.erp_id }) });
-      const glData = await glResp.json() as any;
-      const entries = glData?.event?.entries || [];
-      if (entries.length > 0) {
-        const facts = entries.map((e: any) => ({
-          source_system: source, source_batch_id: `sync-${source}-${Date.now()}`, project_id: demoState.erp_id,
-          account: e.account, org_unit: e.org_unit, period: e.period, amount: e.amount, currency: e.currency || "SEK",
-          transaction_date: e.transaction_date, dim1: e.activity, dim2: e.cost_bearer, dim3: e.counterpart,
-        }));
-        const ins = insertEconFacts(facts);
-        const val = validateEconFacts(ins.batch_id);
-        upsertSyncState(source, "facts", { last_sync_at: new Date().toISOString(), rows_received: ins.received, rows_validated: val.validated, rows_rejected: val.rejected, status: "idle", duration_ms: Date.now() - t0 });
-      } else {
-        upsertSyncState(source, "facts", { status: "idle", duration_ms: Date.now() - t0 });
-      }
-    } else {
-      // Seed sample GL transactions so there's data without running demo steps
-      const batchId = `seed-${source}-${Date.now()}`;
-      const sampleFacts = [
-        { source_system: source, source_batch_id: batchId, project_id: "SAMPLE-001", account: "4010", org_unit: "OU-100", period: "2025-01", amount: -125000, currency: "SEK", transaction_date: "2025-01-15", dim1: "AKT-100", dim2: "KB-500", dim3: "MP-200" },
-        { source_system: source, source_batch_id: batchId, project_id: "SAMPLE-001", account: "4020", org_unit: "OU-100", period: "2025-01", amount: -85000,  currency: "SEK", transaction_date: "2025-01-22", dim1: "AKT-200", dim2: "KB-600", dim3: "MP-300" },
-        { source_system: source, source_batch_id: batchId, project_id: "SAMPLE-001", account: "5010", org_unit: "OU-200", period: "2025-01", amount: -12500,  currency: "SEK", transaction_date: "2025-01-28", dim1: "AKT-300", dim2: "KB-500", dim3: "MP-200" },
-        { source_system: source, source_batch_id: batchId, project_id: "SAMPLE-001", account: "4010", org_unit: "OU-100", period: "2025-02", amount: -130000, currency: "SEK", transaction_date: "2025-02-10", dim1: "AKT-100", dim2: "KB-500", dim3: "MP-200" },
-        { source_system: source, source_batch_id: batchId, project_id: "SAMPLE-001", account: "4020", org_unit: "OU-200", period: "2025-02", amount: -92000,  currency: "SEK", transaction_date: "2025-02-18", dim1: "AKT-200", dim2: "KB-600", dim3: "MP-300" },
-        { source_system: source, source_batch_id: batchId, project_id: "SAMPLE-001", account: "3010", org_unit: "OU-100", period: "2025-02", amount: 450000,  currency: "SEK", transaction_date: "2025-02-25", dim1: "AKT-100", dim2: "KB-500", dim3: "MP-200" },
-        { source_system: source, source_batch_id: batchId, project_id: "SAMPLE-001", account: "4010", org_unit: "OU-100", period: "2025-03", amount: -140000, currency: "SEK", transaction_date: "2025-03-12", dim1: "AKT-100", dim2: "KB-500", dim3: "MP-300" },
-        { source_system: source, source_batch_id: batchId, project_id: "SAMPLE-001", account: "5010", org_unit: "OU-200", period: "2025-03", amount: -18000,  currency: "SEK", transaction_date: "2025-03-20", dim1: "AKT-300", dim2: "KB-600", dim3: "MP-200" },
-      ];
-      // Also register SAMPLE-001 as a project entity
-      upsertEconEntity({ source_system: source, dimension: "project", code: "SAMPLE-001", name: "Sample Project (seed data)", type: "leaf" });
-      const ins = insertEconFacts(sampleFacts);
+    const syncState = getSyncState(source, "facts") as any;
+    const highWatermark = syncState?.high_watermark || null;
+
+    // Build query params for incremental or period-based sync
+    const params = new URLSearchParams();
+    if ((req as any)?.query?.period_from) params.set("period_from", (req as any).query.period_from);
+    if ((req as any)?.query?.period_to) params.set("period_to", (req as any).query.period_to);
+    if (!params.has("period_from") && highWatermark) params.set("modified_since", highWatermark);
+
+    const qs = params.toString() ? `?${params.toString()}` : "";
+    const glResp = await fetch(`${ERP_URL}/api/gl${qs}`);
+    const glData = await glResp.json() as any;
+    const entries: any[] = glData.entries || [];
+    const periods: string[] = glData.periods || [];
+
+    // If explicit period range requested, delete old facts first (handles source-side deletes)
+    const isPeriodSync = params.has("period_from") || params.has("period_to");
+    if (isPeriodSync && periods.length > 0) {
+      deleteEconFactsByPeriods(source, periods);
+      console.log(`[SCHEDULER] Deleted old facts for periods: ${periods.join(",")}`);
+    }
+
+    if (entries.length > 0) {
+      const batchId = `sync-${source}-${Date.now()}`;
+      const projectId = demoState.erp_id || "ERP-GL";
+
+      const facts = entries.map((e: any) => ({
+        source_system: source,
+        source_batch_id: batchId,
+        source_row_id: e.entry_id || null,
+        source_modified_at: e.modified_at || null,
+        project_id: projectId,
+        account: e.account,
+        org_unit: e.org_unit,
+        period: e.period,
+        amount: e.amount,
+        currency: e.currency || "SEK",
+        transaction_date: e.transaction_date,
+        dim1: e.activity,
+        dim2: e.cost_bearer,
+        dim3: e.counterpart,
+      }));
+
+      const ins = insertEconFacts(facts);
       const val = validateEconFacts(ins.batch_id);
-      upsertSyncState(source, "facts", { last_sync_at: new Date().toISOString(), rows_received: ins.received, rows_validated: val.validated, rows_rejected: val.rejected, status: "idle", duration_ms: Date.now() - t0 });
-      console.log(`[SCHEDULER] Seeded ${sampleFacts.length} sample GL transactions for ${source}`);
+      const newWatermark = glData.high_watermark || highWatermark;
+
+      // ── Auto-publish based on error policy ──
+      const errorPolicy = getSystemConfig(source, "error_policy") || "skip_invalid";
+      const autoPublish = getSystemConfig(source, "auto_publish") === "true";
+      const policyResult = evaluateErrorPolicy(errorPolicy, val.validated, val.rejected);
+      let publishedCount = 0;
+
+      if (autoPublish && val.validated > 0) {
+        if (policyResult.allowed) {
+          try {
+            const pubResult = await executeFactPublish();
+            publishedCount = pubResult.published;
+            console.log(`[SCHEDULER] Auto-publish: ${publishedCount} facts published (policy: ${errorPolicy})`);
+          } catch (e: any) {
+            console.error(`[SCHEDULER] Auto-publish failed:`, e.message);
+          }
+        } else {
+          console.warn(`[SCHEDULER] Auto-publish BLOCKED by policy: ${policyResult.reason}`);
+          insertAuditEvent("out", `economy.publish.blocked`, "PublishBlocked", undefined, source, `Auto-publish blocked: ${policyResult.reason} (${val.rejected} rejected of ${val.validated + val.rejected})`);
+        }
+      }
+
+      upsertSyncState(source, "facts", {
+        last_sync_at: new Date().toISOString(),
+        high_watermark: newWatermark || undefined,
+        rows_received: ins.received + ins.updated,
+        rows_validated: val.validated,
+        rows_rejected: val.rejected,
+        status: policyResult.allowed ? "idle" : "blocked",
+        duration_ms: Date.now() - t0,
+      });
+      console.log(`[SCHEDULER] Facts sync: ${ins.received} new, ${ins.updated} updated, ${val.validated} validated, ${val.rejected} rejected, ${publishedCount} published (policy: ${errorPolicy}, auto: ${autoPublish}) (periods: ${periods.join(",")})`);
+      insertAuditEvent("in", `economy.sync.facts`, "FactsSync", undefined, source, `Synced ${ins.received} new + ${ins.updated} updated, ${val.validated} valid, ${val.rejected} rejected, ${publishedCount} published (policy: ${errorPolicy})`);
+    } else {
+      upsertSyncState(source, "facts", { status: "idle", duration_ms: Date.now() - t0 });
     }
    } // end scope !== "entities"
 
@@ -1038,7 +1263,7 @@ function scheduleEconSync(source: string, cronExpr: string) {
 app.post("/api/economy/sync/:source/run", async (req, res) => {
   const scope = (req.query.scope as string) || "all";
   if (!["all", "entities", "facts"].includes(scope)) { res.status(400).json({ error: "scope must be all, entities, or facts" }); return; }
-  await runEconSync(req.params.source, scope as any);
+  await runEconSync(req.params.source, scope as any, req);
   res.json({ ok: true, source: req.params.source, scope });
 });
 
@@ -1065,6 +1290,21 @@ app.delete("/api/economy/sync/:source/schedule", (req, res) => {
   const existing = scheduledJobs.get(key);
   if (existing) { existing.stop(); scheduledJobs.delete(key); }
   res.json({ ok: true, stopped: !!existing });
+});
+
+// API: Re-validate (reset rejected → received, then validate again)
+app.post("/api/economy/facts/revalidate", (_req, res) => {
+  const result = revalidateEconFacts();
+  insertAuditEvent("in", "economy.revalidate", "Revalidate", undefined, undefined, `Re-validated: ${result.reset} reset, ${result.validated} validated, ${result.rejected} still rejected`);
+  res.json({ ok: true, ...result });
+});
+
+// API: Full re-read (reset watermark + trigger sync)
+app.post("/api/economy/sync/:source/full-reread", async (req, res) => {
+  resetSyncWatermark(req.params.source, "facts");
+  insertAuditEvent("in", "economy.full-reread", "FullReread", undefined, req.params.source, `Watermark reset for ${req.params.source} — starting full re-read`);
+  await runEconSync(req.params.source, "facts");
+  res.json({ ok: true, description: `Full re-read completed for ${req.params.source}` });
 });
 
 // ── Demo Runner ──
@@ -1190,18 +1430,18 @@ app.post("/api/demo/step/1", async (_req, res) => {
     upsertEconEntityAttribute({ dimension: "org_unit", code: "DIV-01", attribute_name: "region", attribute_value: "Stockholm", source_system: "erp" });
     upsertEconEntityAttribute({ dimension: "org_unit", code: "DIV-01", attribute_name: "level", attribute_value: "division", source_system: "erp" });
 
-    // ── ERP flex dimensions (not shared — mapped to products' dim1/dim2/dim3 via routing) ──
+    // ── ERP flex dimensions → platform dim-slots (dim1/dim2/dim3) ──
     const flexDims = [
-      { dim: "activity", codes: [
+      { dim: "dim1", codes: [
         { code: "AKT-100", name: "Design" },
         { code: "AKT-200", name: "Construction" },
         { code: "AKT-300", name: "Inspection" },
       ]},
-      { dim: "cost_center", codes: [
+      { dim: "dim2", codes: [
         { code: "KB-500", name: "Internal" },
         { code: "KB-600", name: "External" },
       ]},
-      { dim: "counterpart", codes: [
+      { dim: "dim3", codes: [
         { code: "MP-200", name: "Supplier Alpha" },
         { code: "MP-300", name: "Supplier Beta" },
       ]},
@@ -1601,6 +1841,81 @@ app.post("/api/demo/step/11", async (_req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: `Process management demo failed: ${err}` });
+  }
+});
+
+// ── Lab Scenario: Inject invalid GL rows to demonstrate rejected facts ──
+app.post("/api/demo/inject-bad-facts", (_req, res) => {
+  const badFacts = [
+    { source_system: "erp", source_batch_id: "lab-bad-facts", account: "9999", org_unit: "OU-100", period: "2025-03", amount: 42000, currency: "SEK" },
+    { source_system: "erp", source_batch_id: "lab-bad-facts", account: "4010", org_unit: "OU-FAKE", period: "2025-04", amount: 88000, currency: "SEK" },
+    { source_system: "erp", source_batch_id: "lab-bad-facts", account: "0000", org_unit: "OU-GHOST", period: "2025-05", amount: 13500, currency: "SEK" },
+    { source_system: "erp", source_batch_id: "lab-bad-facts", account: "XXXX", org_unit: "OU-300", period: "2025-06", amount: -55000, currency: "SEK" },
+    { source_system: "erp", source_batch_id: "lab-bad-facts", account: "3010", org_unit: "OU-999", period: "2025-07", amount: -200000, currency: "SEK" },
+  ];
+  const insertResult = insertEconFacts(badFacts);
+  const valResult = validateEconFacts(insertResult.batch_id);
+  upsertSyncState("erp", "facts", {
+    last_sync_at: new Date().toISOString(),
+    rows_received: insertResult.received,
+    rows_validated: valResult.validated,
+    rows_rejected: valResult.rejected,
+    status: "idle",
+  });
+  console.log(`[LAB] Injected ${insertResult.received} bad facts → ${valResult.validated} validated, ${valResult.rejected} rejected`);
+  res.json({
+    ok: true,
+    description: `Injected ${insertResult.received} rows: ${valResult.rejected} rejected, ${valResult.validated} validated. Check "Rejected Facts" in Data Operations.`,
+    validated: valResult.validated,
+    rejected: valResult.rejected,
+    errors: valResult.errors,
+  });
+});
+
+// ── Golden Path — Full lifecycle demo ──
+app.post("/api/demo/golden-path", async (_req, res) => {
+  const steps: Array<{ step: string; result: string; ok: boolean }> = [];
+  try {
+    // Step 1: Full sync (entities + facts)
+    await runEconSync("erp", "all");
+    const s1 = getEconFactsSummary();
+    steps.push({ step: "Sync entities + facts", result: `${s1.total} facts, ${s1.validated} validated`, ok: true });
+
+    // Step 2: Re-sync same data to trigger change detection ("unchanged, skipping publish")
+    await runEconSync("erp", "entities");
+    steps.push({ step: "Re-sync (change detection)", result: "Dimension publish skipped — content hash unchanged", ok: true });
+
+    // Step 3: Inject invalid rows
+    const badFacts = [
+      { source_system: "erp", source_batch_id: "golden-path-bad", account: "9999", org_unit: "OU-100", period: "2025-08", amount: 50000, currency: "SEK" },
+      { source_system: "erp", source_batch_id: "golden-path-bad", account: "4010", org_unit: "OU-FAKE", period: "2025-09", amount: 75000, currency: "SEK" },
+      { source_system: "erp", source_batch_id: "golden-path-bad", account: "XXXX", org_unit: "OU-300", period: "2025-10", amount: -30000, currency: "SEK" },
+    ];
+    const ins = insertEconFacts(badFacts);
+    const val = validateEconFacts(ins.batch_id);
+    steps.push({ step: "Inject invalid GL rows", result: `${ins.received} inserted → ${val.rejected} rejected, ${val.validated} validated`, ok: true });
+
+    // Step 4: Re-validate (will still fail because reference data doesn't exist)
+    const reval1 = revalidateEconFacts();
+    steps.push({ step: "Re-validate (before fix)", result: `${reval1.reset} reset → ${reval1.rejected} still rejected (expected)`, ok: true });
+
+    // Step 5: Fix reference data (add the missing entities) then re-validate
+    upsertEconEntity({ source_system: "erp", dimension: "account", code: "9999", name: "Suspense Account (recovered)", type: "leaf" });
+    upsertEconEntity({ source_system: "erp", dimension: "org_unit", code: "OU-FAKE", name: "Fake Unit (recovered)", type: "leaf" });
+    upsertEconEntity({ source_system: "erp", dimension: "org_unit", code: "OU-300", name: "Branch Office (recovered)", type: "leaf" });
+    // Note: "XXXX" account still doesn't exist — shows partial recovery
+    const reval2 = revalidateEconFacts();
+    steps.push({ step: "Fix reference data + re-validate", result: `${reval2.reset} reset → ${reval2.validated} recovered, ${reval2.rejected} still rejected`, ok: true });
+
+    // Step 6: Publish all validated facts
+    const pub = await executeFactPublish();
+    steps.push({ step: "Final publish", result: `${pub.published} facts delivered to downstream products`, ok: true });
+
+    insertAuditEvent("out", "demo.golden-path", "GoldenPath", undefined, undefined, `Golden Path complete: ${steps.length} steps, ${pub.published} facts published`);
+    res.json({ ok: true, steps });
+  } catch (err: any) {
+    steps.push({ step: "ERROR", result: err.message, ok: false });
+    res.json({ ok: false, steps, error: err.message });
   }
 });
 

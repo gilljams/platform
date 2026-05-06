@@ -1,4 +1,5 @@
 import express from "express";
+import path from "path";
 import { Kafka, Partitioners } from "kafkajs";
 import { v4 as uuid } from "uuid";
 
@@ -15,6 +16,60 @@ const TOPICS = {
   ERP_PROJECTS: "erp.projects",
   ERP_ACCOUNTS: "erp.accounts",
   ERP_GENERAL_LEDGER: "erp.general-ledger",
+};
+
+// ── Reference Data (shared between GET endpoints and Kafka publishers) ──
+
+const ACCOUNTS = [
+  // Revenue
+  { code: "3010", name: "Service Revenue",  parent: "30", type: "leaf", account_type: "income", account_group: "revenue" },
+  { code: "3020", name: "Product Sales",    parent: "30", type: "leaf", account_type: "income", account_group: "revenue" },
+  { code: "3030", name: "Consulting Fees",  parent: "30", type: "leaf", account_type: "income", account_group: "revenue" },
+  { code: "30",   name: "Revenue",          parent: "RES", type: "group" },
+  // Personnel costs
+  { code: "4010", name: "Salaries",         parent: "40", type: "leaf", account_type: "expense", account_group: "personnel" },
+  { code: "4020", name: "Social Security",  parent: "40", type: "leaf", account_type: "expense", account_group: "personnel" },
+  { code: "4030", name: "Pension",          parent: "40", type: "leaf", account_type: "expense", account_group: "personnel" },
+  { code: "4040", name: "Consultants",      parent: "40", type: "leaf", account_type: "expense", account_group: "external services" },
+  { code: "40",   name: "Personnel Costs",  parent: "COSTS", type: "group" },
+  // External costs
+  { code: "5010", name: "Travel",           parent: "50", type: "leaf", account_type: "expense", account_group: "travel" },
+  { code: "5020", name: "Marketing",        parent: "50", type: "leaf", account_type: "expense", account_group: "marketing" },
+  { code: "5030", name: "IT Costs",         parent: "50", type: "leaf", account_type: "expense", account_group: "it" },
+  { code: "50",   name: "External Costs",   parent: "COSTS", type: "group" },
+  // Operating costs
+  { code: "6010", name: "Rent",             parent: "60", type: "leaf", account_type: "expense", account_group: "premises" },
+  { code: "6020", name: "Depreciation",     parent: "60", type: "leaf", account_type: "expense", account_group: "depreciation" },
+  { code: "60",   name: "Operating Costs",  parent: "COSTS", type: "group" },
+  // Aggregation nodes
+  { code: "COSTS", name: "Costs",           parent: "RES", type: "group" },
+  { code: "RES",   name: "Result",          parent: null,  type: "group" },
+];
+
+const ORG_UNITS = [
+  { code: "OU-100", name: "Sales",          parent: "DEPT-A", type: "leaf", region: "Stockholm", level: "department" },
+  { code: "OU-200", name: "Marketing",      parent: "DEPT-A", type: "leaf", region: "Stockholm", level: "department" },
+  { code: "OU-300", name: "IT",             parent: "DEPT-B", type: "leaf", region: "Gothenburg", level: "department" },
+  { code: "OU-400", name: "Finance",        parent: "DEPT-B", type: "leaf", region: "Gothenburg", level: "department" },
+  { code: "DEPT-A", name: "Marketing & Sales", parent: "ACME", type: "group", region: "Stockholm", level: "division" },
+  { code: "DEPT-B", name: "Operations",     parent: "ACME", type: "group", region: "Gothenburg", level: "division" },
+  { code: "ACME",   name: "Acme Inc",       parent: null,  type: "group", region: null, level: "company" },
+];
+
+const FLEX_DIMENSIONS: Record<string, { code: string; name: string }[]> = {
+  activity: [
+    { code: "AKT-100", name: "Core Operations" },
+    { code: "AKT-200", name: "Support" },
+    { code: "AKT-300", name: "Management" },
+  ],
+  cost_center: [
+    { code: "KB-500", name: "Product Development" },
+    { code: "KB-600", name: "Operations" },
+  ],
+  counterpart: [
+    { code: "MP-200", name: "Customer A" },
+    { code: "MP-300", name: "Customer B" },
+  ],
 };
 
 // ── Kafka setup ──
@@ -39,10 +94,22 @@ async function publish(topic: string, event: BaseEvent & Record<string, unknown>
 
 const app = express();
 app.use(express.json());
+app.use(express.static(path.join(__dirname, "../public")));
 
 // Healthcheck
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", service: "erp-mock" });
+});
+
+// ── GET endpoints (read-only, no Kafka) — for UI ──
+
+app.get("/api/data/dimensions", (_req, res) => {
+  res.json({ accounts: ACCOUNTS, org_units: ORG_UNITS, flex: FLEX_DIMENSIONS });
+});
+
+app.get("/api/data/gl", (_req, res) => {
+  const entries = generateGlEntries();
+  res.json({ entries, entry_count: entries.length });
 });
 
 // Capabilities — Platform discovers this system's dimensions automatically
@@ -60,7 +127,18 @@ app.get("/api/capabilities", (_req, res) => {
       { field_name: "activity", field_label: "Activity", data_type: "string" },
       { field_name: "cost_bearer", field_label: "Cost Center", data_type: "string" },
       { field_name: "counterpart", field_label: "Counterpart", data_type: "string" }
-    ]
+    ],
+    // Member attributes — metadata fields on dimension members (not dimensions themselves)
+    member_attributes: {
+      account: [
+        { attribute_name: "account_type", attribute_label: "Account Type", data_type: "string", allowed_values: ["income", "expense"] },
+        { attribute_name: "account_group", attribute_label: "Account Group", data_type: "string" }
+      ],
+      org_unit: [
+        { attribute_name: "region", attribute_label: "Region", data_type: "string" },
+        { attribute_name: "level", attribute_label: "Level", data_type: "string", allowed_values: ["company", "division", "department"] }
+      ]
+    }
   });
 });
 
@@ -71,40 +149,8 @@ app.post("/api/publish-accounts", async (_req, res) => {
     event_type: "AccountsPublished" as const,
     timestamp: new Date().toISOString(),
     source_system: "erp" as const,
-    accounts: [
-      // Revenue
-      { code: "3010", name: "Service Revenue",  parent: "30", type: "leaf" },
-      { code: "3020", name: "Product Sales",    parent: "30", type: "leaf" },
-      { code: "3030", name: "Consulting Fees",  parent: "30", type: "leaf" },
-      { code: "30",   name: "Revenue",          parent: "RES", type: "group" },
-      // Personnel costs
-      { code: "4010", name: "Salaries",         parent: "40", type: "leaf" },
-      { code: "4020", name: "Social Security",  parent: "40", type: "leaf" },
-      { code: "4030", name: "Pension",          parent: "40", type: "leaf" },
-      { code: "4040", name: "Consultants",      parent: "40", type: "leaf" },
-      { code: "40",   name: "Personnel Costs",  parent: "COSTS", type: "group" },
-      // External costs
-      { code: "5010", name: "Travel",           parent: "50", type: "leaf" },
-      { code: "5020", name: "Marketing",        parent: "50", type: "leaf" },
-      { code: "5030", name: "IT Costs",         parent: "50", type: "leaf" },
-      { code: "50",   name: "External Costs",   parent: "COSTS", type: "group" },
-      // Operating costs
-      { code: "6010", name: "Rent",             parent: "60", type: "leaf" },
-      { code: "6020", name: "Depreciation",     parent: "60", type: "leaf" },
-      { code: "60",   name: "Operating Costs",  parent: "COSTS", type: "group" },
-      // Aggregation nodes
-      { code: "COSTS", name: "Costs",           parent: "RES", type: "group" },
-      { code: "RES",   name: "Result",          parent: null,  type: "group" },
-    ],
-    org_units: [
-      { code: "OU-100", name: "Sales",          parent: "DEPT-A", type: "leaf" },
-      { code: "OU-200", name: "Marketing",      parent: "DEPT-A", type: "leaf" },
-      { code: "OU-300", name: "IT",             parent: "DEPT-B", type: "leaf" },
-      { code: "OU-400", name: "Finance",        parent: "DEPT-B", type: "leaf" },
-      { code: "DEPT-A", name: "Marketing & Sales", parent: "ACME", type: "group" },
-      { code: "DEPT-B", name: "Operations",     parent: "ACME", type: "group" },
-      { code: "ACME",   name: "Acme Inc",       parent: null,  type: "group" },
-    ],
+    accounts: ACCOUNTS,
+    org_units: ORG_UNITS,
   };
   await publish(TOPICS.ERP_ACCOUNTS, event);
   res.json({ ok: true, event });
@@ -179,13 +225,16 @@ function generateGlEntries() {
     const txDate = `${period}-${String(day).padStart(2, "0")}`;
     lines.forEach((line, idx) => {
       const amount = Math.round(line.base * seasonal[m - 1] * vary(idx, m));
+      const entryId = `gl-${line.account}-${line.org_unit}-${period}`;
       entries.push({
+        entry_id: entryId,
         account: line.account,
         org_unit: line.org_unit,
         amount,
         currency: "SEK",
         period,
         transaction_date: txDate,
+        modified_at: txDate + "T08:00:00Z",
         activity: line.activity,
         cost_bearer: line.cost_bearer,
         counterpart: line.counterpart,
@@ -195,9 +244,7 @@ function generateGlEntries() {
   return entries;
 }
 
-// POST /api/publish-gl — Step 6 in demo
-// ERP GL data has richer dimensionality than Product A's budget —
-// e.g. "activity" which the budget model lacks. Demonstrates dimension gap.
+// POST /api/publish-gl — Step 6 in demo (legacy push-based, publishes to Kafka)
 app.post("/api/publish-gl", (req, res) => {
   const { erp_id, entries } = req.body;
   const event = {
@@ -210,6 +257,43 @@ app.post("/api/publish-gl", (req, res) => {
   };
   publish(TOPICS.ERP_GENERAL_LEDGER, event);
   res.json({ ok: true, event });
+});
+
+// GET /api/gl — Pull-based GL data with period filtering (production pattern)
+// Query params:
+//   ?period_from=2025-01&period_to=2025-06  — fetch specific period range
+//   ?modified_since=2025-03-01T00:00:00Z    — incremental (only modified after timestamp)
+//   (no params = all data)
+// Returns: { entries: [...], high_watermark: "..." }
+app.get("/api/gl", (req, res) => {
+  const periodFrom = req.query.period_from as string | undefined;
+  const periodTo = req.query.period_to as string | undefined;
+  const modifiedSince = req.query.modified_since as string | undefined;
+
+  let entries = generateGlEntries();
+
+  if (periodFrom || periodTo) {
+    entries = entries.filter((e: any) => {
+      if (periodFrom && e.period < periodFrom) return false;
+      if (periodTo && e.period > periodTo) return false;
+      return true;
+    });
+  }
+
+  if (modifiedSince) {
+    entries = entries.filter((e: any) => e.modified_at > modifiedSince);
+  }
+
+  // High watermark = latest modified_at in this result set
+  const highWatermark = entries.reduce((max: string, e: any) => e.modified_at > max ? e.modified_at : max, "");
+
+  const periods = [...new Set(entries.map((e: any) => e.period))].sort();
+  res.json({
+    entries,
+    total: entries.length,
+    periods,
+    high_watermark: highWatermark || null,
+  });
 });
 
 // ── Start ──

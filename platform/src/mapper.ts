@@ -178,6 +178,16 @@ db.exec(`
     UNIQUE(dimension, attribute_name, source_system)
   );
 
+  CREATE TABLE IF NOT EXISTS attribute_publish_rules (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    dimension        TEXT NOT NULL,
+    source_attribute TEXT NOT NULL,
+    publish_as       TEXT NOT NULL,
+    transform        TEXT,
+    enabled          INTEGER NOT NULL DEFAULT 1,
+    UNIQUE(dimension, source_attribute)
+  );
+
   CREATE TABLE IF NOT EXISTS econ_relations (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     source_system   TEXT NOT NULL,
@@ -215,7 +225,18 @@ db.exec(`
     dim6              TEXT,
     staging_status    TEXT NOT NULL DEFAULT 'received',
     received_at       TEXT NOT NULL DEFAULT (datetime('now')),
-    validated_at      TEXT
+    validated_at      TEXT,
+    UNIQUE(source_system, source_row_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS dimension_policies (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    dimension       TEXT NOT NULL,
+    policy_type     TEXT NOT NULL,
+    config          TEXT NOT NULL DEFAULT '{}',
+    enabled         INTEGER NOT NULL DEFAULT 1,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(dimension, policy_type)
   );
 
   CREATE TABLE IF NOT EXISTS sync_state (
@@ -242,7 +263,26 @@ db.exec(`
     visible       INTEGER DEFAULT 1,
     created_at    TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS event_subscriptions (
+    product        TEXT NOT NULL,
+    event_type     TEXT NOT NULL,
+    enabled        INTEGER DEFAULT 1,
+    created_at     TEXT DEFAULT (datetime('now')),
+    PRIMARY KEY (product, event_type)
+  );
 `);
+
+// Seed default subscriptions if table is empty
+if ((db.prepare("SELECT COUNT(*) as c FROM event_subscriptions").get() as any).c === 0) {
+  const defaults = [
+    ["prod_a", "accounts", 1], ["prod_a", "gl", 1], ["prod_a", "projects", 1], ["prod_a", "dimensions", 1], ["prod_a", "budget", 0], ["prod_a", "entity-linked", 1],
+    ["prod_b", "accounts", 1], ["prod_b", "gl", 1], ["prod_b", "projects", 1], ["prod_b", "dimensions", 1], ["prod_b", "budget", 1], ["prod_b", "entity-linked", 1],
+  ];
+  const ins = db.prepare("INSERT INTO event_subscriptions (product, event_type, enabled) VALUES (?, ?, ?)");
+  for (const [p, e, en] of defaults) ins.run(p, e, en);
+  console.log("[MAPPER] Seeded default event subscriptions");
+}
 
 // ── Schema migrations (add columns to existing tables) ──
 function addColumnIfNotExists(table: string, column: string, type: string) {
@@ -257,6 +297,26 @@ addColumnIfNotExists("inbox_items", "task_path", "TEXT");
 addColumnIfNotExists("inbox_items", "due_date", "TEXT");
 addColumnIfNotExists("inbox_items", "category", "TEXT DEFAULT 'action'");
 addColumnIfNotExists("dimension_code_mappings", "source_key", "TEXT");
+addColumnIfNotExists("sync_state", "error_policy", "TEXT DEFAULT 'skip_invalid'");
+addColumnIfNotExists("sync_state", "auto_publish", "INTEGER DEFAULT 0");
+addColumnIfNotExists("sync_state", "last_publish_at", "TEXT");
+addColumnIfNotExists("sync_state", "rows_published", "INTEGER DEFAULT 0");
+addColumnIfNotExists("econ_facts", "rejection_reason", "TEXT");
+addColumnIfNotExists("sync_state", "content_hash", "TEXT");
+
+// ── Dead Letter Queue table ──
+db.exec(`
+  CREATE TABLE IF NOT EXISTS dead_letter_queue (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    topic       TEXT NOT NULL,
+    event_type  TEXT,
+    raw_message TEXT,
+    error       TEXT NOT NULL,
+    created_at  TEXT DEFAULT (datetime('now')),
+    retried_at  TEXT,
+    status      TEXT DEFAULT 'pending'
+  );
+`);
 
 // ── Prepared statements ──
 
@@ -579,6 +639,22 @@ export function getAllSystemConfigs(): any[] {
   return db.prepare("SELECT * FROM system_config ORDER BY system_name, config_key").all();
 }
 
+// ── Event Subscriptions ──
+
+export function getEventSubscriptions(): { product: string; event_type: string; enabled: number }[] {
+  return db.prepare("SELECT product, event_type, enabled FROM event_subscriptions ORDER BY product, event_type").all() as any[];
+}
+
+export function setEventSubscription(product: string, eventType: string, enabled: boolean) {
+  db.prepare("INSERT OR REPLACE INTO event_subscriptions (product, event_type, enabled) VALUES (?, ?, ?)").run(product, eventType, enabled ? 1 : 0);
+}
+
+export function isTopicEnabledForProduct(product: string, eventType: string): boolean {
+  const row = db.prepare("SELECT enabled FROM event_subscriptions WHERE product = ? AND event_type = ?").get(product, eventType) as { enabled: number } | undefined;
+  // If no row exists, default to enabled (allow unknown products)
+  return row ? row.enabled === 1 : true;
+}
+
 export function getCodeMappings(dimensionName: string, product?: string) {
   if (product) {
     return db.prepare("SELECT * FROM dimension_code_mappings WHERE dimension_name = ? AND product = ? ORDER BY local_code").all(dimensionName, product);
@@ -769,6 +845,67 @@ export function getAuditEventCount(): number {
   return (db.prepare("SELECT COUNT(*) as c FROM audit_events").get() as { c: number }).c;
 }
 
+export function getPipelineHealth(): {
+  facts_total: number; facts_published: number; facts_rejected: number;
+  dlq_pending: number; last_sync: string | null; last_publish: string | null;
+  publishes_skipped: number; entities_total: number;
+} {
+  const facts = db.prepare("SELECT COUNT(*) as total, SUM(CASE WHEN staging_status='published' THEN 1 ELSE 0 END) as published, SUM(CASE WHEN staging_status='rejected' THEN 1 ELSE 0 END) as rejected FROM econ_facts").get() as any;
+  const dlq = (db.prepare("SELECT COUNT(*) as c FROM dead_letter_queue WHERE status='pending'").get() as any).c;
+  const lastSync = (db.prepare("SELECT MAX(last_sync_at) as v FROM sync_state").get() as any).v;
+  const lastPublish = (db.prepare("SELECT MAX(last_publish_at) as v FROM sync_state").get() as any).v;
+  const skipped = (db.prepare("SELECT COUNT(*) as c FROM audit_events WHERE summary LIKE '%unchanged%skipping%'").get() as any).c;
+  const entities = (db.prepare("SELECT COUNT(*) as c FROM econ_entities WHERE code != '_placeholder'").get() as any).c;
+  return {
+    facts_total: facts.total || 0,
+    facts_published: facts.published || 0,
+    facts_rejected: facts.rejected || 0,
+    dlq_pending: dlq,
+    last_sync: lastSync || null,
+    last_publish: lastPublish || null,
+    publishes_skipped: skipped,
+    entities_total: entities,
+  };
+}
+
+// ── Dead Letter Queue ──
+
+export function insertDLQ(topic: string, eventType: string | undefined, rawMessage: string, error: string) {
+  db.prepare(
+    "INSERT INTO dead_letter_queue (topic, event_type, raw_message, error) VALUES (?, ?, ?, ?)"
+  ).run(topic, eventType || null, rawMessage, error);
+}
+
+export function getDLQItems(limit = 50): any[] {
+  return db.prepare("SELECT * FROM dead_letter_queue ORDER BY id DESC LIMIT ?").all(limit) as any;
+}
+
+export function getDLQCount(): { total: number; pending: number } {
+  const total = (db.prepare("SELECT COUNT(*) as c FROM dead_letter_queue").get() as any).c;
+  const pending = (db.prepare("SELECT COUNT(*) as c FROM dead_letter_queue WHERE status = 'pending'").get() as any).c;
+  return { total, pending };
+}
+
+export function markDLQRetried(id: number) {
+  db.prepare("UPDATE dead_letter_queue SET status = 'retried', retried_at = datetime('now') WHERE id = ?").run(id);
+}
+
+// ── Content Hash (change detection) ──
+
+export function computeContentHash(data: unknown): string {
+  const crypto = require("crypto");
+  return crypto.createHash("sha256").update(JSON.stringify(data)).digest("hex").slice(0, 16);
+}
+
+export function getSyncContentHash(source: string, entityType: string): string | null {
+  const row = db.prepare("SELECT content_hash FROM sync_state WHERE source_system = ? AND entity_type = ?").get(source, entityType) as { content_hash: string | null } | undefined;
+  return row?.content_hash || null;
+}
+
+export function setSyncContentHash(source: string, entityType: string, hash: string) {
+  db.prepare("UPDATE sync_state SET content_hash = ? WHERE source_system = ? AND entity_type = ?").run(hash, source, entityType);
+}
+
 // ── Idempotency ──
 
 export function isEventProcessed(eventId: string): boolean {
@@ -792,6 +929,10 @@ export function upsertEconEntity(entity: { source_system: string; dimension: str
   `).run(entity.source_system, entity.dimension, entity.code, entity.name, entity.type || "leaf", entity.status || "active", entity.valid_from || null, entity.valid_to || null);
 }
 
+export function getEconDimensions(): { dimension: string; entity_count: number }[] {
+  return db.prepare("SELECT dimension, COUNT(*) as entity_count FROM econ_entities GROUP BY dimension ORDER BY dimension").all() as any[];
+}
+
 export function getEconEntities(dimension?: string): any[] {
   if (dimension) return db.prepare("SELECT * FROM econ_entities WHERE dimension = ? ORDER BY code").all(dimension);
   return db.prepare("SELECT * FROM econ_entities ORDER BY dimension, code").all();
@@ -812,8 +953,11 @@ export function upsertEconEntityAttribute(attr: { dimension: string; code: strin
   `).run(attr.dimension, attr.code, attr.attribute_name, attr.attribute_value, attr.source_system);
 }
 
-export function getEconEntityAttributes(dimension: string, code: string): any[] {
-  return db.prepare("SELECT * FROM econ_entity_attributes WHERE dimension = ? AND code = ? ORDER BY source_system, attribute_name").all(dimension, code);
+export function getEconEntityAttributes(dimension: string, code?: string): any[] {
+  if (code) {
+    return db.prepare("SELECT * FROM econ_entity_attributes WHERE dimension = ? AND code = ? ORDER BY source_system, attribute_name").all(dimension, code);
+  }
+  return db.prepare("SELECT * FROM econ_entity_attributes WHERE dimension = ? ORDER BY code, attribute_name").all(dimension);
 }
 
 export function upsertEconAttributeDef(def: { dimension: string; attribute_name: string; attribute_label: string; data_type?: string; source_system?: string; allowed_values?: string }) {
@@ -828,6 +972,26 @@ export function upsertEconAttributeDef(def: { dimension: string; attribute_name:
 export function getEconAttributeDefs(dimension?: string): any[] {
   if (dimension) return db.prepare("SELECT * FROM econ_attribute_defs WHERE dimension = ? ORDER BY attribute_name").all(dimension);
   return db.prepare("SELECT * FROM econ_attribute_defs ORDER BY dimension, attribute_name").all();
+}
+
+// ── Attribute Publish Rules ──
+
+export function upsertAttributePublishRule(rule: { dimension: string; source_attribute: string; publish_as: string; transform?: string; enabled?: number }) {
+  db.prepare(`
+    INSERT INTO attribute_publish_rules (dimension, source_attribute, publish_as, transform, enabled)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(dimension, source_attribute) DO UPDATE SET
+      publish_as = excluded.publish_as, transform = excluded.transform, enabled = excluded.enabled
+  `).run(rule.dimension, rule.source_attribute, rule.publish_as, rule.transform || null, rule.enabled ?? 1);
+}
+
+export function getAttributePublishRules(dimension?: string): any[] {
+  if (dimension) return db.prepare("SELECT * FROM attribute_publish_rules WHERE dimension = ? ORDER BY source_attribute").all(dimension);
+  return db.prepare("SELECT * FROM attribute_publish_rules ORDER BY dimension, source_attribute").all();
+}
+
+export function deleteAttributePublishRule(id: number): boolean {
+  return db.prepare("DELETE FROM attribute_publish_rules WHERE id = ?").run(id).changes > 0;
 }
 
 export function upsertEconRelation(rel: { source_system: string; relation_type?: string; dimension: string; child_code: string; parent_code: string; hierarchy_name?: string; level?: number; sort_order?: number; valid_from?: string; valid_to?: string }) {
@@ -847,23 +1011,50 @@ export function getEconRelations(dimension?: string, hierarchyName?: string): an
   return db.prepare("SELECT * FROM econ_relations ORDER BY dimension, hierarchy_name, level, sort_order").all();
 }
 
-export function insertEconFacts(facts: Array<{ source_system: string; source_batch_id?: string; source_row_id?: string; source_modified_at?: string; project_id?: string; account: string; org_unit: string; period: string; amount: number; currency?: string; transaction_date?: string; dim1?: string; dim2?: string; dim3?: string; dim4?: string; dim5?: string; dim6?: string }>): { received: number; rejected: number; batch_id: string } {
+export function insertEconFacts(facts: Array<{ source_system: string; source_batch_id?: string; source_row_id?: string; source_modified_at?: string; project_id?: string; account: string; org_unit: string; period: string; amount: number; currency?: string; transaction_date?: string; dim1?: string; dim2?: string; dim3?: string; dim4?: string; dim5?: string; dim6?: string }>): { received: number; rejected: number; updated: number; batch_id: string } {
   const batchId = facts[0]?.source_batch_id || `batch-${Date.now()}`;
-  const stmt = db.prepare(`
+  // Use upsert when source_row_id is provided (idempotent re-sync)
+  const stmtUpsert = db.prepare(`
+    INSERT INTO econ_facts (source_system, source_batch_id, source_row_id, source_modified_at, project_id, account, org_unit, period, amount, currency, transaction_date, dim1, dim2, dim3, dim4, dim5, dim6, staging_status, received_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'received', datetime('now'))
+    ON CONFLICT(source_system, source_row_id) DO UPDATE SET
+      source_batch_id = excluded.source_batch_id,
+      source_modified_at = excluded.source_modified_at,
+      project_id = excluded.project_id,
+      account = excluded.account,
+      org_unit = excluded.org_unit,
+      period = excluded.period,
+      amount = excluded.amount,
+      currency = excluded.currency,
+      transaction_date = excluded.transaction_date,
+      dim1 = excluded.dim1, dim2 = excluded.dim2, dim3 = excluded.dim3,
+      dim4 = excluded.dim4, dim5 = excluded.dim5, dim6 = excluded.dim6,
+      staging_status = 'received',
+      received_at = datetime('now')
+  `);
+  const stmtInsert = db.prepare(`
     INSERT INTO econ_facts (source_system, source_batch_id, source_row_id, source_modified_at, project_id, account, org_unit, period, amount, currency, transaction_date, dim1, dim2, dim3, dim4, dim5, dim6, staging_status, received_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'received', datetime('now'))
   `);
-  let received = 0, rejected = 0;
+  let received = 0, rejected = 0, updated = 0;
   const run = db.transaction(() => {
     for (const f of facts) {
       try {
-        stmt.run(f.source_system, batchId, f.source_row_id || null, f.source_modified_at || null, f.project_id || null, f.account, f.org_unit, f.period, f.amount, f.currency || "SEK", f.transaction_date || null, f.dim1 || null, f.dim2 || null, f.dim3 || null, f.dim4 || null, f.dim5 || null, f.dim6 || null);
-        received++;
+        const stmt = f.source_row_id ? stmtUpsert : stmtInsert;
+        const result = stmt.run(f.source_system, batchId, f.source_row_id || null, f.source_modified_at || null, f.project_id || null, f.account, f.org_unit, f.period, f.amount, f.currency || "SEK", f.transaction_date || null, f.dim1 || null, f.dim2 || null, f.dim3 || null, f.dim4 || null, f.dim5 || null, f.dim6 || null);
+        if (f.source_row_id && result.changes === 1 && result.lastInsertRowid === 0) { updated++; }
+        else { received++; }
       } catch { rejected++; }
     }
   });
   run();
-  return { received, rejected, batch_id: batchId };
+  return { received, rejected, updated, batch_id: batchId };
+}
+
+export function deleteEconFactsByPeriods(source: string, periods: string[]): number {
+  if (periods.length === 0) return 0;
+  const placeholders = periods.map(() => "?").join(",");
+  return db.prepare(`DELETE FROM econ_facts WHERE source_system = ? AND period IN (${placeholders})`).run(source, ...periods).changes;
 }
 
 export function validateEconFacts(batchId?: string): { validated: number; rejected: number; errors: string[] } {
@@ -876,16 +1067,30 @@ export function validateEconFacts(batchId?: string): { validated: number; reject
     const accExists = db.prepare("SELECT 1 FROM econ_entities WHERE dimension = 'account' AND code = ?").get(row.account);
     const orgExists = db.prepare("SELECT 1 FROM econ_entities WHERE dimension = 'org_unit' AND code = ?").get(row.org_unit);
     if (accExists && orgExists) {
-      db.prepare("UPDATE econ_facts SET staging_status = 'validated', validated_at = datetime('now') WHERE id = ?").run(row.id);
+      db.prepare("UPDATE econ_facts SET staging_status = 'validated', validated_at = datetime('now'), rejection_reason = NULL WHERE id = ?").run(row.id);
       validated++;
     } else {
-      db.prepare("UPDATE econ_facts SET staging_status = 'rejected' WHERE id = ?").run(row.id);
+      const reasons: string[] = [];
+      if (!accExists) reasons.push(`unknown account '${row.account}'`);
+      if (!orgExists) reasons.push(`unknown org_unit '${row.org_unit}'`);
+      const reason = reasons.join("; ");
+      db.prepare("UPDATE econ_facts SET staging_status = 'rejected', rejection_reason = ? WHERE id = ?").run(reason, row.id);
       rejected++;
-      if (!accExists) errors.push(`Row ${row.id}: unknown account '${row.account}'`);
-      if (!orgExists) errors.push(`Row ${row.id}: unknown org_unit '${row.org_unit}'`);
+      errors.push(`Row ${row.id}: ${reason}`);
     }
   }
   return { validated, rejected, errors };
+}
+
+export function revalidateEconFacts(): { reset: number; validated: number; rejected: number; errors: string[] } {
+  // Reset rejected rows back to 'received' so validateEconFacts picks them up
+  const resetResult = db.prepare("UPDATE econ_facts SET staging_status = 'received', rejection_reason = NULL WHERE staging_status = 'rejected'").run();
+  const result = validateEconFacts();
+  return { reset: resetResult.changes, ...result };
+}
+
+export function resetSyncWatermark(source: string, entityType: string): void {
+  db.prepare("UPDATE sync_state SET high_watermark = NULL WHERE source_system = ? AND entity_type = ?").run(source, entityType);
 }
 
 export function getEconFacts(opts?: { status?: string; project_id?: string; limit?: number }): any[] {
@@ -908,6 +1113,34 @@ export function getEconFactsSummary(): { total: number; received: number; valida
 export function publishEconFacts(): number {
   const result = db.prepare("UPDATE econ_facts SET staging_status = 'published' WHERE staging_status = 'validated'").run();
   return result.changes;
+}
+
+/**
+ * Evaluate error policy to determine if publishing is allowed.
+ * Policies:
+ *   - "skip_invalid"      → always publish validated rows (default)
+ *   - "abort_on_error"    → block publish if ANY rows were rejected
+ *   - "threshold:N"       → block publish if rejection rate exceeds N%
+ * Returns { allowed, reason }
+ */
+export function evaluateErrorPolicy(policy: string, validated: number, rejected: number): { allowed: boolean; reason: string | null } {
+  const total = validated + rejected;
+  if (total === 0) return { allowed: true, reason: null };
+
+  if (policy === "abort_on_error") {
+    if (rejected > 0) return { allowed: false, reason: `abort_on_error: ${rejected} row(s) rejected — publish blocked` };
+    return { allowed: true, reason: null };
+  }
+
+  if (policy.startsWith("threshold:")) {
+    const pct = parseInt(policy.split(":")[1], 10);
+    const actualPct = Math.round((rejected / total) * 100);
+    if (actualPct > pct) return { allowed: false, reason: `threshold exceeded: ${actualPct}% rejected (limit: ${pct}%)` };
+    return { allowed: true, reason: null };
+  }
+
+  // Default: skip_invalid — always allow
+  return { allowed: true, reason: null };
 }
 
 export function getEconFactsForPublish(): any[] {
@@ -935,6 +1168,168 @@ export function getSyncStates(): any[] {
 
 export function getSyncState(source: string, entityType: string): any {
   return db.prepare("SELECT * FROM sync_state WHERE source_system = ? AND entity_type = ?").get(source, entityType);
+}
+
+// ── Dimension Policies ──
+
+export function getDimensionPolicies(dimension?: string): any[] {
+  if (dimension) return db.prepare("SELECT * FROM dimension_policies WHERE dimension = ? ORDER BY policy_type").all(dimension);
+  return db.prepare("SELECT * FROM dimension_policies ORDER BY dimension, policy_type").all();
+}
+
+export function upsertDimensionPolicy(dimension: string, policyType: string, config: Record<string, any> = {}, enabled = 1) {
+  db.prepare(`
+    INSERT INTO dimension_policies (dimension, policy_type, config, enabled)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(dimension, policy_type) DO UPDATE SET config = excluded.config, enabled = excluded.enabled
+  `).run(dimension, policyType, JSON.stringify(config), enabled);
+}
+
+export function deleteDimensionPolicy(dimension: string, policyType: string): boolean {
+  return db.prepare("DELETE FROM dimension_policies WHERE dimension = ? AND policy_type = ?").run(dimension, policyType).changes > 0;
+}
+
+export function applyStructuralPolicies(dimension: string): { actions: string[], created_entities: number, created_relations: number, applied: number } {
+  const policies = db.prepare("SELECT * FROM dimension_policies WHERE (dimension = ? OR dimension = '*') AND enabled = 1 ORDER BY policy_type").all(dimension) as any[];
+  const actions: string[] = [];
+  let created_entities = 0, created_relations = 0, applied = 0;
+
+  for (const p of policies) {
+    const cfg = JSON.parse(p.config || "{}");
+    const effDim = dimension; // policies with '*' apply to this specific dimension
+    applied++;
+
+    if (p.policy_type === "auto_root") {
+      const rootCode = cfg.root_code || "_ALL";
+      const rootName = cfg.root_name || "All";
+      const existing = db.prepare("SELECT 1 FROM econ_entities WHERE dimension = ? AND code = ?").get(effDim, rootCode);
+      if (!existing) {
+        upsertEconEntity({ source_system: "platform", dimension: effDim, code: rootCode, name: rootName, type: "system" });
+        actions.push(`Created root node "${rootCode}" (${rootName}) for ${effDim}`);
+        created_entities++;
+      }
+      // Connect all leaf entities to root (flat list under _ALL)
+      const leaves = db.prepare(
+        "SELECT code FROM econ_entities WHERE dimension = ? AND type = 'leaf' AND code != ?"
+      ).all(effDim, rootCode) as { code: string }[];
+      let connected = 0;
+      for (const { code } of leaves) {
+        const existingRel = db.prepare(
+          "SELECT 1 FROM econ_relations WHERE dimension = ? AND hierarchy_name = 'standard' AND child_code = ? AND parent_code = ?"
+        ).get(effDim, code, rootCode);
+        if (!existingRel) {
+          upsertEconRelation({ source_system: "platform", dimension: effDim, child_code: code, parent_code: rootCode, hierarchy_name: "standard", level: 1 });
+          connected++;
+          created_relations++;
+        }
+      }
+      if (connected > 0) actions.push(`Connected ${connected} leaf entities to root "${rootCode}" in ${effDim}`);
+    }
+
+    if (p.policy_type === "auto_missing") {
+      const missingCode = cfg.missing_code || "_MISSING";
+      const missingName = cfg.missing_name || "(Missing)";
+      const existing = db.prepare("SELECT 1 FROM econ_entities WHERE dimension = ? AND code = ?").get(effDim, missingCode);
+      if (!existing) {
+        upsertEconEntity({ source_system: "platform", dimension: effDim, code: missingCode, name: missingName, type: "system" });
+        created_entities++;
+        // If auto_root exists, connect missing under root
+        const rootPolicy = policies.find(pp => pp.policy_type === "auto_root" && (pp.dimension === effDim || pp.dimension === "*"));
+        if (rootPolicy) {
+          const rootCfg = JSON.parse(rootPolicy.config || "{}");
+          const rootCode = rootCfg.root_code || "_ALL";
+          upsertEconRelation({ source_system: "platform", dimension: effDim, child_code: missingCode, parent_code: rootCode, hierarchy_name: "standard", level: 2 });
+          created_relations++;
+        }
+        actions.push(`Created missing node "${missingCode}" (${missingName}) for ${effDim}`);
+      }
+    }
+
+    if (p.policy_type === "grouping_rules") {
+      const rules: { strategy: string; params: Record<string, any> }[] = cfg.rules || [];
+      const leaves = db.prepare("SELECT code, name FROM econ_entities WHERE dimension = ? AND type = 'leaf'").all(effDim) as { code: string; name: string }[];
+      const groupsCreated = new Set<string>();
+
+      for (const rule of rules) {
+        for (const leaf of leaves) {
+          let groupCode: string | null = null;
+          let groupName: string | null = null;
+
+          if (rule.strategy === "first_n_chars") {
+            const n = rule.params?.n || 2;
+            if (leaf.code.length <= n) continue;
+            groupCode = leaf.code.substring(0, n);
+            groupName = rule.params?.name_template
+              ? rule.params.name_template.replace("{prefix}", groupCode)
+              : `Group ${groupCode}`;
+          } else if (rule.strategy === "char_range") {
+            // e.g. { start: 0, end: 1 } — extract characters at positions start..end
+            const start = rule.params?.start ?? 0;
+            const end = rule.params?.end ?? 1;
+            if (leaf.code.length <= end) continue;
+            groupCode = leaf.code.substring(start, end + 1);
+            groupName = rule.params?.name_template
+              ? rule.params.name_template.replace("{group}", groupCode)
+              : `Group ${groupCode}`;
+          } else if (rule.strategy === "regex") {
+            // e.g. { pattern: "^(\\d{2})", group_index: 1 }
+            const match = leaf.code.match(new RegExp(rule.params?.pattern || "^(.+)$"));
+            if (!match) continue;
+            groupCode = match[rule.params?.group_index ?? 1] || null;
+            if (!groupCode) continue;
+            groupName = rule.params?.name_template
+              ? rule.params.name_template.replace("{group}", groupCode)
+              : `Group ${groupCode}`;
+          }
+
+          if (!groupCode) continue;
+
+          // Create group entity if needed
+          const existingGroup = db.prepare("SELECT code FROM econ_entities WHERE dimension = ? AND code = ?").get(effDim, groupCode);
+          if (!existingGroup && !groupsCreated.has(groupCode)) {
+            upsertEconEntity({ source_system: "platform", dimension: effDim, code: groupCode, name: groupName!, type: "group" });
+            groupsCreated.add(groupCode);
+            actions.push(`Created group "${groupCode}" (${groupName}) for ${effDim}`);
+            created_entities++;
+          }
+
+          // Ensure leaf → group relation
+          const existingRel = db.prepare("SELECT 1 FROM econ_relations WHERE dimension = ? AND hierarchy_name = 'standard' AND child_code = ? AND parent_code = ?").get(effDim, leaf.code, groupCode);
+          if (!existingRel) {
+            upsertEconRelation({ source_system: "platform", dimension: effDim, child_code: leaf.code, parent_code: groupCode, hierarchy_name: "standard", level: 3 });
+            created_relations++;
+          }
+        }
+      }
+    }
+
+    // Backward compat: old "group_by_prefix" policy type → treat as single first_n_chars rule
+    if (p.policy_type === "group_by_prefix") {
+      const prefixLen = cfg.prefix_length || 2;
+      const leaves = db.prepare("SELECT code, name FROM econ_entities WHERE dimension = ? AND type = 'leaf'").all(effDim) as { code: string; name: string }[];
+      const groupsCreated = new Set<string>();
+      for (const leaf of leaves) {
+        if (leaf.code.length <= prefixLen) continue;
+        const prefix = leaf.code.substring(0, prefixLen);
+        const existingGroup = db.prepare("SELECT code FROM econ_entities WHERE dimension = ? AND code = ?").get(effDim, prefix);
+        if (!existingGroup && !groupsCreated.has(prefix)) {
+          const groupName = cfg.name_template ? cfg.name_template.replace("{prefix}", prefix) : `Group ${prefix}`;
+          upsertEconEntity({ source_system: "platform", dimension: effDim, code: prefix, name: groupName, type: "group" });
+          groupsCreated.add(prefix);
+          actions.push(`Created group "${prefix}" (${groupName}) for ${effDim}`);
+          created_entities++;
+        }
+        const parentCode = prefix;
+        const existingRel = db.prepare("SELECT 1 FROM econ_relations WHERE dimension = ? AND hierarchy_name = 'standard' AND child_code = ? AND parent_code = ?").get(effDim, leaf.code, parentCode);
+        if (!existingRel) {
+          upsertEconRelation({ source_system: "platform", dimension: effDim, child_code: leaf.code, parent_code: parentCode, hierarchy_name: "standard", level: 3 });
+          created_relations++;
+        }
+      }
+    }
+  }
+
+  return { actions, created_entities, created_relations, applied };
 }
 
 // ── External Tools ──

@@ -370,6 +370,71 @@
       font-size: 14px; padding: 0 4px; opacity: 0.5; transition: opacity 0.15s;
     }
     .delete-btn:hover { opacity: 1; }
+
+    /* ── Policy toggles ── */
+    .pol-dim-card { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; }
+    .pol-dim-header { padding: 10px 14px; background: #f8f9fa; border-bottom: 1px solid #e0e0e0; font-size: 12px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+    .pol-dim-badge { font-size: 10px; background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 4px; font-weight: 700; text-transform: uppercase; }
+    .pol-row { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid #f1f5f9; font-size: 12px; }
+    .pol-row:last-child { border-bottom: none; }
+    .pol-switch { position: relative; width: 34px; height: 18px; flex-shrink: 0; }
+    .pol-switch input { opacity: 0; width: 0; height: 0; }
+    .pol-switch .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: #cbd5e1; border-radius: 9px; transition: 0.2s; }
+    .pol-switch .slider::before { content: ''; position: absolute; height: 12px; width: 12px; left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: 0.2s; }
+    .pol-switch input:checked + .slider { background: #1f64a4; }
+    .pol-switch input:checked + .slider::before { transform: translateX(16px); }
+    .pol-label { flex: 1; }
+    .pol-label .pol-name { font-weight: 600; color: #1a1a2e; }
+    .pol-label .pol-desc { font-size: 11px; color: #888; margin-top: 1px; }
+    .pol-status { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 4px; }
+    .pol-status.on { background: #dcfce7; color: #166534; }
+    .pol-status.off { background: #f1f5f9; color: #94a3b8; }
+    .pol-rules-section { padding: 8px 14px; background: #fafbfc; border-top: 1px solid #e8edf4; }
+    .pol-rules-section h5 { font-size: 11px; font-weight: 700; color: #555; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.3px; }
+    .pol-rule-item { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12px; }
+    .pol-rule-item select, .pol-rule-item input { padding: 3px 6px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 11px; font-family: inherit; }
+    .pol-rule-item input { width: 50px; }
+    .pol-rule-item .rule-remove { color: #c62828; cursor: pointer; font-size: 14px; border: none; background: none; padding: 0 2px; }
+    .pol-add-rule { font-size: 11px; color: #1f64a4; cursor: pointer; border: none; background: none; font-weight: 600; padding: 4px 0; font-family: inherit; }
+    .pol-add-rule:hover { text-decoration: underline; }
+
+    /* ── Pipeline Dashboard KPIs ── */
+    .kpi-cell { background: #f8f9fa; border: 1px solid #e8e9ef; border-radius: 6px; padding: 10px 8px; text-align: center; }
+    .kpi-val { font-size: 22px; font-weight: 700; color: #0d1822; }
+    .kpi-lbl { font-size: 10px; color: #888; margin-top: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .kpi-blue { color: #1f64a4; }
+    .kpi-green { color: #10b981; }
+    .kpi-warn { color: #f59e0b; }
+    .kpi-danger { color: #dc2626; }
+
+    /* ── Collapsible card sections ── */
+    .card-details { background: #fff; border: 1px solid #e8e9ef; border-radius: 3px; margin-bottom: 16px; }
+    .card-details[open] { border-color: #c7d2fe; }
+    .card-details-summary {
+      display: flex; align-items: center; justify-content: flex-start;
+      padding: 14px 20px; cursor: pointer; user-select: none; list-style: none;
+    }
+    .card-details-summary::-webkit-details-marker { display:none; }
+    .card-details-summary::before { content: '▸'; font-size: 18px; margin-right: 10px; color: #888; transition: transform 0.2s; }
+    .card-details[open] > .card-details-summary::before { transform: rotate(90deg); }
+    .card-details-summary h2 { margin: 0; font-size: 13px; }
+
+    /* ── Small inputs ── */
+    .input-sm { padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px; }
+
+    /* ── Action box (recovery subsection) ── */
+    .action-box { padding: 12px; background: #f8f9fa; border: 1px solid #e8e9ef; border-radius: 6px; }
+    .action-box h4 { font-size: 12px; font-weight: 700; margin: 0 0 4px; color: #1f64a4; }
+    .action-box p { font-size: 11px; color: #666; margin: 0 0 8px; }
+    .action-sep { border-left: 1px solid #ddd; height: 24px; margin: 0 4px; }
+
+    /* ── Health status badges ── */
+    .health-status-ok { color: #10b981; font-weight: 600; }
+    .health-status-warn { color: #f59e0b; font-weight: 600; }
+    .health-status-error { color: #ef4444; font-weight: 600; }
+
+    /* Recovery sub-details arrow rotation */
+    details[open] > summary .recovery-arrow { display: inline-block; transform: rotate(90deg); }
   </style>
 </head>
 <body>
@@ -388,14 +453,19 @@
     </div>
     <nav class="sidebar-nav">
       <div class="sidebar-section">Tabs</div>
-      <a href="#" class="active" onclick="switchTab('setup');toggleSidebar();return false">Initial Setup</a>
+      <a href="#" class="active" onclick="switchTab('config');toggleSidebar();return false">Configuration</a>
+      <a href="#" onclick="switchTab('masterdata');toggleSidebar();return false">Master Data</a>
+      <a href="#" onclick="switchTab('domains');toggleSidebar();return false">Domains</a>
       <a href="#" onclick="switchTab('users');toggleSidebar();return false">Identity & Access</a>
-      <a href="#" onclick="switchTab('economy');toggleSidebar();return false">Data Operations</a>
-      <a href="#" onclick="switchTab('operations');toggleSidebar();return false">Operations</a>
       <a href="#" onclick="switchTab('events');toggleSidebar();return false">Events</a>
       <a href="#" onclick="switchTab('demo');toggleSidebar();return false">Demo</a>
       <a href="#" onclick="switchTab('notes');toggleSidebar();return false">POC & Production</a>
     </nav>
+    <div class="sidebar-section">Shell</div>
+    <label style="display:flex;align-items:center;gap:8px;padding:6px 18px;font-size:12px;color:rgba(255,255,255,0.6);cursor:pointer">
+      <input type="checkbox" id="logo-toggle" onchange="toggleCustomLogo(this.checked)">
+      Use custom logo
+    </label>
     <div class="sidebar-footer">
       <button onclick="doLogout()">Log out</button>
     </div>
@@ -412,50 +482,31 @@
 
   <!-- Tab bar -->
   <div class="tab-bar">
-    <button class="tab-btn active" onclick="switchTab('setup')">Initial Setup</button>
+    <button class="tab-btn active" onclick="switchTab('config')">Configuration</button>
+    <button class="tab-btn" onclick="switchTab('masterdata')">Master Data</button>
+    <button class="tab-btn" onclick="switchTab('domains')">Domains</button>
     <button class="tab-btn" onclick="switchTab('users')">Identity & Access</button>
-    <button class="tab-btn" onclick="switchTab('economy')">Data Operations</button>
-    <button class="tab-btn" onclick="switchTab('operations')">Operations</button>
     <button class="tab-btn" onclick="switchTab('events')">Events</button>
     <button class="tab-btn" onclick="switchTab('demo')">Demo</button>
     <button class="tab-btn" onclick="switchTab('notes')">POC & Production</button>
   </div>
 
   <!-- --------------------------------------------------------------- -->
-  <!-- TAB 1: INITIAL SETUP -->
+  <!-- TAB: CONFIGURATION -->
   <!-- --------------------------------------------------------------- -->
-  <div class="tab-panel active" id="tab-setup">
+  <div class="tab-panel active" id="tab-config">
     <div class="container">
 
-      <!-- Setup intro banner -->
+      <!-- Intro banner -->
       <div class="setup-intro">
-        <h2>Checklist</h2>
+        <h2>Configuration</h2>
         <p>
-          These settings are configured <strong>once per customer installation</strong>.
+          Platform infrastructure settings — systems, products, routing policies, and integrations.
+          Configured <strong>once per installation</strong>, rarely changed after go-live.
         </p>
         <div class="setup-checklist" id="setupChecklist">
-          <div class="setup-check" id="check-economy">
-            <span class="setup-check-label">Economy Domain</span>
-            <span class="setup-check-status">not configured</span>
-          </div>
           <div class="setup-check" id="check-systems">
             <span class="setup-check-label">Systems</span>
-            <span class="setup-check-status">not configured</span>
-          </div>
-          <div class="setup-check" id="check-dims">
-            <span class="setup-check-label">Dimensions</span>
-            <span class="setup-check-status">not configured</span>
-          </div>
-          <div class="setup-check" id="check-participants">
-            <span class="setup-check-label">Participants</span>
-            <span class="setup-check-status">not configured</span>
-          </div>
-          <div class="setup-check" id="check-codes">
-            <span class="setup-check-label">Code Lists</span>
-            <span class="setup-check-status">not configured</span>
-          </div>
-          <div class="setup-check" id="check-ecomodel">
-            <span class="setup-check-label">Economic Model</span>
             <span class="setup-check-status">not configured</span>
           </div>
           <div class="setup-check" id="check-routing">
@@ -465,61 +516,7 @@
         </div>
       </div>
 
-      <!-- STEP 1: Economy Domain Overview -->
-      <div class="card">
-        <div class="card-header">
-          <h2>Economy Domain</h2>
-          <span class="card-step-badge">Data Foundation</span>
-        </div>
-        <div id="econDomainStatus" style="display:flex;align-items:center;gap:12px;margin-bottom:12px;padding:8px 14px;border-radius:6px;border:1px solid #ced4da;background:#fff;">
-          <span style="font-weight:700;font-size:12px;color:#0d1822;">ERP Adapter</span>
-          <span style="font-size:11px;color:#888;">Chart of accounts, org units, projects, GL</span>
-          <span id="econDomainEnableBtn"></span>
-        </div>
-        <p style="font-size:13px;color:#666;margin-bottom:12px;">
-          The Economy Domain contains <strong>standardized reference data</strong> (chart of accounts, org units, projects, flex dimensions)
-          independent of any specific source system. Adapters are responsible for loading data here.
-        </p>
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
-          <button class="btn btn-primary btn-sm" id="btnSyncErp" onclick="syncFromErp()" style="padding:5px 14px;">Sync Structure from ERP</button>
-          <span id="syncStatus" style="font-size:12px;color:#888;"></span>
-          <span style="font-size:11px;color:#888;">(dimensions, codes, hierarchies, attributes — no transactions)</span>
-        </div>
-        <div id="econOverviewPanel" style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px;">
-          <div style="text-align:center;padding:12px 20px;background:#f8f9fa;border-radius:8px;min-width:120px;">
-            <div style="font-size:24px;font-weight:700;color:#1f64a4;" id="econEntityCount">—</div>
-            <div style="font-size:11px;color:#888;">Entities</div>
-          </div>
-          <div style="text-align:center;padding:12px 20px;background:#f8f9fa;border-radius:8px;min-width:120px;">
-            <div style="font-size:24px;font-weight:700;color:#1f64a4;" id="econRelationCount">—</div>
-            <div style="font-size:11px;color:#888;">Relations</div>
-          </div>
-          <div style="text-align:center;padding:12px 20px;background:#f8f9fa;border-radius:8px;min-width:120px;">
-            <div style="font-size:24px;font-weight:700;color:#1f64a4;" id="econDimensionCount">—</div>
-            <div style="font-size:11px;color:#888;">Dimensions</div>
-          </div>
-        </div>
-        <table>
-          <thead>
-            <tr><th>Dimension</th><th>Entities</th><th>Type</th></tr>
-          </thead>
-          <tbody id="econOverviewBody">
-            <tr><td colspan="3" style="color:#999;text-align:center;">No data staged yet</td></tr>
-          </tbody>
-        </table>
-        <div class="info-block" style="margin-top:12px">
-          <div class="info-trigger" onclick="toggleInfo(this)">Show details ▸</div>
-          <div class="info-content">
-            <div class="info-title">Architecture</div>
-            The Economy Domain is a <strong>standardized staging layer</strong> — same schema regardless of whether data comes from SAP, IFS, or our demo ERP mock.<br><br>
-            <strong>Shared dimensions</strong> (account, org_unit, project) are activated below and used across all products with the same code list.<br>
-            <strong>Flex dimensions</strong> (activity, cost_center, counterpart) are ERP-specific and mapped to products' generic dim1/dim2/dim3 slots via routing rules.<br><br>
-            The adapter (<code>runEconSync</code>) is responsible for filling this layer. The platform reads from it — never from source systems directly.
-          </div>
-        </div>
-      </div>
-
-      <!-- STEP 1b: Connected Systems -->
+      <!-- Connected Systems -->
       <div class="card">
         <div class="card-header">
           <h2>Connected Systems</h2>
@@ -563,6 +560,32 @@
       <!-- External Tools -->
       <div class="card">
         <div class="card-header">
+          <h2>Event Subscriptions</h2>
+          <span class="card-step-badge">Routing Policy</span>
+        </div>
+        <p style="font-size:13px;color:#666;margin-bottom:12px;">
+          Controls which event types each product receives from the platform router. Disabled subscriptions are logged but not delivered.
+        </p>
+        <div id="subscriptionMatrix" style="overflow-x:auto;">
+          <p style="color:#999;font-size:13px;font-style:italic;">Loading…</p>
+        </div>
+        <div id="subscriptionStatus" style="margin-top:8px;font-size:12px;"></div>
+        <div class="info-block" style="margin-top:12px">
+          <div class="info-trigger" onclick="toggleInfo(this)">Show details ▸</div>
+          <div class="info-content">
+            <div class="info-title">Event Subscription Model</div>
+            The platform router publishes enriched events to <code>platform.*.out</code> topics.<br>
+            Each product has a subscription that determines whether it receives a given event type.<br>
+            <strong>Event types:</strong> accounts, gl, budget, projects, dimensions, entity-linked<br>
+            <strong>V1:</strong> Toggling a subscription logs blocked deliveries. Products still technically subscribe to all topics, but the router gates outbound messages.<br>
+            <strong>V2 (future):</strong> Dynamic topic ACLs so consumers only see topics they are subscribed to.
+          </div>
+        </div>
+      </div>
+
+      <!-- External Tools -->
+      <div class="card">
+        <div class="card-header">
           <h2>External Tools</h2>
           <span class="card-step-badge">Optional</span>
         </div>
@@ -598,11 +621,130 @@
         </div>
       </div>
 
-      <!-- STEP 2: Shared dimensions -->
+    </div>
+  </div>
+
+  <!-- --------------------------------------------------------------- -->
+  <!-- TAB: MASTER DATA -->
+  <!-- --------------------------------------------------------------- -->
+  <div class="tab-panel" id="tab-masterdata">
+    <div class="container">
+
+      <div class="setup-intro">
+        <h2>Master Data</h2>
+        <p>Cross-domain reference data — dimensions, identity resolution, and data model configuration.
+          This is the <strong>golden record layer</strong> that all domains and products share.</p>
+        <div class="setup-checklist">
+          <div class="setup-check" id="check-economy">
+            <span class="setup-check-label">Economy Domain</span>
+            <span class="setup-check-status">not configured</span>
+          </div>
+          <div class="setup-check" id="check-dims">
+            <span class="setup-check-label">Dimensions</span>
+            <span class="setup-check-status">not configured</span>
+          </div>
+          <div class="setup-check" id="check-participants">
+            <span class="setup-check-label">Participants</span>
+            <span class="setup-check-status">not configured</span>
+          </div>
+          <div class="setup-check" id="check-codes">
+            <span class="setup-check-label">Code Lists</span>
+            <span class="setup-check-status">not configured</span>
+          </div>
+          <div class="setup-check" id="check-ecomodel">
+            <span class="setup-check-label">Economic Model</span>
+            <span class="setup-check-status">not configured</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── Data Domains ─── -->
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
+        <h3 style="font-size:12px;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin:0;">Data Domains</h3>
+        <div style="flex:1;height:1px;background:#e8e9ef;"></div>
+        <span style="font-size:11px;color:#aaa;">Each domain has its own adapter, schema, and pipeline</span>
+      </div>
+
+      <!-- Economy Domain -->
+      <div class="card">
+        <div class="card-header">
+          <h2 style="display:flex;align-items:center;gap:8px;">
+            <span style="width:8px;height:8px;border-radius:50%;background:#10b981;"></span> Economy Domain
+          </h2>
+          <span class="card-step-badge">Active</span>
+        </div>
+        <div id="econDomainStatus" style="display:flex;align-items:center;gap:12px;margin-bottom:12px;padding:8px 14px;border-radius:6px;border:1px solid #ced4da;background:#fff;">
+          <span style="font-weight:700;font-size:12px;color:#0d1822;">ERP Adapter</span>
+          <span style="font-size:11px;color:#888;">Chart of accounts, org units, projects, GL</span>
+          <span id="econDomainEnableBtn"></span>
+        </div>
+        <p style="font-size:13px;color:#666;margin-bottom:12px;">
+          The Economy Domain contains <strong>standardized reference data</strong> (chart of accounts, org units, projects, flex dimensions)
+          independent of any specific source system. Adapters are responsible for loading data here.
+        </p>
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+          <button class="btn btn-primary btn-sm" id="btnSyncErp" onclick="syncFromErp()" style="padding:5px 14px;">Sync Structure from ERP</button>
+          <span id="syncStatus" style="font-size:12px;color:#888;"></span>
+          <span style="font-size:11px;color:#888;">(dimensions, codes, hierarchies, attributes — no transactions)</span>
+        </div>
+        <div id="econOverviewPanel" style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px;">
+          <div style="text-align:center;padding:12px 20px;background:#f8f9fa;border-radius:8px;min-width:120px;">
+            <div style="font-size:24px;font-weight:700;color:#1f64a4;" id="econEntityCount">—</div>
+            <div style="font-size:11px;color:#888;">Entities</div>
+          </div>
+          <div style="text-align:center;padding:12px 20px;background:#f8f9fa;border-radius:8px;min-width:120px;">
+            <div style="font-size:24px;font-weight:700;color:#1f64a4;" id="econRelationCount">—</div>
+            <div style="font-size:11px;color:#888;">Relations</div>
+          </div>
+          <div style="text-align:center;padding:12px 20px;background:#f8f9fa;border-radius:8px;min-width:120px;">
+            <div style="font-size:24px;font-weight:700;color:#1f64a4;" id="econDimensionCount">—</div>
+            <div style="font-size:11px;color:#888;">Dimensions</div>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr><th>Dimension</th><th>Entities</th><th>Type</th></tr>
+          </thead>
+          <tbody id="econOverviewBody">
+            <tr><td colspan="3" style="color:#999;text-align:center;">No data staged yet</td></tr>
+          </tbody>
+        </table>
+        <div class="info-block" style="margin-top:12px">
+          <div class="info-trigger" onclick="toggleInfo(this)">Show details ▸</div>
+          <div class="info-content">
+            <div class="info-title">Architecture</div>
+            The Economy Domain is a <strong>standardized staging layer</strong> — same schema regardless of whether data comes from SAP, IFS, or our demo ERP mock.<br><br>
+            <strong>Shared dimensions</strong> (account, org_unit, project) are activated below and used across all products with the same code list.<br>
+            <strong>Flex dimensions</strong> (dim1–dim5) are generic slots. The adapter routes ERP-specific fields (e.g. "activity") into these slots via dim_routing rules. Products then label each slot (e.g. dim1 = "Activity") via dim_models.<br><br>
+            The adapter (<code>runEconSync</code>) is responsible for filling this layer. The platform reads from it — never from source systems directly.
+          </div>
+        </div>
+      </div>
+
+      <!-- HR Domain (placeholder) -->
+      <div class="card" style="opacity:0.5;border-style:dashed;">
+        <div class="card-header">
+          <h2 style="display:flex;align-items:center;gap:8px;">
+            <span style="width:8px;height:8px;border-radius:50%;background:#cbd5e1;"></span> HR Domain
+          </h2>
+          <span class="card-step-badge" style="background:#f1f5f9;color:#94a3b8;">Not activated</span>
+        </div>
+        <p style="font-size:12px;color:#888;margin:0;">
+          Employees, departments, positions, employment contracts. Same pattern as Economy — own adapter, own entity schema, own pipeline in the Domains tab.
+        </p>
+      </div>
+
+      <!-- ─── Cross-domain Configuration ─── -->
+      <div style="display:flex;align-items:center;gap:10px;margin:8px 0 4px;">
+        <h3 style="font-size:12px;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin:0;">Cross-domain</h3>
+        <div style="flex:1;height:1px;background:#e8e9ef;"></div>
+        <span style="font-size:11px;color:#aaa;">Shared structures that span multiple domains</span>
+      </div>
+
+      <!-- Shared Dimensions -->
       <div class="card">
         <div class="card-header">
           <h2>Shared Dimensions</h2>
-          <span class="card-step-badge">One-time Setup</span>
         </div>
         <p style="font-size:13px;color:#888;margin-bottom:4px;">
           <strong>Question:</strong> Which dimensions exist in the customer's economic model?
@@ -779,36 +921,42 @@ Normally set at customer installation, updated when chart of accounts changes.</
           <div class="info-trigger" onclick="toggleInfo(this)">Show details ▸</div>
           <div class="info-content">
             <div class="info-title">Example: "Nybyggen AB"</div>
-            The customer has the ERP fields <strong>activity</strong>, <strong>cost_bearer</strong> and <strong>counterpart</strong>
-            on each journal entry line. The budget tool has the same fields. We configure:<br>
-            • dim1 = Activity (from both ERP's and budget's <code>activity</code> field)<br>
-            • dim2 = Cost Center (from <code>cost_bearer</code>)<br>
-            • dim3 = Counterpart (from <code>counterpart</code>)<br>
-            Now the platform knows that each GL line <strong>and</strong> budget line should be enriched with these three values.
+            The customer's ERP sends fields <strong>activity</strong>, <strong>cost_bearer</strong> and <strong>counterpart</strong>
+            on each journal entry line. The platform stores these values in generic dim-slots (dim1, dim2, dim3).
+            We configure routing to tell the platform which ERP field maps to which slot:<br>
+            • erp.activity → dim1 (product labels it "Activity")<br>
+            • erp.cost_bearer → dim2 (product labels it "Cost Center")<br>
+            • erp.counterpart → dim3 (product labels it "Counterpart")<br>
+            Now all GL lines <strong>and</strong> budget lines use the same dim1/dim2/dim3 regardless of source.
           </div>
           <div class="info-content">
-            <div class="info-title">Approach C — named core + generic flex (technical)</div>
-            <pre>dim_models: prod_b.dim1="Activity", dim2="Cost Center", dim3="Counterpart"
-dim_routing: erp.activity→dim1, erp.cost_bearer→dim2, erp.counterpart→dim3
-             prod_a.activity→dim1, prod_a.cost_bearer→dim2, prod_a.counterpart→dim3
+            <div class="info-title">Architecture — named core + generic flex slots</div>
+            <pre>dim_models (per product):
+  prod_a.dim1 = "Activity", dim2 = "Cost Center", dim3 = "Counterpart"
+  prod_b.dim1 = "Activity", dim2 = "Cost Center", dim3 = "Counterpart"
 
-GL ingress  → applyDimRouting("erp","prod_b",entry)   → dim_values_per_entry
-Budget out  → applyDimRouting("prod_a","prod_b",line)  → dim_values_per_line
-→ Product B stores dim1/dim2/dim3 for BOTH budget and actuals
+dim_routing (source_field → target_slot):
+  erp.activity → dim1, erp.cost_bearer → dim2, erp.counterpart → dim3
+  prod_a.dim1 → dim1, prod_a.dim2 → dim2, prod_a.dim3 → dim3
 
-Configured once at customer installation.
-Can be extended if the customer adds more source fields.</pre>
+econ_entities: stores flex dim codes under dim1, dim2, dim3
+econ_facts:    stores values in dim1, dim2, dim3 columns
+
+Flow:
+  ERP GL entry { activity: "AKT-100" }
+    → econ_facts.dim1 = "AKT-100"
+    → applyDimRouting("erp", "prod_b", {activity:"AKT-100"}) → {dim1:"AKT-100"}
+    → Product B receives dim1 = "AKT-100", knows dim1 = "Activity"</pre>
           </div>
         </div>
       </div>
 
-    </div>
-  </div>
-  <!-- --------------------------------------------------------------- -->
-  <!-- TAB 2: OPERATIONS -->
-  <!-- --------------------------------------------------------------- -->
-  <div class="tab-panel" id="tab-operations">
-    <div class="container">
+      <!-- ─── Identity & Entity Resolution ─── -->
+      <div style="display:flex;align-items:center;gap:10px;margin:8px 0 4px;">
+        <h3 style="font-size:12px;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin:0;">Identity & Entity Resolution</h3>
+        <div style="flex:1;height:1px;background:#e8e9ef;"></div>
+        <span style="font-size:11px;color:#aaa;">Golden records, cross-system linking, and planning interpretation</span>
+      </div>
 
       <!-- Canonical Projects -->
       <div class="card">
@@ -918,106 +1066,575 @@ Enriched on BudgetSubmitted event when routing to platform.budget.out</pre>
   </div>
 
   <!-- --------------------------------------------------------------- -->
-  <!-- TAB: DATA OPERATIONS -->
+  <!-- TAB: DOMAINS -->
   <!-- --------------------------------------------------------------- -->
-  <div class="tab-panel" id="tab-economy">
+  <div class="tab-panel" id="tab-domains">
     <div class="container">
-      <div class="setup-intro">
-        <h2>Data Operations</h2>
-        <p>Sync, validate, and publish financial data (entities &amp; GL transactions) from external sources to downstream products.</p>
-      </div>
-
-      <!-- Pipeline Summary -->
-      <div class="card">
-        <div class="card-header">
-          <h2>Pipeline Summary</h2>
-          <button class="btn btn-sm" onclick="loadEconomyDomain()">↻ Refresh</button>
+      <div class="setup-intro" style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <h2>Domains</h2>
+          <p>Domain-scoped data pipeline — sync, validate, publish, and configure per data domain.</p>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px;" id="econSummaryCards">
-          <div class="stat-card"><div class="stat-value" id="econEntitiesCount">-</div><div class="stat-label">Entities</div></div>
-          <div class="stat-card"><div class="stat-value" id="econRelationsCount">-</div><div class="stat-label">Relations</div></div>
-          <div class="stat-card"><div class="stat-value" id="econFactsReceived">-</div><div class="stat-label">Facts received</div></div>
-          <div class="stat-card"><div class="stat-value" id="econFactsValidated">-</div><div class="stat-label">Facts validated</div></div>
-          <div class="stat-card" style="border-color:#e74c3c44"><div class="stat-value" style="color:#e74c3c" id="econFactsRejected">-</div><div class="stat-label">Facts rejected</div></div>
-          <div class="stat-card" style="border-color:#27ae6044"><div class="stat-value" style="color:#27ae60" id="econFactsPublished">-</div><div class="stat-label">Facts published</div></div>
-        </div>
-        <style>
-          .stat-card { background:#f8f9fa; border:1px solid #e0e0e0; border-radius:8px; padding:16px; text-align:center; }
-          .stat-value { font-size:28px; font-weight:700; color:#1f64a4; }
-          .stat-label { font-size:12px; color:#666; margin-top:4px; text-transform:uppercase; letter-spacing:0.5px; }
-        </style>
-      </div>
-
-      <!-- Actions -->
-      <div class="card">
-        <h2>Actions</h2>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="btn" onclick="econValidate()">✓ Validate pending facts</button>
-          <button class="btn" onclick="econPublish()" style="background:#27ae60;color:#fff;">▶ Publish validated</button>
-          <button class="btn" onclick="econManualSync('erp')" style="background:#e67e22;color:#fff;">↻ Full sync (ERP)</button>
-        </div>
-        <div id="econActionResult" style="margin-top:12px;font-size:13px;"></div>
-      </div>
-
-      <!-- Entities by dimension -->
-      <div class="card">
-        <div class="card-header">
-          <h2>Entities</h2>
-          <select id="econDimFilter" onchange="loadEconEntities()" style="padding:4px 8px;border-radius:4px;border:1px solid #ccc;font-size:13px;">
-            <option value="">All dimensions</option>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <label style="font-size:11px;color:rgba(255,255,255,0.6);font-weight:600;">DOMAIN:</label>
+          <select id="domainSelector" style="padding:6px 12px;border-radius:4px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.1);color:#fff;font-size:12px;font-weight:600;">
+            <option value="economy">Economy</option>
+            <option value="hr" disabled>HR (coming soon)</option>
           </select>
         </div>
-        <div id="econEntitiesTable" style="max-height:400px;overflow-y:auto;"></div>
       </div>
 
-      <!-- Sync State + Scheduler -->
-      <div class="card">
-        <h2>Sync State & Scheduler</h2>
-        <div id="econSyncTable"></div>
-        <div style="margin-top:16px;padding-top:12px;border-top:1px solid #e0e0e0;">
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-            <label style="font-size:13px;font-weight:600;">Schedule ERP sync:</label>
-            <input id="econCronInput" type="text" placeholder="e.g. 0 2 * * *  (nightly at 02:00)" style="padding:6px 10px;border:1px solid #ccc;border-radius:4px;font-size:13px;width:260px;" value="0 2 * * *">
-            <button class="btn" onclick="econSetSchedule('erp')">Set schedule</button>
-            <button class="btn" onclick="econStopSchedule('erp')" style="background:#e74c3c;color:#fff;">Stop</button>
-          </div>
-          <div id="econScheduleResult" style="margin-top:8px;font-size:13px;"></div>
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <!-- SECTION 1: Pipeline Dashboard (always visible)            -->
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <div class="card" id="pipelineDashboard" style="border-left:4px solid #10b981;">
+        <div class="card-header">
+          <h2 style="display:flex;align-items:center;gap:8px;">
+            <span id="healthIcon" style="font-size:18px;">🟢</span> Pipeline Status
+          </h2>
+          <span id="healthLastSync" style="font-size:11px;color:#888;"></span>
         </div>
+
+        <!-- Fact funnel -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:8px;margin-bottom:12px;">
+          <div class="kpi-cell"><div class="kpi-val" id="healthEntities">-</div><div class="kpi-lbl">Entities</div></div>
+          <div class="kpi-cell"><div class="kpi-val" id="econRelationsCount">-</div><div class="kpi-lbl">Relations</div></div>
+          <div class="kpi-cell"><div class="kpi-val kpi-blue" id="econFactsReceived">-</div><div class="kpi-lbl">Received</div></div>
+          <div class="kpi-cell"><div class="kpi-val kpi-blue" id="econFactsValidated">-</div><div class="kpi-lbl">Validated</div></div>
+          <div class="kpi-cell"><div class="kpi-val kpi-green" id="healthPublished">-</div><div class="kpi-lbl">Published</div></div>
+          <div class="kpi-cell"><div class="kpi-val kpi-warn" id="healthRejected">-</div><div class="kpi-lbl">Rejected</div></div>
+          <div class="kpi-cell"><div class="kpi-val kpi-danger" id="healthDLQ">-</div><div class="kpi-lbl">DLQ</div></div>
+          <div class="kpi-cell"><div class="kpi-val" id="healthSkipped">-</div><div class="kpi-lbl">Skipped</div></div>
+        </div>
+
+        <!-- Timestamps -->
+        <div style="display:flex;gap:24px;font-size:11px;color:#666;">
+          <span>Last sync: <strong id="healthLastSyncValue">—</strong></span>
+          <span>Last publish: <strong id="healthLastPublish">—</strong></span>
+        </div>
+
+        <div id="healthStatus" style="margin-top:10px;font-size:13px;"></div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <!-- SECTION 2: Actions (always visible)                       -->
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <div class="card">
+        <h2>Actions</h2>
+        <!-- Common actions -->
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
+          <button class="btn btn-primary" onclick="econValidate()">✓ Validate</button>
+          <button class="btn btn-primary" onclick="econPublish()">▶ Publish</button>
+          <button class="btn" onclick="econManualSync('erp')">↻ Full Sync</button>
+        </div>
+        <div id="econActionResult" style="font-size:13px;min-height:20px;"></div>
+
+        <!-- Recovery actions (collapsible) -->
+        <details style="margin-top:12px;border-top:1px solid #eee;padding-top:12px;">
+          <summary style="cursor:pointer;font-size:13px;font-weight:600;color:#555;user-select:none;display:flex;align-items:center;gap:6px;"><span style="font-size:16px;color:#888;transition:transform 0.2s;" class="recovery-arrow">▸</span> Recovery & Re-read</summary>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:12px;">
+            <div class="action-box">
+              <h4>Sync Period</h4>
+              <p>Sync specific periods from ERP without re-reading all data.</p>
+              <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">
+                <input id="econPeriodFrom" type="text" placeholder="2025-01" class="input-sm" style="width:72px;" value="">
+                <span style="font-size:11px;color:#888;">→</span>
+                <input id="econPeriodTo" type="text" placeholder="2025-06" class="input-sm" style="width:72px;" value="">
+                <button class="btn btn-sm" onclick="econPeriodSync('erp')">↻ Sync</button>
+              </div>
+            </div>
+            <div class="action-box">
+              <h4>Re-read Period</h4>
+              <p>Delete + re-fetch facts for specific periods from ERP.</p>
+              <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">
+                <input id="rereadFrom" type="text" placeholder="2025-01" class="input-sm" style="width:72px;">
+                <span style="font-size:11px;color:#888;">→</span>
+                <input id="rereadTo" type="text" placeholder="2025-06" class="input-sm" style="width:72px;">
+                <button class="btn btn-sm" onclick="doRereadPeriod()">↻ Re-read</button>
+              </div>
+            </div>
+            <div class="action-box">
+              <h4>Full Re-read</h4>
+              <p>Reset watermark and pull ALL facts from ERP again.</p>
+              <button class="btn btn-sm" onclick="doFullReread()">⚡ Full Re-read</button>
+            </div>
+            <div class="action-box">
+              <h4>Re-validate</h4>
+              <p>Give rejected facts a second chance (after fixing reference data).</p>
+              <button class="btn btn-sm" onclick="doRevalidate()">✓ Re-validate</button>
+            </div>
+          </div>
+          <div id="opsActionResult" style="margin-top:8px;font-size:13px;"></div>
+        </details>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <!-- SECTION 3: Detail Views (collapsible)                     -->
+      <!-- ═══════════════════════════════════════════════════════════ -->
+
+      <!-- Rejected Facts -->
+      <details class="card-details">
+        <summary class="card-details-summary">
+          <h2>Rejected Facts</h2>
+        </summary>
+        <div style="padding:16px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <div id="rejectedFactsSummary" style="font-size:12px;color:#666;"></div>
+            <button class="btn btn-sm" onclick="loadRejectedFacts()">↻ Refresh</button>
+          </div>
+          <div id="rejectedFactsTable" style="max-height:400px;overflow-y:auto;">
+            <p style="color:#999;font-size:13px;font-style:italic;">Loading…</p>
+          </div>
+        </div>
+      </details>
+
+      <!-- Entities -->
+      <details class="card-details">
+        <summary class="card-details-summary">
+          <h2>Entities</h2>
+        </summary>
+        <div style="padding:16px;">
+          <div style="margin-bottom:10px;">
+            <select id="econDimFilter" onchange="loadEconEntities()" style="padding:4px 8px;border-radius:4px;border:1px solid #ccc;font-size:12px;">
+              <option value="">All dimensions</option>
+            </select>
+          </div>
+          <div id="econEntitiesTable" style="max-height:400px;overflow-y:auto;"></div>
+        </div>
+      </details>
+
+      <!-- Sync State -->
+      <details class="card-details">
+        <summary class="card-details-summary">
+          <h2>Sync State & Scheduler</h2>
+        </summary>
+        <div style="padding:16px;">
+          <div id="econSyncTable"></div>
+          <div style="margin-top:16px;padding-top:12px;border-top:1px solid #eee;">
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <label style="font-size:12px;font-weight:600;">Schedule:</label>
+              <input id="econCronInput" type="text" placeholder="0 2 * * *" class="input-sm" style="width:180px;" value="0 2 * * *">
+              <button class="btn btn-sm" onclick="econSetSchedule('erp')">Set</button>
+              <button class="btn btn-sm" onclick="econStopSchedule('erp')" style="color:#dc2626;">Stop</button>
+            </div>
+            <div id="econScheduleResult" style="margin-top:6px;font-size:12px;"></div>
+          </div>
+        </div>
+      </details>
+
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <!-- SECTION 4: Configuration (collapsible)                    -->
+      <!-- ═══════════════════════════════════════════════════════════ -->
+
+      <!-- Pipeline Configuration -->
+      <details class="card-details">
+        <summary class="card-details-summary">
+          <h2>Pipeline Configuration</h2>
+        </summary>
+        <div style="padding:16px;">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start;">
+            <div>
+              <label style="font-size:12px;font-weight:600;color:#333;display:block;margin-bottom:4px;">Error Policy</label>
+              <select id="pipelineErrorPolicy" onchange="savePipelineConfig()" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:4px;font-size:13px;">
+                <option value="skip_invalid">Skip invalid — publish valid rows, log rejected</option>
+                <option value="abort_on_error">Abort on error — block publish if any row fails</option>
+                <option value="threshold:10">Threshold 10% — block if &gt;10% rejected</option>
+                <option value="threshold:25">Threshold 25% — block if &gt;25% rejected</option>
+                <option value="threshold:50">Threshold 50% — block if &gt;50% rejected</option>
+              </select>
+              <p style="font-size:11px;color:#888;margin-top:4px">Controls whether validated facts are published when some rows are rejected.</p>
+            </div>
+            <div>
+              <label style="font-size:12px;font-weight:600;color:#333;display:block;margin-bottom:4px;">Auto-publish</label>
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:6px 0;">
+                <input type="checkbox" id="pipelineAutoPublish" onchange="savePipelineConfig()">
+                <span style="font-size:13px;color:#333;">Automatically publish after sync</span>
+              </label>
+              <p style="font-size:11px;color:#888;margin-top:4px">When enabled, validated facts are published immediately after sync (respecting error policy).</p>
+            </div>
+          </div>
+          <div id="pipelineConfigStatus" style="margin-top:8px;font-size:12px;"></div>
+        </div>
+      </details>
+
+      <!-- Structural Policies -->
+      <details class="card-details">
+        <summary class="card-details-summary">
+          <h2>Structural Policies</h2>
+        </summary>
+        <div style="padding:16px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <p style="font-size:12px;color:#666;margin:0;">
+              Platform-level rules applied after sync, before products consume data.
+              Ensures consistent dimension structures (root nodes, grouping) across all sources.
+            </p>
+            <div style="display:flex;gap:6px;flex-shrink:0;margin-left:12px;">
+              <button class="btn btn-sm" onclick="policiesApplyAll()">▶ Apply All</button>
+              <button class="btn btn-sm" onclick="policiesLoad()">↻</button>
+            </div>
+          </div>
+          <div id="policiesDimGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px;margin-bottom:14px;">
+            <div style="color:#999;font-size:12px;padding:16px;text-align:center;">Loading…</div>
+          </div>
+          <div id="policiesResult" style="display:none;margin-top:10px;padding:10px 14px;background:#f8f9fa;border:1px solid #e0e0e0;border-radius:6px;font-size:12px;font-family:Consolas,monospace;white-space:pre-wrap;max-height:200px;overflow-y:auto;"></div>
+        </div>
+      </details>
+
+      <!-- Attribute Publishing -->
+      <details class="card-details">
+        <summary class="card-details-summary">
+          <h2>Attribute Publishing</h2>
+        </summary>
+        <div style="padding:16px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <p style="font-size:12px;color:#666;margin:0;">
+              Control which ERP-discovered attributes are published to downstream products.
+              No rules = passthrough (all attributes published as-is). Add rules to rename, remap, or exclude.
+            </p>
+            <div style="display:flex;gap:6px;flex-shrink:0;margin-left:12px;">
+              <button class="btn btn-sm" onclick="attrPubRepublish()">▶ Republish</button>
+              <button class="btn btn-sm" onclick="attrPubLoad()">↻</button>
+            </div>
+          </div>
+          <div style="margin-bottom:12px">
+            <select id="attrPubDimFilter" onchange="attrPubRender()" style="padding:4px 8px;border-radius:4px;border:1px solid #ccc;font-size:13px;">
+              <option value="">All dimensions</option>
+            </select>
+          </div>
+          <div id="attrPubTable" style="overflow-x:auto;"></div>
+          <div style="margin-top:16px;padding-top:12px;border-top:1px solid #eee;">
+            <h3 style="font-size:13px;margin-bottom:8px;">Add / Edit Rule</h3>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;">
+              <div style="display:flex;flex-direction:column;gap:2px;">
+                <label style="font-size:11px;font-weight:600;">Dimension</label>
+                <select id="apDim" class="input-sm"></select>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:2px;">
+                <label style="font-size:11px;font-weight:600;">Source Attribute</label>
+                <select id="apSrcAttr" class="input-sm"></select>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:2px;">
+                <label style="font-size:11px;font-weight:600;">Publish As</label>
+                <input id="apPublishAs" class="input-sm" style="width:120px;" placeholder="e.g. kontoklass">
+              </div>
+              <div style="display:flex;flex-direction:column;gap:2px;">
+                <label style="font-size:11px;font-weight:600;">Value Mapping</label>
+                <input id="apTransform" class="input-sm" style="width:200px;" placeholder='{"income":"I","expense":"K"}'>
+              </div>
+              <button class="btn btn-primary btn-sm" onclick="attrPubAdd()">Save Rule</button>
+            </div>
+          </div>
+          <div id="attrPubResult" style="display:none;margin-top:10px;padding:8px 12px;background:#f8f9fa;border:1px solid #e0e0e0;border-radius:6px;font-size:12px;"></div>
+        </div>
+      </details>
+
+      <!-- ERP Link -->
+      <div style="margin-top:12px;text-align:right;">
+        <a href="http://localhost:3001" target="_blank" style="display:inline-flex;align-items:center;gap:5px;padding:6px 12px;font-size:12px;font-weight:600;color:#1f64a4;background:#f0f4ff;border:1px solid #c7d2fe;border-radius:6px;text-decoration:none;">🏦 ERP Economy Domain Explorer ↗</a>
       </div>
 
       <!-- Info block -->
       <div class="info-block" style="margin-top:16px">
         <div class="info-trigger" onclick="toggleInfo(this)">Show details ▸</div>
+
         <div class="info-content">
-          <div class="info-title">Data Operations architecture</div>
-          <p>The Data Operations layer (Economy Domain) is a <strong>source-agnostic staging layer</strong> that decouples the platform from specific ERP connectors.</p>
-          <p><strong>Pipeline:</strong> External source → <code>econ_entities</code> / <code>econ_facts</code> → validate → publish → Kafka → downstream products.</p>
-          <p><strong>Tables:</strong> econ_entities, econ_entity_attributes, econ_attribute_defs, econ_relations, econ_facts, sync_state.</p>
-          <p><strong>API:</strong> <code>/api/economy/entities</code>, <code>/api/economy/facts</code>, <code>/api/economy/relations</code>, <code>/api/economy/sync-state</code></p>
+          <div class="info-title">Overview &mdash; Domain Pipeline</div>
+          <p>This tab shows the operational pipeline for the selected domain.
+            The platform provides a <strong>source-agnostic staging layer</strong> per domain &mdash;
+            the adapter reads source data, transforms it into a standard format, and publishes it via Kafka.
+            Products never talk to source systems directly.</p>
+          <pre style="font-size:11px;line-height:1.5;margin:8px 0;">
+ERP (source)                        Platform                                Products
+───────────                     ────────────────                        ─────────────
+ accounts  ──► Adapter ──► econ_entities ──► Structural Policies ──►  DimensionSnapshot ──► dim_members
+ org_units         │        econ_relations    (auto_root, grouping)     (Kafka event)        dim_relations
+ GL entries        │        econ_facts ──► validate ──► publish ──►   GL/Budget events ──► gl_lines
+                   │        econ_attribute_defs                                              budget_lines
+                   └──────► econ_entity_attributes ──► Publish Rules ──► (attributes in snapshot)</pre>
+          <p>Each section on this page represents a stage in this pipeline. Together they control how data flows from source to products.</p>
         </div>
+
         <div class="info-content">
-          <div class="info-title">Scheduler &amp; cron syntax</div>
-          <p>The scheduler uses <strong>cron expressions</strong> to trigger periodic ERP syncs. Format:</p>
-          <pre>┌───── minute (0–59)
-│ ┌───── hour (0–23)
-│ │ ┌───── day of month (1–31)
-│ │ │ ┌───── month (1–12)
-│ │ │ │ ┌───── day of week (0–7, 0 and 7 = Sunday)
-│ │ │ │ │
-* * * * *</pre>
-          <p><strong>Examples:</strong></p>
+          <div class="info-title">Pipeline Summary</div>
+          <p>Shows counters for the staging layer: how many <strong>entities</strong> (accounts, org units, etc.),
+            <strong>relations</strong> (hierarchies), and <strong>facts</strong> (GL transactions) are currently staged.
+            Facts pass through three states:</p>
+          <p><code>received</code> → <code>validated</code> → <code>published</code></p>
+          <p>A fact that fails validation becomes <strong>rejected</strong> and needs manual review.</p>
+        </div>
+
+        <div class="info-content">
+          <div class="info-title">Actions</div>
+          <p><strong>Validate pending facts</strong> &mdash; runs validation rules on all <code>received</code> facts (e.g. account code exists, amount is numeric). Valid facts move to <code>validated</code>; invalid ones become <code>rejected</code>.</p>
+          <p><strong>Publish validated</strong> &mdash; publishes all <code>validated</code> facts to Kafka (<code>platform.gl.out</code>). Products consume these events and store into their local <code>gl_lines</code> tables.</p>
+          <p><strong>Full sync (ERP)</strong> &mdash; triggers a complete sync cycle: fetch entities + facts from ERP, apply structural policies, publish dimension snapshots, and stage GL transactions.</p>
+          <p><strong>Sync periods</strong> &mdash; re-reads GL data for a specific period range from the ERP, bypassing the high watermark. Old staged data for those periods is deleted and replaced with fresh data. Use this when source data has been corrected retroactively.</p>
+        </div>
+
+        <div class="info-content">
+          <div class="info-title">Entities</div>
+          <p>Browse all entities staged in the Economy Domain, filterable by dimension (account, org_unit, project, etc.).
+            Entities are the building blocks that appear in dimension hierarchies and that transactions reference.
+            They arrive from the ERP adapter during sync and are the input for Structural Policies.</p>
+        </div>
+
+        <div class="info-content">
+          <div class="info-title">Sync State &amp; Scheduler</div>
+          <p><strong>Sync State</strong> shows per-source status: when the last sync ran, how many rows were received/validated/rejected.</p>
+          <p><strong>Scheduler</strong> lets you set a <strong>cron expression</strong> for automatic periodic syncs. The schedule runs inside the Platform container.</p>
           <table style="font-size:12px;margin:8px 0;border-collapse:collapse;">
-            <tr><td style="padding:3px 12px 3px 0;font-family:monospace;white-space:nowrap"><code>0 2 * * *</code></td><td style="padding:3px 0">Every night at 02:00 (default)</td></tr>
+            <tr><td style="padding:3px 12px 3px 0;font-family:monospace;white-space:nowrap"><code>0 2 * * *</code></td><td style="padding:3px 0">Every night at 02:00</td></tr>
             <tr><td style="padding:3px 12px 3px 0;font-family:monospace;white-space:nowrap"><code>*/15 * * * *</code></td><td style="padding:3px 0">Every 15 minutes</td></tr>
-            <tr><td style="padding:3px 12px 3px 0;font-family:monospace;white-space:nowrap"><code>0 */6 * * *</code></td><td style="padding:3px 0">Every 6 hours</td></tr>
             <tr><td style="padding:3px 12px 3px 0;font-family:monospace;white-space:nowrap"><code>0 8 * * 1-5</code></td><td style="padding:3px 0">Weekdays at 08:00</td></tr>
-            <tr><td style="padding:3px 12px 3px 0;font-family:monospace;white-space:nowrap"><code>0 6,18 * * *</code></td><td style="padding:3px 0">Twice daily at 06:00 and 18:00</td></tr>
           </table>
-          <p><strong>How it works:</strong> The <code>node-cron</code> library runs inside the Platform container.
-            When the schedule fires it calls <code>POST /api/economy/sync/erp/run</code>, which fetches data from ERP Mock,
-            upserts into <code>econ_entities</code> / <code>econ_facts</code>, validates, and publishes to downstream products via Kafka.</p>
-          <p><strong>Set schedule:</strong> Enter a cron expression and click "Set schedule". The schedule persists until stopped or the container restarts.</p>
-          <p><strong>Stop:</strong> Click "Stop" to cancel the active schedule. You can always trigger a manual sync using the "Manual sync (ERP)" button above.</p>
+          <p>The schedule persists until stopped or the container restarts. You can always trigger a manual sync regardless of the schedule.</p>
+        </div>
+
+        <div class="info-content">
+          <div class="info-title">Structural Policies</div>
+          <p>Rules that shape dimension hierarchies <strong>after</strong> adapter sync but <strong>before</strong> products receive the data.
+            They ensure consistent structures without modifying the original source data.</p>
+          <table style="font-size:12px;margin:8px 0;border-collapse:collapse;width:100%;">
+            <tr><td style="padding:4px 12px 4px 0;vertical-align:top;font-weight:600;white-space:nowrap">Auto Root</td>
+              <td style="padding:4px 0">Creates a <code>_ALL</code> root node and connects all leaf entities as children. Gives every dimension a single entry point for drill-down.</td></tr>
+            <tr><td style="padding:4px 12px 4px 0;vertical-align:top;font-weight:600;white-space:nowrap">Auto Missing</td>
+              <td style="padding:4px 0">Creates a <code>_MISSING</code> node under the root. Transactions referencing unknown codes can be caught here instead of being lost.</td></tr>
+            <tr><td style="padding:4px 12px 4px 0;vertical-align:top;font-weight:600;white-space:nowrap">Grouping Rules</td>
+              <td style="padding:4px 0">Creates intermediate group nodes based on patterns (first N characters, character range, or regex). E.g. accounts 3010–3030 grouped under a "30" node.</td></tr>
+          </table>
+          <p><strong>Execution order:</strong> Auto Root → Auto Missing → Grouping Rules (per dimension).<br>
+            <strong>When applied:</strong> Automatically after each ERP sync, or manually via "Apply All".</p>
+        </div>
+
+        <div class="info-content">
+          <div class="info-title">Attribute Publishing</div>
+          <p>Controls which <strong>member attributes</strong> are included in DimensionSnapshot events sent to products.
+            Attributes originate from the ERP (e.g. <code>account_type</code>, <code>region</code>) and are discovered automatically
+            during sync via the ERP's self-describing capabilities API.</p>
+          <p><strong>Three modes:</strong></p>
+          <table style="font-size:12px;margin:8px 0;border-collapse:collapse;width:100%;">
+            <tr><td style="padding:4px 12px 4px 0;vertical-align:top;font-weight:600;white-space:nowrap">Passthrough</td>
+              <td style="padding:4px 0">No rules configured for a dimension &mdash; all attributes are published as-is with their original names and values. This is the default.</td></tr>
+            <tr><td style="padding:4px 12px 4px 0;vertical-align:top;font-weight:600;white-space:nowrap">Published (with rule)</td>
+              <td style="padding:4px 0">A rule maps <code>source_attribute</code> → <code>publish_as</code>. Optionally includes a <strong>value mapping</strong> (JSON) to translate values, e.g. <code>{"income":"I","expense":"K"}</code>.</td></tr>
+            <tr><td style="padding:4px 12px 4px 0;vertical-align:top;font-weight:600;white-space:nowrap">Not published</td>
+              <td style="padding:4px 0">When rules exist for a dimension, any attribute <em>without</em> a rule is excluded from the snapshot. This lets you filter out irrelevant attributes.</td></tr>
+          </table>
+          <p>Click <strong>Republish</strong> after changing rules to re-send dimension snapshots immediately.</p>
+        </div>
+
+        <div class="info-content">
+          <div class="info-title">Example &mdash; from ERP attribute to product behavior</div>
+          <p>A concrete example of how attributes flow through the layers:</p>
+          <pre style="font-size:11px;line-height:1.6;margin:8px 0;background:#f8f9fa;padding:12px;border-radius:6px;border:1px solid #e0e0e0;">
+<strong>1. ERP</strong> declares that accounts have an attribute <code>account_type</code> with values like "income" or "expense".
+   Account 3010 (Sales revenue) has account_type = "income".
+   Account 4010 (Salaries) has account_type = "expense".
+
+<strong>2. Platform</strong> discovers this during sync and stores it in the Economy Domain.
+   An admin creates a <strong>publish rule</strong>:
+     account_type → publish as "kontoklass", values: {"income":"I", "expense":"K"}
+
+<strong>3. DimensionSnapshot</strong> (Kafka event) now includes:
+   { code: "3010", name: "Sales revenue", attributes: { kontoklass: "I" } }
+   { code: "4010", name: "Salaries",      attributes: { kontoklass: "K" } }
+
+<strong>4. Product B</strong> receives and stores these attributes locally.
+   The product admin creates an <strong>ingestion rule</strong>:
+     "If member_attr:account:kontoklass = I → set dim2 = REVENUE"
+     "If member_attr:account:kontoklass = K → set dim2 = COST"
+   Now every GL line is auto-tagged with a cost/revenue category for reporting.</pre>
+          <p>Another example: an org_unit attribute <code>region</code> could let a product group organizational units
+            by geographic area, or a <code>level</code> attribute could control which org units appear in summary reports.
+            The platform provides the <em>building blocks</em>; each product decides what to do with them.</p>
+        </div>
+
+        <div class="info-content">
+          <div class="info-title">Fact Pipeline &mdash; GL data ingestion</div>
+          <p>GL (General Ledger) transactions flow from ERP to products through a <strong>three-layer idempotent pipeline</strong>.
+            The design prevents duplicates on re-sync, supports period-based re-reads, and uses high-watermark tracking for incremental sync.</p>
+          <table style="font-size:12px;margin:8px 0;border-collapse:collapse;width:100%;">
+            <tr style="background:#f8f9fa;font-weight:600;">
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;">Layer</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;">Mechanism</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;">Dedup strategy</td></tr>
+            <tr>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;font-weight:600;white-space:nowrap">ERP (source)</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;">Pull-based API: <code>GET /api/gl</code> with <code>period_from</code>, <code>period_to</code>, <code>modified_since</code> params.</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;">Each row has a deterministic <code>entry_id</code> (e.g. <code>gl-3010-OU-100-2025-01</code>) and <code>modified_at</code> timestamp.</td></tr>
+            <tr>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;font-weight:600;white-space:nowrap">Platform (staging)</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;"><code>econ_facts</code> table with <code>UNIQUE(source_system, source_row_id)</code>. Insert uses <code>ON CONFLICT DO UPDATE</code> (upsert).</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;">Same row from same source always overwrites &mdash; never duplicated. Period re-syncs delete old period data first then re-insert.</td></tr>
+            <tr>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;font-weight:600;white-space:nowrap">Product (consumer)</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;">Reads <code>sync_mode</code> from Kafka event. When <code>replace_by_period</code>: deletes <code>gl_lines</code> for those periods before inserting.</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;">Period-level atomicity: old data removed, new data inserted. No stale or duplicated rows.</td></tr>
+          </table>
+          <p><strong>Sync modes:</strong></p>
+          <table style="font-size:12px;margin:8px 0;border-collapse:collapse;width:100%;">
+            <tr><td style="padding:4px 12px 4px 0;vertical-align:top;font-weight:600;white-space:nowrap">Incremental (default)</td>
+              <td style="padding:4px 0">Uses <code>high_watermark</code> (last <code>modified_at</code> seen). Only fetches rows modified after the watermark. Fast, minimal data transfer.</td></tr>
+            <tr><td style="padding:4px 12px 4px 0;vertical-align:top;font-weight:600;white-space:nowrap">Period re-read</td>
+              <td style="padding:4px 0">Admin specifies <code>period_from</code> / <code>period_to</code>. Ignores watermark, fetches all rows for those periods, deletes old staged data for those periods, and re-inserts. Useful when source data has been corrected retroactively.</td></tr>
+            <tr><td style="padding:4px 12px 4px 0;vertical-align:top;font-weight:600;white-space:nowrap">Full sync</td>
+              <td style="padding:4px 0">No period filter, no watermark. Fetches everything. Upsert ensures no duplicates. Safe to run as a "reset" but slower.</td></tr>
+          </table>
+          <p><strong>The high watermark</strong> (shown in the Sync State table) tracks the latest <code>modified_at</code> timestamp from the ERP.
+            On each incremental sync, only rows newer than this value are fetched. After a successful sync, the watermark advances to the newest timestamp in the batch.</p>
+        </div>
+
+        <div class="info-content">
+          <div class="info-title">Layer model &mdash; who owns what?</div>
+          <p>The architecture has a clear separation of responsibilities. Each layer owns its own logic and never reaches into another layer's domain:</p>
+          <table style="font-size:12px;margin:8px 0;border-collapse:collapse;width:100%;">
+            <tr style="background:#f8f9fa;font-weight:600;">
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;">Layer</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;">Responsibility</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;">Examples</td></tr>
+            <tr>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;font-weight:600;white-space:nowrap">ERP (source)</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;">Owns the master data. Declares what attributes exist and what values each member has.</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;font-size:11px;">Accounts, org units, hierarchies, GL transactions, account_type, region</td></tr>
+            <tr>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;font-weight:600;white-space:nowrap">Platform</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;">Standardizes, curates, and distributes.
+                Transforms source data into a common format, applies structural policies,
+                controls which attributes reach products and in what shape.
+                <strong>Does not</strong> contain product-specific business logic.</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;font-size:11px;">Adapter mapping, auto_root, grouping rules, attribute publish rules (rename/remap/filter), dim routing</td></tr>
+            <tr>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;font-weight:600;white-space:nowrap">Product</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;">Owns its business logic. Receives curated data from the platform and
+                decides how to use it &mdash; grouping dimensions, deriving categories,
+                setting defaults, building reports.
+                <strong>Does not</strong> know about the ERP or how data was sourced.</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;font-size:11px;">Ingestion rules (derive dim2 from kontoklass), local dimension groupings, budget validation, report aggregation</td></tr>
+          </table>
+          <p style="margin-top:8px"><strong>Key principle:</strong> The platform gives products <em>capabilities</em> (attributes, hierarchies, curated data) &mdash;
+            but the decision of <em>how</em> to use them lives in the product.
+            This means the same attribute (e.g. <code>kontoklass</code>) can drive completely different behavior in different products:
+            one product might use it for report grouping, another for access control, a third might ignore it entirely.</p>
+        </div>
+
+        <div class="info-content">
+          <div class="info-title">Pipeline Configuration &mdash; Error Policy &amp; Auto-Publish</div>
+          <p>Controls what happens <strong>after validation</strong> when some rows fail. This is inspired by enterprise ETL patterns
+            (Snowflake <code>ON_ERROR</code>, dbt <code>store_failures</code>, Fivetran connector error handling).</p>
+          <table style="font-size:12px;margin:8px 0;border-collapse:collapse;width:100%;">
+            <tr style="background:#f8f9fa;font-weight:600;">
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;">Policy</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;">Behavior</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;">Use when</td></tr>
+            <tr>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;font-weight:600;font-family:monospace;font-size:11px">skip_invalid</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;">Publish all valid rows. Rejected rows are logged but do not block.</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;">Default. Source data is mostly correct; a few missing codes are acceptable.</td></tr>
+            <tr>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;font-weight:600;font-family:monospace;font-size:11px">abort_on_error</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;">Block publish entirely if &ge;1 row is rejected. Status becomes <code>blocked</code>.</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;">Critical financial data. No partial data is acceptable.</td></tr>
+            <tr>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;font-weight:600;font-family:monospace;font-size:11px">threshold:N</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;">Block publish if rejection rate exceeds N%. E.g. <code>threshold:10</code> blocks if &gt;10% rejected.</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;">Tolerant of occasional errors but wants a safety net for large-scale source issues.</td></tr>
+          </table>
+          <p><strong>Auto-publish:</strong> When enabled, the sync runner automatically publishes validated facts to downstream products
+            immediately after validation &mdash; provided the error policy allows it. This eliminates the manual "Validate → Publish" workflow.</p>
+          <pre style="font-size:11px;line-height:1.6;margin:8px 0;background:#f8f9fa;padding:12px;border-radius:6px;border:1px solid #e0e0e0;">
+<strong>Manual workflow (auto-publish off):</strong>
+  Run Sync → [facts staged] → Click Validate → [validated/rejected] → Click Publish → [sent to Kafka]
+
+<strong>Automated workflow (auto-publish on):</strong>
+  Run Sync (or scheduled cron) → stage → validate → policy check → publish ✓
+  If policy blocks: status = "blocked", admin investigates rejected rows.</pre>
+          <p><strong>Rejection reason:</strong> Each rejected row now stores the specific validation error
+            (e.g. "unknown account '9999'") making it easy to diagnose and fix issues at the source.</p>
+        </div>
+
+        <div class="info-content">
+          <div class="info-title">Rejected Facts (error visibility)</div>
+          <p>When facts fail validation, they move to <code>rejected</code> status with a reason stored per row.
+            The <strong>Rejected Facts</strong> panel below exposes these errors directly in the UI so you can:</p>
+          <ul style="font-size:12px;margin:8px 0;">
+            <li>See exactly which rows failed and why</li>
+            <li>Identify if the problem is at the source (missing account in ERP) or in configuration (dimension not synced)</li>
+            <li>Decide whether to fix the source and re-sync, or accept and move on</li>
+          </ul>
+          <p>This follows the <strong>Observability</strong> principle from modern data engineering:
+            errors should be visible, searchable, and actionable &mdash; not hidden in log files.</p>
+        </div>
+
+        <div class="info-content">
+          <div class="info-title">Roadmap &mdash; upcoming pipeline improvements</div>
+          <table style="font-size:12px;margin:8px 0;border-collapse:collapse;width:100%;">
+            <tr style="background:#f8f9fa;font-weight:600;">
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;">#</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;">Feature</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;">Description</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;">Pattern</td></tr>
+            <tr>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;font-weight:600;color:#27ae60">✓</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;">Error Policy</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;">Configurable per source: skip, abort, or threshold-based blocking.</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;font-size:11px;color:#888">Snowflake ON_ERROR</td></tr>
+            <tr>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;font-weight:600;color:#27ae60">✓</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;">Auto-Publish</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;">Automatic publish respecting policy after sync + validate.</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;font-size:11px;color:#888">Fivetran auto-sync</td></tr>
+            <tr>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;font-weight:600;color:#27ae60">✓</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;">Rejected Facts View</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;">UI panel showing rejected rows with error reasons.</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;font-size:11px;color:#888">dbt store_failures</td></tr>
+            <tr>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;font-weight:600;color:#27ae60">✓</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;">Dead Letter Queue</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;">Capture Kafka/router processing errors in a searchable table with retry capability.</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;font-size:11px;color:#888">Confluent DLQ</td></tr>
+            <tr>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;font-weight:600;color:#27ae60">✓</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;">Change Detection</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;">Hash-based diff to only publish dimension snapshots when actual data changed.</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;font-size:11px;color:#888">dbt incremental</td></tr>
+            <tr>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;font-weight:600;color:#27ae60">✓</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;">Re-read UI</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;">One-click buttons for period re-read, full re-sync, and re-validate.</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;font-size:11px;color:#888">Airbyte resync</td></tr>
+            <tr>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;font-weight:600;color:#27ae60">✓</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;">Sync Audit Trail</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;">Each sync/publish writes a structured audit event for traceability.</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;font-size:11px;color:#888">Databricks Unity</td></tr>
+            <tr>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;font-weight:600;color:#888">8</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;">Attribute Versioning</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;">SCD Type 2 with valid_from/valid_to for historical attribute tracking.</td>
+              <td style="padding:6px 12px;border:1px solid #e0e0e0;font-size:11px;color:#888">Kimball SCD2</td></tr>
+          </table>
+        </div>
+
+        <div class="info-content">
+          <div class="info-title">How it all connects (end-to-end)</div>
+          <pre style="font-size:11px;line-height:1.6;">
+1. Sync         ERP adapter fetches accounts, org_units, GL → stages in econ_* tables
+                Attributes discovered from ERP capabilities → econ_attribute_defs + econ_entity_attributes
+                GL entries pulled via GET /api/gl with period filtering or high watermark (modified_since)
+2. Policies     Structural policies add _ALL root, grouping nodes, _MISSING
+3. Attributes   Publish rules rename/remap/filter attributes before they leave the platform
+4. Facts        GL transactions upserted via UNIQUE(source_system, source_row_id) — idempotent
+                Period re-syncs delete + replace; incremental syncs advance the high watermark
+5. Publish      DimensionSnapshot (entities + relations + attributes) → Kafka
+                GL facts validated → published (with sync_mode + periods) → Kafka
+6. Products     Consume snapshots → local dim_members + dim_relations + dim_member_attributes
+                Consume GL/Budget → period-based replace or append → apply ingestion rules → store
+
+Key insight:
+  The platform provides the building blocks — products decide how to use them.
+  Three-layer idempotency (ERP entry_id, Platform upsert, Product replace-by-period)
+  ensures that re-syncing is always safe and never causes duplicates.</pre>
         </div>
       </div>
 
@@ -1051,6 +1668,28 @@ In-memory ring buffer (max 200) → GET /api/events</pre>
           </div>
         </div>
       </div>
+
+      <!-- Dead Letter Queue -->
+      <div class="card" style="border-left: 3px solid #ef4444;">
+        <div class="card-header">
+          <h2>Dead Letter Queue</h2>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span id="dlqCount" style="font-size:12px;color:#888;"></span>
+            <button class="btn" onclick="loadDLQ()" style="background:#ef4444;color:#fff;">↻ Refresh</button>
+          </div>
+        </div>
+        <div id="dlqTable" style="max-height:300px;overflow-y:auto;">
+          <p style="color:#999;font-size:13px;font-style:italic;">Loading…</p>
+        </div>
+        <div class="info-block" style="margin-top:12px">
+          <div class="info-trigger" onclick="toggleInfo(this)">Show details ▸</div>
+          <div class="info-content">
+            <div class="info-title">Dead Letter Queue</div>
+            Messages that failed processing in the platform router land here. Each entry contains the original message, the error, and a retry button.<br>
+            <strong>Pattern:</strong> DLQ + retry (Confluent Kafka best practices). Failed messages are preserved for inspection and can be retried after fixing the root cause.
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1060,9 +1699,28 @@ In-memory ring buffer (max 200) → GET /api/events</pre>
   <div class="tab-panel" id="tab-demo">
     <div class="container">
       <div class="status-bar" id="statusBar"></div>
+
+      <!-- Intro: explain the two tracks -->
+      <div class="setup-intro" style="margin-bottom:20px;">
+        <h2>Demo & Scenarios</h2>
+        <p>This tab has two separate demo tracks that showcase the platform's capabilities from different perspectives:</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px;">
+          <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:14px;">
+            <h3 style="margin:0 0 6px;font-size:14px;color:#0369a1;">🎬 Demo Runner — "Happy Path"</h3>
+            <p style="font-size:12px;color:#555;margin:0;">Step-by-step through the <strong>normal business flow</strong>: setup → ERP data → budget → analytics. Shows how data flows from source to product when everything works as expected.</p>
+            <p style="font-size:11px;color:#0369a1;margin:8px 0 0;font-weight:600;">Focus: Integration & data flow</p>
+          </div>
+          <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:8px;padding:14px;">
+            <h3 style="margin:0 0 6px;font-size:14px;color:#7c3aed;">🏆 Golden Path — "What happens when things go wrong"</h3>
+            <p style="font-size:12px;color:#555;margin:0;">One click that demonstrates <strong>pipeline resilience</strong>: change detection → error injection → rejection → recovery → publish. Shows how the platform handles and resolves problems automatically.</p>
+            <p style="font-size:11px;color:#7c3aed;margin:8px 0 0;font-weight:600;">Focus: Observability & error handling</p>
+          </div>
+        </div>
+      </div>
+
       <div class="card">
         <div class="demo-header">
-          <h2>Demo Runner</h2>
+          <h2>🎬 Demo Runner — Normal Business Flow</h2>
           <div style="display:flex;gap:8px;align-items:center;">
             <span id="demoProgress" style="font-size:12px;color:#888;">Step 0 / 11</span>
             <button class="btn btn-step" id="btnRunAll" onclick="runAllDemo()" title="Reset + run steps 1–11 sequentially">&#x25b6; Run All</button>
@@ -1077,10 +1735,10 @@ In-memory ring buffer (max 200) → GET /api/events</pre>
           <div class="info-trigger" onclick="toggleInfo(this)">Show details ▸</div>
           <div class="info-content">
             <div class="info-title">What is Demo Runner?</div>
-            Simulates a full customer flow step by step. Step 1 stages reference data in the Economy Domain
-            and configures dimensions + routing. Then come operational flows
-            (projects, budgets, actuals). All tabs update live as steps progress.
-          </div>
+            Walks through the <strong>normal business flow</strong> step by step — from initial setup to finished analytics.
+            Each step simulates a real event (ERP publishes, Product A budgets, Platform links entities).
+            All tabs update live as steps progress. <br><br>
+            <em>Run this first</em> — it creates the baseline data that Golden Path can then stress-test.</div>
           <div class="info-content">
             <div class="info-title">Demo Runner API (technical)</div>
             <pre>POST /api/demo/step/1  → Initial Setup: Economy Domain + shared dimensions + routing
@@ -1096,6 +1754,46 @@ POST /api/demo/step/10 → Product B: show analytics
 POST /api/demo/step/11 → Process: open budget + assign users</pre>
           </div>
         </div>
+      </div>
+
+      <!-- Lab Scenarios (standalone, outside the chained flow) -->
+      <div class="card" style="border-left:3px solid #f59e0b;">
+        <div class="card-header">
+          <h2 style="display:flex;align-items:center;gap:8px;">🧪 Lab Scenarios</h2>
+          <span style="font-size:11px;color:#888;">Standalone — run after the demo chain</span>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:start;">
+          <div style="flex:1;min-width:250px;">
+            <button class="btn" onclick="injectBadFacts()" style="background:#dc2626;color:#fff;font-weight:600;">💥 Inject Invalid GL Rows</button>
+            <p style="font-size:11px;color:#666;margin-top:6px;">Inserts 5 GL rows with unknown accounts/org units to demonstrate rejected facts, error policy, and the Rejected Facts table in Data Operations.</p>
+          </div>
+          <div id="labScenarioResult" style="flex:1;min-width:250px;font-size:13px;"></div>
+        </div>
+      </div>
+
+      <!-- Golden Path -->
+      <div class="card" style="border-left:3px solid #8b5cf6;background:linear-gradient(135deg,#faf5ff 0%,#fff 100%);">
+        <div class="card-header">
+          <h2 style="display:flex;align-items:center;gap:8px;">🏆 Golden Path — Pipeline Resilience</h2>
+          <button class="btn" onclick="runGoldenPath()" style="background:#7c3aed;color:#fff;font-weight:600;" id="btnGoldenPath">▶ Run Scenario</button>
+        </div>
+        <p style="font-size:12px;color:#555;margin-bottom:4px;">
+          <strong>Shows what happens when things go wrong — and how the platform recovers.</strong>
+        </p>
+        <p style="font-size:11px;color:#888;margin-bottom:12px;">
+          Unlike Demo Runner (which shows the normal flow), Golden Path tests error handling, change detection, DLQ, and operational actions. Perfect as "act 2" in a presentation — after Demo Runner has shown the happy path.
+        </p>
+        <div id="goldenPathSteps" style="font-size:12px;">
+          <div style="display:grid;grid-template-columns:24px 1fr;gap:4px 8px;color:#666;">
+            <span>①</span><span>Sync entities + facts from ERP → audit trail logs</span>
+            <span>②</span><span>Publish dimensions → content hash saved</span>
+            <span>③</span><span>Re-sync same data → "unchanged, skipping publish" detected</span>
+            <span>④</span><span>Inject invalid GL rows → facts rejected by validation</span>
+            <span>⑤</span><span>Fix reference data + re-validate → rejected facts recovered</span>
+            <span>⑥</span><span>Final publish → all facts delivered to products</span>
+          </div>
+        </div>
+        <div id="goldenPathLog" style="margin-top:12px;max-height:300px;overflow-y:auto;"></div>
       </div>
     </div>
   </div>
@@ -1536,7 +2234,8 @@ In production:
           <ul style="font-size:13px;color:#555;line-height:1.8;margin:0;padding-left:20px">
             <li><strong>7 Docker containers</strong> — platform, 2 products, Kafka (Redpanda), console, Jaeger, ERP mock.</li>
             <li><strong>Event-driven data flow</strong> — ERP publishes projects/accounts → platform routes to products via Kafka.</li>
-            <li><strong>Shared shell</strong> — injected header with navigation, inbox, and pin/unpin across all products.</li>
+            <li><strong>Shared shell</strong> — injected header with navigation, and pin/unpin across all products.</li>
+            <li><strong>Platform services</strong> — shared capabilities delivered through the shell: master inbox, AI assistant, external tool links.</li>
             <li><strong>SCIM provisioning</strong> — automated user lifecycle from IdP with group-to-role mapping.</li>
             <li><strong>Budget workflow</strong> — full create → edit → submit → publish → cross-product sync lifecycle.</li>
             <li><strong>Process management</strong> — assignment matrix, task inbox, status tracking.</li>
@@ -1753,6 +2452,12 @@ In production:
   <script>
     var API = '';
 
+    function escapeHtml(str) {
+      var div = document.createElement('div');
+      div.appendChild(document.createTextNode(str));
+      return div.innerHTML;
+    }
+
     // Sidebar toggle
     function toggleSidebar() {
       document.getElementById('sidebar').classList.toggle('open');
@@ -1767,13 +2472,33 @@ In production:
       });
     }
 
+    // ── Custom logo toggle ──
+    function toggleCustomLogo(checked) {
+      fetch('/api/system-config/platform', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ use_custom_logo: checked ? 'true' : 'false' })
+      });
+    }
+    // Load initial state
+    fetch('/api/shell-config', { credentials: 'include' })
+      .then(function(r) { return r.json(); })
+      .then(function(cfg) {
+        var cb = document.getElementById('logo-toggle');
+        if (cb) cb.checked = !!cfg.use_custom_logo;
+      });
+
     // Tab switching
     function switchTab(tabId) {
+      // Map legacy tab IDs to new ones
+      var legacyMap = { 'setup': 'config', 'economy': 'domains', 'operations': 'masterdata' };
+      if (legacyMap[tabId]) tabId = legacyMap[tabId];
       document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
       document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
       document.getElementById('tab-' + tabId).classList.add('active');
       var btns = document.querySelectorAll('.tab-btn');
-      var tabMap = ['setup', 'users', 'economy', 'operations', 'events', 'demo', 'notes'];
+      var tabMap = ['config', 'masterdata', 'domains', 'users', 'events', 'demo', 'notes'];
       var idx = tabMap.indexOf(tabId);
       if (idx >= 0 && btns[idx]) btns[idx].classList.add('active');
       localStorage.setItem('activeTab', tabId);
@@ -1931,6 +2656,98 @@ In production:
           '</div>';
         }).join('');
       } catch(e) {}
+    }
+
+    async function loadPipelineHealth() {
+      try {
+        var h = await fetch('/api/pipeline-health', { credentials: 'include' }).then(function(r) { return r.json(); });
+        document.getElementById('healthEntities').textContent = h.entities_total;
+        document.getElementById('healthPublished').textContent = h.facts_published;
+        document.getElementById('healthRejected').textContent = h.facts_rejected;
+        document.getElementById('healthDLQ').textContent = h.dlq_pending;
+        document.getElementById('healthSkipped').textContent = h.publishes_skipped;
+        // Last publish
+        if (h.last_publish) {
+          document.getElementById('healthLastPublish').textContent = h.last_publish.replace('T',' ').slice(0,16);
+        } else {
+          document.getElementById('healthLastPublish').textContent = '—';
+        }
+        // Last sync
+        if (h.last_sync) {
+          var ls = h.last_sync.replace('T',' ').slice(0,16);
+          document.getElementById('healthLastSync').textContent = 'Last sync: ' + ls;
+          document.getElementById('healthLastSyncValue').textContent = ls;
+        } else {
+          document.getElementById('healthLastSyncValue').textContent = '—';
+        }
+        // Overall status + icon
+        var statusEl = document.getElementById('healthStatus');
+        var iconEl = document.getElementById('healthIcon');
+        var card = document.getElementById('pipelineDashboard');
+        if (h.dlq_pending > 0) {
+          statusEl.innerHTML = '<span class="health-status-error">⚠ ' + h.dlq_pending + ' messages in Dead Letter Queue — check Events tab</span>';
+          card.style.borderLeftColor = '#ef4444';
+          iconEl.textContent = '🔴';
+        } else if (h.facts_rejected > 0 && h.facts_published === 0) {
+          statusEl.innerHTML = '<span class="health-status-warn">⚡ Facts rejected but nothing published yet</span>';
+          card.style.borderLeftColor = '#f59e0b';
+          iconEl.textContent = '🟡';
+        } else if (h.facts_published > 0) {
+          statusEl.innerHTML = '<span class="health-status-ok">✓ Pipeline healthy — ' + h.facts_published + ' facts delivered to products</span>';
+          card.style.borderLeftColor = '#10b981';
+          iconEl.textContent = '🟢';
+        } else {
+          statusEl.innerHTML = '<span style="color:#888;">Waiting for first sync…</span>';
+          card.style.borderLeftColor = '#d1d5db';
+          iconEl.textContent = '⚪';
+        }
+      } catch(e) {}
+    }
+
+    async function loadDLQ() {
+      try {
+        var data = await fetch('/api/dlq', { credentials: 'include' }).then(function(r) { return r.json(); });
+        var countEl = document.getElementById('dlqCount');
+        countEl.textContent = data.pending > 0 ? data.pending + ' pending / ' + data.total + ' total' : (data.total > 0 ? data.total + ' total (all retried)' : '');
+        var container = document.getElementById('dlqTable');
+        if (!data.items || data.items.length === 0) {
+          container.innerHTML = '<p style="color:#27ae60;font-size:13px;">✓ No failed messages — router is healthy.</p>';
+          return;
+        }
+        var html = '<table style="width:100%;font-size:12px;border-collapse:collapse;">';
+        html += '<thead><tr style="background:#fef2f2;border-bottom:2px solid #fca5a5;">';
+        html += '<th style="padding:6px 8px;text-align:left;">Time</th>';
+        html += '<th style="padding:6px 8px;text-align:left;">Topic</th>';
+        html += '<th style="padding:6px 8px;text-align:left;">Event</th>';
+        html += '<th style="padding:6px 8px;text-align:left;">Error</th>';
+        html += '<th style="padding:6px 8px;text-align:left;">Status</th>';
+        html += '<th style="padding:6px 8px;width:60px;"></th>';
+        html += '</tr></thead><tbody>';
+        data.items.forEach(function(item) {
+          var statusColor = item.status === 'pending' ? '#dc2626' : '#16a34a';
+          html += '<tr style="border-bottom:1px solid #fee2e2;">';
+          html += '<td style="padding:5px 8px;color:#888;font-size:11px;">' + (item.created_at || '').replace('T',' ').slice(0,16) + '</td>';
+          html += '<td style="padding:5px 8px;">' + escapeHtml(item.topic || '') + '</td>';
+          html += '<td style="padding:5px 8px;">' + escapeHtml(item.event_type || '—') + '</td>';
+          html += '<td style="padding:5px 8px;color:#dc2626;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escapeHtml(item.error || '') + '">' + escapeHtml(item.error || '') + '</td>';
+          html += '<td style="padding:5px 8px;"><span style="color:' + statusColor + ';font-weight:600;">' + item.status + '</span></td>';
+          html += '<td style="padding:5px 8px;">';
+          if (item.status === 'pending') html += '<button onclick="retryDLQ(' + item.id + ')" style="font-size:11px;padding:2px 8px;border:1px solid #ddd;border-radius:3px;cursor:pointer;background:#fff;">Retry</button>';
+          html += '</td></tr>';
+        });
+        html += '</tbody></table>';
+        container.innerHTML = html;
+      } catch (e) {
+        console.error('loadDLQ error:', e);
+        document.getElementById('dlqTable').innerHTML = '<p style="color:#ef4444;">Failed to load DLQ.</p>';
+      }
+    }
+
+    async function retryDLQ(id) {
+      try {
+        await fetch('/api/dlq/' + id + '/retry', { method: 'POST', credentials: 'include' });
+        loadDLQ();
+      } catch (e) { console.error('retryDLQ error:', e); }
     }
 
     // Demo Runner
@@ -2832,6 +3649,69 @@ In production:
     ];
     var cachedSystemConfig = {};
 
+    // ── Event Subscriptions ──
+    var SUBSCRIPTION_EVENT_TYPES = ['accounts', 'gl', 'budget', 'projects', 'dimensions', 'entity-linked'];
+    var SUBSCRIPTION_LABELS = { accounts: 'Accounts', gl: 'GL (Actuals)', budget: 'Budget', projects: 'Projects', dimensions: 'Dimensions', 'entity-linked': 'Entity Linked' };
+
+    async function loadSubscriptions() {
+      try {
+        var subs = await fetch('/api/subscriptions', { credentials: 'include' }).then(function(r) { return r.json(); });
+        // Build lookup: { "prod_a:budget": true/false }
+        var lookup = {};
+        subs.forEach(function(s) { lookup[s.product + ':' + s.event_type] = s.enabled === 1; });
+
+        // Get products from system config
+        var products = Object.keys(cachedSystemConfig).filter(function(k) {
+          return cachedSystemConfig[k].system_type && k !== 'erp';
+        });
+        if (products.length === 0) products = ['prod_a', 'prod_b'];
+
+        var html = '<table style="width:100%;font-size:13px;border-collapse:collapse;">';
+        html += '<thead><tr style="background:#f8f9fa;border-bottom:2px solid #e2e8f0;">';
+        html += '<th style="padding:8px 10px;text-align:left;">Product</th>';
+        SUBSCRIPTION_EVENT_TYPES.forEach(function(et) {
+          html += '<th style="padding:8px 6px;text-align:center;font-size:12px;">' + SUBSCRIPTION_LABELS[et] + '</th>';
+        });
+        html += '</tr></thead><tbody>';
+
+        products.forEach(function(product) {
+          html += '<tr style="border-bottom:1px solid #eee;">';
+          html += '<td style="padding:8px 10px;font-weight:600;">' + escapeHtml(product) + '</td>';
+          SUBSCRIPTION_EVENT_TYPES.forEach(function(et) {
+            var key = product + ':' + et;
+            var enabled = lookup[key] !== undefined ? lookup[key] : true;
+            var checked = enabled ? 'checked' : '';
+            html += '<td style="padding:8px 6px;text-align:center;">';
+            html += '<input type="checkbox" ' + checked + ' onchange="toggleSubscription(\'' + product + '\', \'' + et + '\', this.checked)" style="width:18px;height:18px;cursor:pointer;">';
+            html += '</td>';
+          });
+          html += '</tr>';
+        });
+        html += '</tbody></table>';
+        document.getElementById('subscriptionMatrix').innerHTML = html;
+      } catch (e) {
+        console.error('loadSubscriptions error:', e);
+        document.getElementById('subscriptionMatrix').innerHTML = '<p style="color:#e74c3c;">Failed to load subscriptions.</p>';
+      }
+    }
+
+    async function toggleSubscription(product, eventType, enabled) {
+      try {
+        await fetch('/api/subscriptions', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ product: product, event_type: eventType, enabled: enabled })
+        });
+        var el = document.getElementById('subscriptionStatus');
+        var action = enabled ? '✓ Enabled' : '✗ Disabled';
+        el.innerHTML = '<span style="color:' + (enabled ? '#27ae60' : '#e74c3c') + ';">' + action + ' ' + eventType + ' for ' + product + '</span>';
+        setTimeout(function() { el.innerHTML = ''; }, 3000);
+      } catch (e) {
+        console.error('toggleSubscription error:', e);
+      }
+    }
+
     async function loadSystems() {
       try {
         cachedSystemConfig = await (await fetch(API + '/api/system-config')).json();
@@ -3134,18 +4014,128 @@ In production:
     }
 
     // ── Economy Domain UI ──
+    // ── Pipeline Configuration ──
+    async function loadPipelineConfig() {
+      try {
+        var cfg = await fetch('/api/economy/pipeline-config/erp', { credentials: 'include' }).then(function(r) { return r.json(); });
+        document.getElementById('pipelineErrorPolicy').value = cfg.error_policy || 'skip_invalid';
+        document.getElementById('pipelineAutoPublish').checked = !!cfg.auto_publish;
+      } catch (e) { console.error('loadPipelineConfig error:', e); }
+    }
+
+    async function savePipelineConfig() {
+      var policy = document.getElementById('pipelineErrorPolicy').value;
+      var autoPublish = document.getElementById('pipelineAutoPublish').checked;
+      try {
+        await fetch('/api/economy/pipeline-config/erp', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ error_policy: policy, auto_publish: autoPublish })
+        });
+        var el = document.getElementById('pipelineConfigStatus');
+        el.innerHTML = '<span style="color:#27ae60">✓ Saved</span>';
+        setTimeout(function() { el.innerHTML = ''; }, 2000);
+      } catch (e) { console.error('savePipelineConfig error:', e); }
+    }
+
+    async function injectBadFacts() {
+      var el = document.getElementById('labScenarioResult');
+      el.innerHTML = '<span style="color:#888;">Injecting invalid rows…</span>';
+      try {
+        var r = await fetch('/api/demo/inject-bad-facts', { method: 'POST', credentials: 'include' }).then(function(r) { return r.json(); });
+        if (r.ok) {
+          el.innerHTML = '<span style="color:#27ae60;">✓ ' + r.description + '</span>';
+          loadEconomyDomain();
+          loadRejectedFacts();
+        } else {
+          el.innerHTML = '<span style="color:#e74c3c;">⚠ ' + (r.error || 'Unknown error') + '</span>';
+        }
+      } catch (e) {
+        el.innerHTML = '<span style="color:#e74c3c;">Failed: ' + e.message + '</span>';
+      }
+    }
+
+    async function runGoldenPath() {
+      var btn = document.getElementById('btnGoldenPath');
+      var log = document.getElementById('goldenPathLog');
+      btn.disabled = true; btn.textContent = 'Running…';
+      log.innerHTML = '';
+      function addStep(num, text, status) {
+        var color = status === 'ok' ? '#059669' : status === 'running' ? '#888' : '#dc2626';
+        var icon = status === 'ok' ? '✓' : status === 'running' ? '⏳' : '✗';
+        log.innerHTML += '<div style="padding:4px 8px;font-size:12px;border-left:3px solid ' + color + ';margin-bottom:4px;background:#f9fafb;border-radius:0 4px 4px 0;">' +
+          '<span style="color:' + color + ';font-weight:600;">' + icon + ' Step ' + num + ':</span> ' + escapeHtml(text) + '</div>';
+        log.scrollTop = log.scrollHeight;
+      }
+      try {
+        addStep(1, 'Starting full lifecycle scenario…', 'running');
+        var r = await fetch('/api/demo/golden-path', { method: 'POST', credentials: 'include' }).then(function(r) { return r.json(); });
+        log.innerHTML = '';
+        if (r.steps) {
+          r.steps.forEach(function(s, i) {
+            addStep(i + 1, s.step + ' — ' + s.result, s.ok ? 'ok' : 'error');
+          });
+        }
+        if (r.ok) {
+          log.innerHTML += '<div style="padding:8px 12px;margin-top:8px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:6px;font-size:13px;font-weight:600;color:#065f46;">🏆 Golden Path complete! Check Data Operations tab for updated pipeline health.</div>';
+        } else {
+          log.innerHTML += '<div style="padding:8px 12px;margin-top:8px;background:#fef2f2;border:1px solid #fca5a5;border-radius:6px;font-size:13px;color:#dc2626;">Failed: ' + escapeHtml(r.error || 'Unknown') + '</div>';
+        }
+        refreshAll();
+      } catch (e) {
+        addStep('?', 'Network error: ' + e.message, 'error');
+      }
+      btn.disabled = false; btn.textContent = '▶ Run Scenario';
+    }
+
+    async function loadRejectedFacts() {
+      try {
+        var facts = await fetch('/api/economy/facts?status=rejected&limit=200', { credentials: 'include' }).then(function(r) { return r.json(); });
+        var container = document.getElementById('rejectedFactsTable');
+        var summary = document.getElementById('rejectedFactsSummary');
+        if (!facts.length) {
+          container.innerHTML = '<p style="color:#27ae60;font-size:13px;">✓ No rejected facts — all rows passed validation.</p>';
+          summary.textContent = '';
+          return;
+        }
+        summary.textContent = facts.length + ' rejected row(s)' + (facts.length >= 200 ? ' (showing first 200)' : '');
+        var html = '<table style="width:100%;font-size:12px;border-collapse:collapse;">';
+        html += '<thead><tr style="background:#fef2f2;border-bottom:2px solid #fca5a5;">';
+        html += '<th style="padding:6px 8px;text-align:left;">Account</th>';
+        html += '<th style="padding:6px 8px;text-align:left;">Org Unit</th>';
+        html += '<th style="padding:6px 8px;text-align:left;">Period</th>';
+        html += '<th style="padding:6px 8px;text-align:right;">Amount</th>';
+        html += '<th style="padding:6px 8px;text-align:left;">Rejection Reason</th>';
+        html += '<th style="padding:6px 8px;text-align:left;">Received</th>';
+        html += '</tr></thead><tbody>';
+        facts.forEach(function(f) {
+          html += '<tr style="border-bottom:1px solid #fee2e2;">';
+          html += '<td style="padding:5px 8px;">' + escapeHtml(f.account || '') + '</td>';
+          html += '<td style="padding:5px 8px;">' + escapeHtml(f.org_unit || '') + '</td>';
+          html += '<td style="padding:5px 8px;">' + escapeHtml(f.period || '') + '</td>';
+          html += '<td style="padding:5px 8px;text-align:right;">' + (f.amount != null ? Number(f.amount).toLocaleString() : '') + '</td>';
+          html += '<td style="padding:5px 8px;color:#dc2626;font-weight:500;">' + escapeHtml(f.rejection_reason || 'Unknown') + '</td>';
+          html += '<td style="padding:5px 8px;color:#888;">' + (f.received_at ? f.received_at.replace('T',' ').slice(0,16) : '') + '</td>';
+          html += '</tr>';
+        });
+        html += '</tbody></table>';
+        container.innerHTML = html;
+      } catch (e) {
+        console.error('loadRejectedFacts error:', e);
+        document.getElementById('rejectedFactsTable').innerHTML = '<p style="color:#ef4444;">Failed to load rejected facts.</p>';
+      }
+    }
+
     async function loadEconomyDomain() {
       try {
-        // Facts summary
+        // Facts summary (received/validated populate the unified dashboard)
         const summary = await fetch('/api/economy/facts/summary').then(r => r.json());
         document.getElementById('econFactsReceived').textContent = summary.received || '0';
         document.getElementById('econFactsValidated').textContent = summary.validated || '0';
-        document.getElementById('econFactsRejected').textContent = summary.rejected || '0';
-        document.getElementById('econFactsPublished').textContent = summary.published || '0';
 
         // Entities — also populate dimension filter dropdown
         const entities = await fetch('/api/economy/entities').then(r => r.json());
-        document.getElementById('econEntitiesCount').textContent = entities.length || '0';
 
         // Build unique dimensions from actual data
         const dimSet = {};
@@ -3189,10 +4179,12 @@ In production:
     function renderSyncTable(states) {
       const el = document.getElementById('econSyncTable');
       if (!states.length) { el.innerHTML = '<div style="color:#999;font-size:13px;padding:12px 0;text-align:center;">No sync state yet.</div>'; return; }
-      let html = '<table><thead><tr><th>Source</th><th>Type</th><th>Status</th><th>Last Sync</th><th>Received</th><th>Validated</th><th>Rejected</th></tr></thead><tbody>';
+      let html = '<table><thead><tr><th>Source</th><th>Type</th><th>Status</th><th>Last Sync</th><th>Watermark</th><th>Received</th><th>Validated</th><th>Rejected</th><th>Duration</th></tr></thead><tbody>';
       for (const s of states) {
-        const statusColor = s.status === 'idle' ? '#27ae60' : s.status === 'syncing' ? '#f39c12' : '#999';
-        html += '<tr><td>' + s.source_system + '</td><td>' + s.entity_type + '</td><td style="color:' + statusColor + ';font-weight:600;">' + (s.status || '-') + '</td><td style="font-size:11px;">' + (s.last_sync_at || 'never') + '</td><td>' + (s.rows_received || 0) + '</td><td>' + (s.rows_validated || 0) + '</td><td>' + (s.rows_rejected || 0) + '</td></tr>';
+        const statusColor = s.status === 'idle' ? '#27ae60' : s.status === 'syncing' ? '#f39c12' : s.status === 'error' ? '#e74c3c' : '#999';
+        const duration = s.duration_ms ? (s.duration_ms < 1000 ? s.duration_ms + 'ms' : (s.duration_ms / 1000).toFixed(1) + 's') : '—';
+        const watermark = s.high_watermark ? '<span style="font-size:10px;color:#666;" title="High watermark">' + s.high_watermark.substring(0, 19) + '</span>' : '<span style="color:#ccc">—</span>';
+        html += '<tr><td>' + s.source_system + '</td><td>' + s.entity_type + '</td><td style="color:' + statusColor + ';font-weight:600;">' + (s.status || '-') + '</td><td style="font-size:11px;">' + (s.last_sync_at || 'never') + '</td><td>' + watermark + '</td><td>' + (s.rows_received || 0) + '</td><td>' + (s.rows_validated || 0) + '</td><td>' + (s.rows_rejected || 0) + '</td><td style="font-size:11px;color:#888;">' + duration + '</td></tr>';
       }
       html += '</tbody></table>';
       el.innerHTML = html;
@@ -3212,6 +4204,7 @@ In production:
         if (r.errors?.length) msg += ' — ' + r.errors.slice(0, 5).join('; ');
         el.innerHTML = '<span style="color:#27ae60;">✓ ' + msg + '</span>';
         loadEconomyDomain();
+        loadRejectedFacts();
       } catch (e) { el.innerHTML = '<span style="color:#e74c3c;">Validation failed: ' + e.message + '</span>'; }
     }
 
@@ -3222,6 +4215,7 @@ In production:
         const r = await fetch('/api/economy/facts/publish', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).then(r => r.json());
         el.innerHTML = '<span style="color:#27ae60;">✓ Published ' + r.published + ' facts to Kafka</span>';
         loadEconomyDomain();
+        loadRejectedFacts();
       } catch (e) { el.innerHTML = '<span style="color:#e74c3c;">Publish failed: ' + e.message + '</span>'; }
     }
 
@@ -3232,7 +4226,61 @@ In production:
         const r = await fetch('/api/economy/sync/' + source + '/run?scope=all', { method: 'POST' }).then(r => r.json());
         el.innerHTML = '<span style="color:#27ae60;">✓ Sync complete for ' + source + '</span>';
         loadEconomyDomain();
+        loadRejectedFacts();
       } catch (e) { el.innerHTML = '<span style="color:#e74c3c;">Sync failed: ' + e.message + '</span>'; }
+    }
+
+    async function econPeriodSync(source) {
+      var from = document.getElementById('econPeriodFrom').value.trim();
+      var to = document.getElementById('econPeriodTo').value.trim();
+      var el = document.getElementById('econActionResult');
+      if (!from && !to) { el.innerHTML = '<span style="color:#e74c3c;">Enter at least one period (from/to)</span>'; return; }
+      var params = 'scope=facts';
+      if (from) params += '&period_from=' + from;
+      if (to) params += '&period_to=' + to;
+      el.innerHTML = '<span style="color:#888;">Syncing ' + source + ' periods ' + (from || '...') + ' → ' + (to || '...') + '...</span>';
+      try {
+        var r = await fetch('/api/economy/sync/' + source + '/run?' + params, { method: 'POST' }).then(function(r) { return r.json(); });
+        el.innerHTML = '<span style="color:#27ae60;">✓ Period sync complete for ' + source + ' (' + (from || '...') + ' → ' + (to || '...') + ')</span>';
+        loadEconomyDomain();
+        loadRejectedFacts();
+      } catch (e) { el.innerHTML = '<span style="color:#e74c3c;">Period sync failed: ' + e.message + '</span>'; }
+    }
+
+    async function doRereadPeriod() {
+      var from = document.getElementById('rereadFrom').value.trim();
+      var to = document.getElementById('rereadTo').value.trim();
+      var el = document.getElementById('opsActionResult');
+      if (!from && !to) { el.innerHTML = '<span style="color:#e74c3c;">Enter at least one period</span>'; return; }
+      var params = 'scope=facts';
+      if (from) params += '&period_from=' + from;
+      if (to) params += '&period_to=' + to;
+      el.innerHTML = '<span style="color:#888;">Re-reading periods ' + (from || '…') + ' → ' + (to || '…') + '…</span>';
+      try {
+        await fetch('/api/economy/sync/erp/run?' + params, { method: 'POST', credentials: 'include' });
+        el.innerHTML = '<span style="color:#27ae60;">✓ Re-read complete for periods ' + (from || '…') + ' → ' + (to || '…') + '</span>';
+        refreshAll();
+      } catch (e) { el.innerHTML = '<span style="color:#e74c3c;">Failed: ' + e.message + '</span>'; }
+    }
+
+    async function doFullReread() {
+      var el = document.getElementById('opsActionResult');
+      el.innerHTML = '<span style="color:#888;">Full re-read in progress (resetting watermark + syncing all facts)…</span>';
+      try {
+        var r = await fetch('/api/economy/sync/erp/full-reread', { method: 'POST', credentials: 'include' }).then(function(r) { return r.json(); });
+        el.innerHTML = '<span style="color:#27ae60;">✓ ' + (r.description || 'Full re-read complete') + '</span>';
+        refreshAll();
+      } catch (e) { el.innerHTML = '<span style="color:#e74c3c;">Failed: ' + e.message + '</span>'; }
+    }
+
+    async function doRevalidate() {
+      var el = document.getElementById('opsActionResult');
+      el.innerHTML = '<span style="color:#888;">Re-validating rejected facts…</span>';
+      try {
+        var r = await fetch('/api/economy/facts/revalidate', { method: 'POST', credentials: 'include' }).then(function(r) { return r.json(); });
+        el.innerHTML = '<span style="color:#27ae60;">✓ Re-validated: ' + r.reset + ' reset → ' + r.validated + ' now valid, ' + r.rejected + ' still rejected</span>';
+        refreshAll();
+      } catch (e) { el.innerHTML = '<span style="color:#e74c3c;">Failed: ' + e.message + '</span>'; }
     }
 
     async function econSetSchedule(source) {
@@ -3254,6 +4302,299 @@ In production:
         el.innerHTML = '<span style="color:#888;">Schedule stopped</span>';
       } catch (e) { el.innerHTML = '<span style="color:#e74c3c;">Stop failed</span>'; }
     }
+
+    // ── Structural Policies ──
+    var polDimensions = []; // fetched dynamically from /api/economy/dimensions
+    var POL_SIMPLE = [
+      { type: 'auto_root', name: 'Auto Root (_ALL)', desc: 'Create _ALL root node, connect all entities as children', icon: '🌳', defaultConfig: { root_code: '_ALL', root_name: 'All' } },
+      { type: 'auto_missing', name: 'Auto Missing', desc: 'Create _MISSING node under root for unresolved references', icon: '❓', defaultConfig: { missing_code: '_MISSING', missing_name: 'Missing / Unassigned' } },
+    ];
+    var GROUPING_STRATEGIES = [
+      { value: 'first_n_chars', label: 'First N characters', params: [{ key: 'n', label: 'N', type: 'number', default: 2 }] },
+      { value: 'char_range', label: 'Character range', params: [{ key: 'start', label: 'Start pos', type: 'number', default: 0 }, { key: 'end', label: 'End pos', type: 'number', default: 1 }] },
+      { value: 'regex', label: 'Regex pattern', params: [{ key: 'pattern', label: 'Pattern', type: 'text', default: '^(\\d{2})' }, { key: 'group_index', label: 'Capture group', type: 'number', default: 1 }] },
+    ];
+    var polData = [];
+
+    async function policiesLoad() {
+      try {
+        var dims = await fetch('/api/economy/dimensions').then(function(r) { return r.json(); });
+        polDimensions = dims.map(function(d) { return d.dimension; });
+        polData = await fetch('/api/economy/policies').then(function(r) { return r.json(); });
+      } catch (e) { polData = []; polDimensions = []; }
+      policiesRender();
+    }
+
+    function polFind(dim, type) {
+      return polData.find(function(p) { return (p.dimension === dim || p.dimension === '*') && p.policy_type === type; });
+    }
+
+    async function polToggle(dim, type, enabled) {
+      var meta = POL_SIMPLE.find(function(p) { return p.type === type; });
+      var cfg = meta ? meta.defaultConfig : {};
+      await fetch('/api/economy/policies', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dimension: dim, policy_type: type, config: cfg, enabled: enabled ? 1 : 0 }) });
+      // Auto-apply and publish to downstream products
+      await fetch('/api/economy/policies/apply', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dimension: dim }) });
+      await policiesLoad();
+    }
+
+    async function polToggleGrouping(dim, enabled) {
+      // Get existing grouping rules or create empty
+      var existing = polFind(dim, 'grouping_rules');
+      var cfg = existing ? JSON.parse(existing.config || '{}') : { rules: [] };
+      await fetch('/api/economy/policies', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dimension: dim, policy_type: 'grouping_rules', config: cfg, enabled: enabled ? 1 : 0 }) });
+      await policiesLoad();
+    }
+
+    async function polAddRule(dim) {
+      var existing = polFind(dim, 'grouping_rules');
+      var cfg = existing ? JSON.parse(existing.config || '{}') : { rules: [] };
+      cfg.rules.push({ strategy: 'first_n_chars', params: { n: 2 } });
+      await fetch('/api/economy/policies', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dimension: dim, policy_type: 'grouping_rules', config: cfg, enabled: existing ? existing.enabled : 1 }) });
+      await policiesLoad();
+    }
+
+    async function polRemoveRule(dim, idx) {
+      var existing = polFind(dim, 'grouping_rules');
+      if (!existing) return;
+      var cfg = JSON.parse(existing.config || '{}');
+      cfg.rules.splice(idx, 1);
+      await fetch('/api/economy/policies', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dimension: dim, policy_type: 'grouping_rules', config: cfg, enabled: existing.enabled }) });
+      await policiesLoad();
+    }
+
+    async function polUpdateRule(dim, idx, field, value) {
+      var existing = polFind(dim, 'grouping_rules');
+      if (!existing) return;
+      var cfg = JSON.parse(existing.config || '{}');
+      if (field === 'strategy') {
+        var strat = GROUPING_STRATEGIES.find(function(s) { return s.value === value; });
+        var newParams = {};
+        strat.params.forEach(function(p) { newParams[p.key] = p.default; });
+        cfg.rules[idx] = { strategy: value, params: newParams };
+      } else {
+        var val = (typeof cfg.rules[idx].params[field] === 'number') ? parseInt(value, 10) || 0 : value;
+        cfg.rules[idx].params[field] = val;
+      }
+      await fetch('/api/economy/policies', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dimension: dim, policy_type: 'grouping_rules', config: cfg, enabled: existing.enabled }) });
+      await policiesLoad();
+    }
+
+    async function policiesApplyAll() {
+      var resultEl = document.getElementById('policiesResult');
+      resultEl.style.display = 'block';
+      resultEl.textContent = 'Applying all policies…';
+      try {
+        var data = await fetch('/api/economy/policies/apply-all', { method: 'POST' }).then(function(r) { return r.json(); });
+        var lines = ['Results:'];
+        var dims = Object.keys(data.results || {});
+        if (dims.length === 0) { resultEl.textContent = 'No dimensions with entities found. Run a sync first.'; return; }
+        dims.forEach(function(dim) {
+          var r = data.results[dim];
+          lines.push('  ' + dim + ': ' + r.applied + ' policies, ' + r.created_entities + ' entities created, ' + r.created_relations + ' relations created');
+          (r.actions || []).forEach(function(a) { lines.push('    → ' + a); });
+        });
+        resultEl.textContent = lines.join('\n');
+      } catch (e) { resultEl.textContent = 'Error: ' + e.message; }
+    }
+
+    function policiesRender() {
+      var grid = document.getElementById('policiesDimGrid');
+      if (!polDimensions.length) {
+        grid.innerHTML = '<div style="color:#888;font-size:12px;padding:20px;text-align:center;grid-column:1/-1;">No dimensions synced yet. Run an economy sync first to populate dimensions.</div>';
+        return;
+      }
+      grid.innerHTML = polDimensions.map(function(dim) {
+        var dimLabel = dim.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+
+        // Simple toggle policies (auto_root, auto_missing)
+        var simpleRows = POL_SIMPLE.map(function(pt) {
+          var existing = polFind(dim, pt.type);
+          var isOn = existing ? !!existing.enabled : false;
+          return '<div class="pol-row"><label class="pol-switch"><input type="checkbox" ' + (isOn ? 'checked' : '') + ' onchange="polToggle(\'' + dim + '\',\'' + pt.type + '\',this.checked)"><span class="slider"></span></label><div class="pol-label"><div class="pol-name">' + pt.icon + ' ' + pt.name + '</div><div class="pol-desc">' + pt.desc + '</div></div><span class="pol-status ' + (isOn ? 'on' : 'off') + '">' + (isOn ? 'ON' : 'OFF') + '</span></div>';
+        }).join('');
+
+        // Grouping rules (multi-rule)
+        var grouping = polFind(dim, 'grouping_rules');
+        var groupingOn = grouping ? !!grouping.enabled : false;
+        var rules = [];
+        if (grouping) { try { rules = JSON.parse(grouping.config || '{}').rules || []; } catch(e) {} }
+
+        var groupingToggle = '<div class="pol-row"><label class="pol-switch"><input type="checkbox" ' + (groupingOn ? 'checked' : '') + ' onchange="polToggleGrouping(\'' + dim + '\',this.checked)"><span class="slider"></span></label><div class="pol-label"><div class="pol-name">📂 Grouping Rules</div><div class="pol-desc">Auto-create group nodes from code patterns (multiple rules)</div></div><span class="pol-status ' + (groupingOn ? 'on' : 'off') + '">' + (groupingOn ? 'ON' : 'OFF') + '</span></div>';
+
+        var rulesHtml = '';
+        if (groupingOn) {
+          var ruleItems = rules.map(function(rule, idx) {
+            var stratSelect = '<select onchange="polUpdateRule(\'' + dim + '\',' + idx + ',\'strategy\',this.value)">' + GROUPING_STRATEGIES.map(function(s) {
+              return '<option value="' + s.value + '"' + (rule.strategy === s.value ? ' selected' : '') + '>' + s.label + '</option>';
+            }).join('') + '</select>';
+
+            var strat = GROUPING_STRATEGIES.find(function(s) { return s.value === rule.strategy; }) || GROUPING_STRATEGIES[0];
+            var paramInputs = strat.params.map(function(p) {
+              var val = (rule.params && rule.params[p.key] !== undefined) ? rule.params[p.key] : p.default;
+              var inputType = p.type === 'number' ? 'number' : 'text';
+              var width = p.type === 'text' ? 'width:120px;' : 'width:50px;';
+              return '<label style="font-size:10px;color:#888;">' + p.label + '</label><input type="' + inputType + '" value="' + val + '" style="' + width + '" onchange="polUpdateRule(\'' + dim + '\',' + idx + ',\'' + p.key + '\',this.value)">';
+            }).join(' ');
+
+            return '<div class="pol-rule-item">' + stratSelect + ' ' + paramInputs + ' <button class="rule-remove" onclick="polRemoveRule(\'' + dim + '\',' + idx + ')" title="Remove rule">×</button></div>';
+          }).join('');
+
+          rulesHtml = '<div class="pol-rules-section"><h5>Rules' + (rules.length ? ' (' + rules.length + ')' : '') + '</h5>' + ruleItems + '<button class="pol-add-rule" onclick="polAddRule(\'' + dim + '\')">+ Add rule</button></div>';
+        }
+
+        return '<div class="pol-dim-card"><div class="pol-dim-header"><span class="pol-dim-badge">' + dim + '</span> ' + dimLabel + '</div>' + simpleRows + groupingToggle + rulesHtml + '</div>';
+      }).join('');
+    }
+
+    // ── Attribute Publishing ──
+    var _apAttrDefs = [];  // from /api/economy/attribute-defs
+    var _apRules = [];     // from /api/economy/attribute-publish-rules
+    var _apDimensions = [];
+
+    async function attrPubLoad() {
+      try {
+        var [defs, rules] = await Promise.all([
+          fetch(API + '/api/economy/attribute-defs').then(function(r) { return r.json(); }),
+          fetch(API + '/api/economy/attribute-publish-rules').then(function(r) { return r.json(); })
+        ]);
+        _apAttrDefs = defs;
+        _apRules = rules;
+        // Collect dimensions
+        var dimSet = {};
+        defs.forEach(function(d) { dimSet[d.dimension] = true; });
+        _apDimensions = Object.keys(dimSet).sort();
+        // Populate dimension selects
+        var filterSel = document.getElementById('attrPubDimFilter');
+        var formSel = document.getElementById('apDim');
+        filterSel.innerHTML = '<option value="">All dimensions</option>' + _apDimensions.map(function(d) { return '<option value="' + d + '">' + d + '</option>'; }).join('');
+        formSel.innerHTML = _apDimensions.map(function(d) { return '<option value="' + d + '">' + d + '</option>'; }).join('');
+        attrPubUpdateSrcSelect();
+        attrPubRender();
+      } catch (e) { console.error('attrPubLoad error:', e); }
+    }
+
+    function attrPubUpdateSrcSelect() {
+      var dim = document.getElementById('apDim').value;
+      var srcSel = document.getElementById('apSrcAttr');
+      var attrs = _apAttrDefs.filter(function(d) { return d.dimension === dim; });
+      srcSel.innerHTML = attrs.map(function(a) { return '<option value="' + a.attribute_name + '">' + a.attribute_name + ' (' + a.attribute_label + ')</option>'; }).join('');
+      // Pre-fill publish_as with source name
+      if (attrs.length > 0) document.getElementById('apPublishAs').value = attrs[0].attribute_name;
+    }
+
+    function attrPubRender() {
+      var filterDim = document.getElementById('attrPubDimFilter').value;
+      var defs = filterDim ? _apAttrDefs.filter(function(d) { return d.dimension === filterDim; }) : _apAttrDefs;
+      // Build rule lookup: dimension:source_attr → rule
+      var ruleMap = {};
+      _apRules.forEach(function(r) { ruleMap[r.dimension + ':' + r.source_attribute] = r; });
+
+      var html = '<table style="font-size:12px;width:100%"><thead><tr>' +
+        '<th>Dimension</th><th>ERP Attribute</th><th>Status</th><th>Published As</th><th>Value Mapping</th><th>Allowed Values</th><th style="width:40px"></th>' +
+        '</tr></thead><tbody>';
+
+      if (defs.length === 0) {
+        html += '<tr><td colspan="7" style="color:#999;text-align:center">No attribute definitions found. Run ERP sync first.</td></tr>';
+      } else {
+        defs.forEach(function(d) {
+          var key = d.dimension + ':' + d.attribute_name;
+          var rule = ruleMap[key];
+          var hasAnyRules = _apRules.some(function(r) { return r.dimension === d.dimension; });
+          var statusTag, publishedAs, transformStr, actions;
+
+          if (rule) {
+            var enabled = rule.enabled;
+            var color = enabled ? '#27ae60' : '#e74c3c';
+            var label = enabled ? 'Published' : 'Excluded';
+            statusTag = '<span style="background:' + (enabled ? '#e8f5e9' : '#fbe9e7') + ';color:' + color + ';padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">' + label + '</span>';
+            publishedAs = rule.publish_as !== d.attribute_name ? '<strong>' + rule.publish_as + '</strong> <span style="color:#999">←' + d.attribute_name + '</span>' : rule.publish_as;
+            var transform = rule.transform ? JSON.parse(rule.transform) : null;
+            transformStr = transform ? '<code style="font-size:10px;background:#f1f3f5;padding:2px 4px;border-radius:2px">' + Object.entries(transform).map(function(e) { return e[0] + '→' + e[1]; }).join(', ') + '</code>' : '—';
+            actions = '<button onclick="attrPubToggle(' + rule.id + ',' + (enabled ? 0 : 1) + ')" style="border:none;background:none;cursor:pointer;font-size:14px" title="' + (enabled ? 'Disable' : 'Enable') + '">' + (enabled ? '🚫' : '✅') + '</button>' +
+              '<button onclick="attrPubDelete(' + rule.id + ')" style="border:none;background:none;cursor:pointer;color:#c62828;font-size:13px" title="Delete rule">×</button>';
+          } else if (hasAnyRules) {
+            statusTag = '<span style="background:#fff3e0;color:#e65100;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">Not published</span>';
+            publishedAs = '<span style="color:#ccc">—</span>';
+            transformStr = '—';
+            actions = '<button onclick="attrPubQuickAdd(\'' + d.dimension + '\',\'' + d.attribute_name + '\')" style="border:none;background:none;cursor:pointer;font-size:14px" title="Add as passthrough">➕</button>';
+          } else {
+            statusTag = '<span style="background:#e3f2fd;color:#1565c0;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">Passthrough</span>';
+            publishedAs = d.attribute_name;
+            transformStr = '—';
+            actions = '';
+          }
+
+          var allowedVals = d.allowed_values ? '<span style="font-size:10px;color:#666">' + d.allowed_values + '</span>' : '—';
+          html += '<tr><td><span class="tag" style="background:#e3f2fd;color:#1565c0">' + d.dimension + '</span></td>' +
+            '<td>' + d.attribute_name + ' <span style="color:#999;font-size:11px">(' + d.attribute_label + ')</span></td>' +
+            '<td>' + statusTag + '</td><td>' + publishedAs + '</td><td>' + transformStr + '</td><td>' + allowedVals + '</td>' +
+            '<td style="white-space:nowrap">' + actions + '</td></tr>';
+        });
+      }
+
+      html += '</tbody></table>';
+      document.getElementById('attrPubTable').innerHTML = html;
+    }
+
+    async function attrPubAdd() {
+      var dim = document.getElementById('apDim').value;
+      var src = document.getElementById('apSrcAttr').value;
+      var pubAs = document.getElementById('apPublishAs').value.trim();
+      var transformStr = document.getElementById('apTransform').value.trim();
+      if (!dim || !src || !pubAs) return;
+
+      var body = { dimension: dim, source_attribute: src, publish_as: pubAs, enabled: 1 };
+      if (transformStr) {
+        try { body.transform = JSON.parse(transformStr); } catch (e) {
+          document.getElementById('attrPubResult').style.display = 'block';
+          document.getElementById('attrPubResult').innerHTML = '<span style="color:#e74c3c">Invalid JSON in value mapping</span>';
+          return;
+        }
+      }
+      await fetch(API + '/api/economy/attribute-publish-rules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      document.getElementById('apTransform').value = '';
+      await attrPubLoad();
+      attrPubShowResult('Rule saved: ' + src + ' → ' + pubAs);
+    }
+
+    async function attrPubQuickAdd(dim, attr) {
+      await fetch(API + '/api/economy/attribute-publish-rules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dimension: dim, source_attribute: attr, publish_as: attr, enabled: 1 }) });
+      await attrPubLoad();
+      attrPubShowResult('Passthrough rule added for ' + dim + '.' + attr);
+    }
+
+    async function attrPubToggle(id, enabled) {
+      var rule = _apRules.find(function(r) { return r.id === id; });
+      if (!rule) return;
+      await fetch(API + '/api/economy/attribute-publish-rules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dimension: rule.dimension, source_attribute: rule.source_attribute, publish_as: rule.publish_as, transform: rule.transform ? JSON.parse(rule.transform) : undefined, enabled: enabled }) });
+      await attrPubLoad();
+    }
+
+    async function attrPubDelete(id) {
+      await fetch(API + '/api/economy/attribute-publish-rules/' + id, { method: 'DELETE' });
+      await attrPubLoad();
+    }
+
+    async function attrPubRepublish() {
+      var el = document.getElementById('attrPubResult');
+      el.style.display = 'block';
+      el.innerHTML = '⏳ Re-publishing dimension snapshots...';
+      try {
+        await fetch(API + '/api/economy/policies/apply-all', { method: 'POST' });
+        el.innerHTML = '✅ All dimension snapshots republished with current attribute rules.';
+      } catch (e) { el.innerHTML = '<span style="color:#e74c3c">Republish failed</span>'; }
+    }
+
+    function attrPubShowResult(msg) {
+      var el = document.getElementById('attrPubResult');
+      el.style.display = 'block';
+      el.innerHTML = '✅ ' + msg;
+      setTimeout(function() { el.style.display = 'none'; }, 4000);
+    }
+
+    // Wire up dimension change in form
+    document.getElementById('apDim').addEventListener('change', function() { attrPubUpdateSrcSelect(); });
 
     // ── External Tools ──
     var editingToolId = null;
@@ -3352,16 +4693,23 @@ In production:
       var typingSection = isTyping ? active.closest('.card, .dim-detail') : null;
 
       loadEventLog();
+      loadDLQ();
+      loadPipelineHealth();
       if (!typingSection || !typingSection.querySelector('#projectsBody')) loadProjects();
       if (!typingSection || !typingSection.querySelector('#dimMappingsBody')) loadDimensionMappings();
       if (!typingSection || !typingSection.querySelector('[id^="dimModel"]')) loadDimModel();
       if (!typingSection || !typingSection.querySelector('#sharedDimsBody, #dimDetailPanel')) loadSharedDimensions();
       if (!typingSection || !typingSection.querySelector('#econOverviewBody')) loadEconOverview();
       if (!typingSection || !typingSection.querySelector('#systemsBody')) loadSystems();
+      if (!typingSection || !typingSection.querySelector('#subscriptionMatrix table')) loadSubscriptions();
       if (!typingSection || !typingSection.querySelector('#usersBody')) loadUsers();
       if (!typingSection || !typingSection.querySelector('#extToolsBody')) loadExternalTools();
       loadTokenPayload();
       if (!typingSection || !typingSection.querySelector('[id^="econ"]')) loadEconomyDomain();
+      if (!typingSection || !typingSection.querySelector('[id^="econ"]')) loadPipelineConfig();
+      if (!typingSection || !typingSection.querySelector('[id^="econ"]')) loadRejectedFacts();
+      if (!typingSection || !typingSection.querySelector('.pol-dim-card')) policiesLoad();
+      if (!typingSection || !typingSection.querySelector('#attrPubTable table')) attrPubLoad();
       if (typeof window.__platformShellReloadNav === 'function') window.__platformShellReloadNav();
     }
 

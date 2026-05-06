@@ -93,6 +93,21 @@ db.exec(`
     name TEXT NOT NULL DEFAULT '',
     PRIMARY KEY (dimension, code)
   );
+
+  CREATE TABLE IF NOT EXISTS dim_relations (
+    dimension TEXT NOT NULL,
+    child_code TEXT NOT NULL,
+    parent_code TEXT NOT NULL,
+    PRIMARY KEY (dimension, child_code, parent_code)
+  );
+
+  CREATE TABLE IF NOT EXISTS dim_member_attributes (
+    dimension TEXT NOT NULL,
+    code TEXT NOT NULL,
+    attribute_name TEXT NOT NULL,
+    attribute_value TEXT NOT NULL,
+    PRIMARY KEY (dimension, code, attribute_name)
+  );
 `);
 
 // ── Dim member auto-registration ──
@@ -150,8 +165,30 @@ function applyIngestionRules(line: Record<string, unknown>, sourceType: "budget"
 
   const result = { ...line };
 
+  // Cache for member attribute lookups: "dimension:code:attr" → value
+  const memberAttrCache: Record<string, string | null> = {};
+  function lookupMemberAttr(dimension: string, code: string, attrName: string): string | null {
+    const cacheKey = `${dimension}:${code}:${attrName}`;
+    if (cacheKey in memberAttrCache) return memberAttrCache[cacheKey];
+    const row = db.prepare("SELECT attribute_value FROM dim_member_attributes WHERE dimension = ? AND code = ? AND attribute_name = ?").get(dimension, code, attrName) as { attribute_value: string } | undefined;
+    memberAttrCache[cacheKey] = row ? row.attribute_value : null;
+    return memberAttrCache[cacheKey];
+  }
+
   for (const rule of rules) {
-    const fieldValue = result[rule.condition_field || ""] as string | null | undefined;
+    let fieldValue: string | null | undefined;
+
+    // Support member_attr:dimension:attribute_name — lookup member attribute
+    const condField = rule.condition_field || "";
+    if (condField.startsWith("member_attr:")) {
+      const parts = condField.split(":");
+      const dimName = parts[1];  // e.g. "account"
+      const attrName = parts[2]; // e.g. "kontoklass"
+      const code = result[dimName] as string | undefined;
+      fieldValue = code ? lookupMemberAttr(dimName, code, attrName) : null;
+    } else {
+      fieldValue = result[condField] as string | null | undefined;
+    }
 
     let matches = false;
     switch (rule.condition_op) {
@@ -211,6 +248,7 @@ const CONSUME_TOPICS = [
   "platform.budget.out",
   "platform.gl.out",
   "platform.entity-linked.out",
+  "platform.dimensions.out",
 ];
 
 async function startConsumer() {
@@ -309,10 +347,18 @@ async function startConsumer() {
           const dimPerEntry = data.dim_values_per_entry || [];
           const srcSys = data.source_system || "erp";
           const srcKey = data.source_key || orig?.erp_id;
+          const entries = orig?.entries || [];
+
+          // Period-based replace: delete existing GL lines for the periods in this batch
+          const periods: string[] = data.periods || [...new Set(entries.map((e: any) => e.period))];
+          if (periods.length > 0 && data.sync_mode === "replace_by_period") {
+            const placeholders = periods.map(() => "?").join(",");
+            db.prepare(`DELETE FROM gl_lines WHERE source_system = ? AND source_key = ? AND period IN (${placeholders})`).run(srcSys, srcKey, ...periods);
+          }
+
           const stmt = db.prepare(
             "INSERT INTO gl_lines (source_system, source_key, account, org_unit, amount, currency, period, transaction_date, dim1, dim2, dim3, dim4, dim5) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
           );
-          const entries = orig?.entries || [];
           let rulesApplied = 0;
           for (let i = 0; i < entries.length; i++) {
             const entry = entries[i];
@@ -330,7 +376,7 @@ async function startConsumer() {
               enriched.transaction_date || null, enriched.dim1 || null, enriched.dim2 || null, enriched.dim3 || null, enriched.dim4 || null, enriched.dim5 || null);
             registerDimMembers([enriched]);
           }
-          console.log(`[PROD-B] GL lines stored for ${srcSys}:${srcKey} (${entries.length} lines, ${rulesApplied} enriched by ingestion rules)`);
+          console.log(`[PROD-B] GL: ${entries.length} lines (${rulesApplied} enriched), periods: [${periods.join(",")}], mode: ${data.sync_mode || "append"}`);
           break;
         }
 
@@ -346,6 +392,34 @@ async function startConsumer() {
             }
             console.log(`[PROD-B] Projects linked under group: ${data.entities.map((e: any) => `${e.source_system}:${e.source_key}`).join(", ")}`);
           }
+          break;
+        }
+        case "platform.dimensions.out": {
+          // Dimension snapshot from platform — ingest entities + relations + attributes
+          const dim = data.dimension;
+          const entities = data.entities || [];
+          const relations = data.relations || [];
+          const stmtDim = db.prepare("INSERT OR REPLACE INTO dim_members (dimension, code, name) VALUES (?, ?, ?)");
+          for (const e of entities) {
+            stmtDim.run(dim, e.code, e.name || e.code);
+          }
+          // Store relations (clear old + insert new)
+          db.prepare("DELETE FROM dim_relations WHERE dimension = ?").run(dim);
+          const stmtRel = db.prepare("INSERT OR IGNORE INTO dim_relations (dimension, child_code, parent_code) VALUES (?, ?, ?)");
+          for (const r of relations) {
+            stmtRel.run(dim, r.child_code, r.parent_code);
+          }
+          // Store member attributes (clear old + insert new)
+          db.prepare("DELETE FROM dim_member_attributes WHERE dimension = ?").run(dim);
+          const stmtAttr = db.prepare("INSERT OR REPLACE INTO dim_member_attributes (dimension, code, attribute_name, attribute_value) VALUES (?, ?, ?, ?)");
+          for (const e of entities) {
+            if (e.attributes) {
+              for (const [attrName, attrValue] of Object.entries(e.attributes)) {
+                stmtAttr.run(dim, e.code, attrName, String(attrValue));
+              }
+            }
+          }
+          console.log(`[PROD-B] Dimension "${dim}" updated: ${entities.length} members, ${relations.length} relations`);
           break;
         }
       }
@@ -439,6 +513,39 @@ app.get("/api/accounts", (_req, res) => {
   res.json({ accounts, org_units });
 });
 
+// GET /api/dim-members — dimension members received from platform
+app.get("/api/dim-members", (req, res) => {
+  const dimension = req.query.dimension as string | undefined;
+  if (dimension) {
+    res.json(db.prepare("SELECT * FROM dim_members WHERE dimension = ? ORDER BY code").all(dimension));
+  } else {
+    res.json(db.prepare("SELECT * FROM dim_members ORDER BY dimension, code").all());
+  }
+});
+
+// GET /api/dim-relations — hierarchy relations
+app.get("/api/dim-relations", (req, res) => {
+  const dimension = req.query.dimension as string | undefined;
+  if (dimension) {
+    res.json(db.prepare("SELECT * FROM dim_relations WHERE dimension = ? ORDER BY parent_code, child_code").all(dimension));
+  } else {
+    res.json(db.prepare("SELECT * FROM dim_relations ORDER BY dimension, parent_code, child_code").all());
+  }
+});
+
+// GET /api/dim-member-attributes — member attributes
+app.get("/api/dim-member-attributes", (req, res) => {
+  const dimension = req.query.dimension as string | undefined;
+  const code = req.query.code as string | undefined;
+  if (dimension && code) {
+    res.json(db.prepare("SELECT * FROM dim_member_attributes WHERE dimension = ? AND code = ? ORDER BY attribute_name").all(dimension, code));
+  } else if (dimension) {
+    res.json(db.prepare("SELECT * FROM dim_member_attributes WHERE dimension = ? ORDER BY code, attribute_name").all(dimension));
+  } else {
+    res.json(db.prepare("SELECT * FROM dim_member_attributes ORDER BY dimension, code, attribute_name").all());
+  }
+});
+
 // ── Ingestion Rules API ──
 
 app.get("/api/ingestion-rules", (_req, res) => {
@@ -508,7 +615,7 @@ app.get("/api/dim-labels", async (_req, res) => {
 });
 
 app.post("/api/reset", (_req, res) => {
-  db.exec("DELETE FROM processed_events; DELETE FROM budget_lines; DELETE FROM gl_lines; DELETE FROM projects; DELETE FROM accounts; DELETE FROM org_units; DELETE FROM ingestion_rules; DELETE FROM dim_members;");
+  db.exec("DELETE FROM processed_events; DELETE FROM budget_lines; DELETE FROM gl_lines; DELETE FROM projects; DELETE FROM accounts; DELETE FROM org_units; DELETE FROM ingestion_rules; DELETE FROM dim_members; DELETE FROM dim_relations; DELETE FROM dim_member_attributes;");
   console.log("[PRODUCT-B] All data reset");
   res.json({ ok: true });
 });

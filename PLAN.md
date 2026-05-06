@@ -24,7 +24,7 @@ Demonstrera en event-driven arkitektur med:
 | Grafana | Nej, Jaeger räcker |
 | Flex-dimensioner | Approach C: namngivna kärndims + generiska dim1-dim3 slots |
 | Dimension Mapping | Shared Taxonomy: plattformen äger kanonisk kodlista, per-produkt mappning |
-| Admin UI-struktur | 6 flikar: ⚙️ Initial Setup → 🔑 Identity & Access → 📊 Master Data → 🔗 Operations → 📋 Events → 🎬 Demo |
+| Admin UI-struktur | 7 flikar: Configuration → Master Data → Domains → Identity & Access → Events → Demo → POC & Production |
 | Budget dim-routing | Budget berikas med flex-dims via samma applyDimRouting-mekanism som GL |
 | Economy Domain | Standardiserat staginglager (econ_*) — adapters transformerar källdata till gemensamt format. Ersätter Connector Registry. |
 
@@ -62,30 +62,128 @@ Ingen produkt behöver känna till en annan produkts ID — plattformen är den 
 ## Arkitektur
 
 ```
-┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│   ERP Mock   │     │  Product A   │     │  Product B   │
-│  (external)  │     │  (Budget &   │     │ (Analytics)  │
-│              │     │   Planning)  │     │              │
-└──────┬───────┘     └──────┬───────┘     └──────▲───────┘
-       │                    │                    │
-       │ ProjectCreated     │ BudgetProject      │ Konsumerar
-       │ AccountsPublished  │ Created            │ events
-       │ GeneralLedger      │ BudgetUpdated      │
-       │ Published          │                    │
-       ▼                    ▼                    │
-┌─────────────────────────────────────────────────────────┐
-│                     REDPANDA (Kafka)                     │
-│                     Event Broker                         │
-└──────────────────────────┬──────────────────────────────┘
-                           │
-                           ▼
-                ┌─────────────────────┐
-                │   Platform Layer    │
-                │  - Mapping Service  │
-                │  - Event Router     │
-                │  - Platform API     │
-                └─────────────────────┘
+ ┌──────────┐   SCIM 2.0    ┌──────────────────────────────────────────────────────┐
+ │   IdP    │──provision───►│              PLATFORM LAYER (:3000)                  │
+ │(simulerad│               │                                                      │
+ │ i demo)  │               │  ┌────────────┐  ┌───────────┐  ┌────────────────┐  │
+ └──────────┘               │  │  Identity   │  │  Economy   │  │  Event Router  │  │
+                            │  │  & Access   │  │  Domain    │  │  & Enrichment  │  │
+                            │  │             │  │ (econ_*)   │  │                │  │
+                            │  │ users       │  │ entities   │  │ dim routing    │  │
+                            │  │ SCIM/OIDC   │  │ relations  │  │ canonical IDs  │  │
+                            │  │ JWT tokens  │  │ facts      │  │ planning dims  │  │
+                            │  │ groups      │  │ attributes │  │ code mapping   │  │
+                            │  └────────────┘  │ sync_state │  └───────┬────────┘  │
+                            │                  │            │          │            │
+                            │  ┌────────────┐  │ ┌────────┐│  ┌───────▼────────┐  │
+                            │  │  Shell.js   │  │ │Adapter ││  │ Kafka Consumer │  │
+                            │  │ (injected)  │  │ │Pattern ││  │ ingress→enrich │  │
+                            │  │ nav, inbox, │  │ │ERP→econ││  │ →egress topics │  │
+                            │  │ ext tools   │  │ └────────┘│  └────────────────┘  │
+                            │  └────────────┘  └───────────┘                      │
+                            └──────────────────────────┬───────────────────────────┘
+                                                       │
+                                          GET /shell.js │ Egress events
+                              ┌────────────────────────┼────────────────────┐
+                              │                        │                    │
+                              ▼                        ▼                    ▼
+                  ┌──────────────────┐   ┌──────────────────┐  ┌──────────────────┐
+                  │    ERP Mock      │   │   Product A      │  │   Product B      │
+                  │   (:3001)        │   │  (:3002)         │  │  (:3003)         │
+                  │                  │   │  Budget &        │  │  Analytics       │
+                  │  Accounts        │   │  Planning        │  │                  │
+                  │  Projects        │   │                  │  │  Ingestion       │
+                  │  General Ledger  │   │  BudgetSubmitted │  │  Pipeline        │
+                  │  (källdata)      │   │  TaskAssigned    │  │  (default/derive │
+                  └────────┬─────────┘   └────────┬─────────┘  │   regler)        │
+                           │                      │            └──────────────────┘
+                           │                      │                    ▲
+                           ▼                      ▼                    │
+                  ┌────────────────────────────────────────────────────────────────┐
+                  │                      REDPANDA (Kafka)                          │
+                  │                                                                │
+                  │  Ingress:  erp.accounts  erp.projects  erp.general-ledger     │
+                  │            product-a.events  product-a.tasks                   │
+                  │                                                                │
+                  │  Egress:   platform.accounts.out  platform.projects.out        │
+                  │            platform.budget.out    platform.gl.out              │
+                  │            platform.entity-linked.out  platform.dimensions.out │
+                  └────────────────────────────────────────────────────────────────┘
 ```
+
+### Dataflöde — Economy Domain
+
+```
+Källa (ERP)                      Platform Economy Domain                  Produkter
+───────────                      ───────────────────────                  ─────────
+                    Adapter
+AccountsPublished ──(runEconSync)──► econ_entities
+                                    econ_relations (hierarkier)
+                                    econ_attribute_defs
+                                    econ_entity_attributes
+
+                    Fact Pipeline
+GeneralLedger     ──────────────────► econ_facts (staging_status)
+Published                              received → validated → published
+                                       ↓
+                                    Kafka: platform.gl.out ──────────► Product B
+                                    (berikad med dim_values_per_entry)   (ingestion pipeline)
+
+                    Shared Dimensions API (delegerar till econ_*)
+                    ┌────────────────────────────────────────┐
+                    │ upsertDimensionCode → upsertEconEntity │
+                    │ getDimensionCodes   → SELECT econ_*    │
+                    │ setHierarchy        → upsertEconRelation│
+                    └────────────────────────────────────────┘
+```
+
+> **POC vs Produktion:** I produktion är ERP-systemet och Economy Domain två helt separata system — ERP:et ägs av kunden och Economy Domain lever i plattformens backend. I denna POC nyttjar vi ERP Mock-miljön (`localhost:3001`) för att visa *båda perspektiven* sida vid sida: källdatan som den ser ut i ERP:et, och hur den transformeras till standardiserat Economy Domain-format via adaptern.
+
+**Nyckelprinciper:**
+- **Economy Domain** (`econ_*`) är plattformens standardiserade staginglager — ERP-oberoende
+- **Adapter-mönster**: `runEconSync` transformerar källdata (ERP API) till Economy Domain-format
+- **Fact Pipeline**: 3-stegs validering (received → validated → published) med idempotent sync (se nedan)
+- **Dim Routing**: `applyDimRouting` översätter källfält till dim-slots via `dim_routing` + `dimension_code_mappings`
+- **Shell injection**: Alla produkter inkluderar `/shell.js` som renderar gemensam header med nav, inbox och externa verktyg
+- **SCIM 2.0**: Användare provisioneras från IdP; `parseGroupClaims` mappar gruppnamn till roll/produkt/org
+
+### Fact Pipeline — Idempotent GL-ingestion
+
+GL-transaktioner flödar ERP → Platform → Produkter genom en **trelagers-idempotent pipeline**.
+Designen förhindrar dubbletter vid omsync, stödjer periodbaserad omläsning och använder high watermark för inkrementell sync.
+
+**Trelagersmodell:**
+
+| Lager | Mekanism | Dedup-strategi |
+|-------|----------|----------------|
+| **ERP (källa)** | Pull-baserat API: `GET /api/gl` med `period_from`, `period_to`, `modified_since` | Varje rad har ett deterministiskt `entry_id` (t.ex. `gl-3010-OU-100-2025-01`) och `modified_at` |
+| **Platform (staging)** | `econ_facts` med `UNIQUE(source_system, source_row_id)`, `ON CONFLICT DO UPDATE` (upsert) | Samma rad från samma källa skriver alltid över — aldrig dubbletter. Periodomsync raderar gamla fakta först |
+| **Produkt (konsument)** | Läser `sync_mode` från Kafka-event. Vid `replace_by_period`: raderar `gl_lines` för berörda perioder före insert | Periodnivå-atomicitet: gammal data tas bort, ny sätts in |
+
+**Sync-lägen:**
+
+| Läge | Beteende |
+|------|----------|
+| **Inkrementell** (default) | Använder `high_watermark` (senaste `modified_at`). Hämtar bara rader modifierade efter watermark. Snabbt, minimal datatransfer |
+| **Periodomläsning** | Admin anger `period_from` / `period_to`. Ignorerar watermark, hämtar alla rader för perioden, raderar gamla stagingdata, och upsertar. Användbart vid retroaktiva korrigeringar i källsystemet |
+| **Full sync** | Inget periodfilter, ingen watermark. Hämtar allt. Upsert säkerställer inga dubbletter. Säkert att köra som "reset" men långsammare |
+
+**High Watermark:**
+- Lagras i `sync_state.high_watermark` per källa + entity_type
+- Visar senaste `modified_at` sedd från ERP
+- Vid varje inkrementell sync hämtas bara rader nyare än watermärket
+- Efter lyckad sync avanceras watermärket till nyaste timestamp i batchen
+- Visas i Sync State-tabellen i Admin UI
+
+**Kafka-event (platform.gl.out) utökat schema:**
+```json
+{
+  "sync_mode": "replace_by_period",
+  "periods": ["2025-01", "2025-02", "2025-03"],
+  "entries": [...]
+}
+```
+Produkten läser `sync_mode` och `periods` för att avgöra om gammal data ska raderas före insert.
 
 ## Komponenter (7 containers)
 
@@ -94,7 +192,7 @@ Ingen produkt behöver känna till en annan produkts ID — plattformen är den 
 | `redpanda` | Redpanda | 19092 (Kafka), 8081 (Schema Reg), 8082 (Admin) |
 | `redpanda-console` | Redpanda Console | 8080 (UI) |
 | `jaeger` | Jaeger all-in-one | 16686 (UI), 4318 (OTLP) |
-| `erp-mock` | Node.js/Express | 3001 |
+| `erp-mock` | Node.js/Express | 3001 (+ Economy Domain Explorer UI) |
 | `product-a` | Node.js/Express + SQLite | 3002 |
 | `product-b` | Node.js/Express + SQLite | 3003 |
 | `platform` | Node.js/Express + SQLite | 3000 |
@@ -129,13 +227,14 @@ Alla events innehåller:
 
 ```typescript
 {
-  entry_id: string;
+  entry_id: string;          // Deterministiskt: "gl-{account}-{org_unit}-{period}" — stabil ID för idempotent upsert
   erp_id: string;            // T.ex. "erp-042"
   org_unit: string;          // T.ex. "OU-100"
   account: string;           // T.ex. "4010"
   period: string;            // T.ex. "2025-01" (år-månad)
   amount: number;
   currency: string;          // T.ex. "SEK"
+  modified_at: string;       // ISO 8601 — används för high watermark-tracking
   activity?: string;         // T.ex. "AKT-100" — flex-dim (routas till dim1)
   cost_bearer?: string;      // T.ex. "KB-500" — flex-dim (routas till dim2)
   counterpart?: string;      // T.ex. "MP-200" — flex-dim (routas till dim3)
@@ -165,7 +264,8 @@ Product A och B konsumerar **bara** dessa — aldrig ingress-topics.
 | `platform.projects.out` | Projekt (berikad med canonical_id) | Product A, Product B |
 | `platform.budget.out` | Budget (berikad med canonical_id + planning_dimensions + dim_values_per_line) | Product B |
 | `platform.gl.out` | Utfall (berikad med canonical_id + dim_values_per_entry) | Product B |
-| `platform.links.out` | ProjectLinked | Product A, Product B |
+| `platform.entity-linked.out` | EntityLinked (identiteter sammankopplade) | Product B |
+| `platform.dimensions.out` | DimensionSnapshot (entiteter + relationer per dimension) | Product A, Product B |
 
 ### Routingprincip
 ```
@@ -195,6 +295,57 @@ Produkterna känner aldrig till varandras topics. Plattformen är enda länken.
   ```json
   { "dim1": "AKT-100", "dim2": "KB-500", "dim3": "MP-200" }
   ```
+
+### Dimension Publishing Pipeline
+
+Platform publicerar **DimensionSnapshot**-events till `platform.dimensions.out` efter varje synk och/eller policy-apply. En snapshot per dimension innehåller alla entiteter och relationer.
+
+**Event-schema:**
+```json
+{
+  "event_id": "uuid",
+  "event_type": "DimensionSnapshot",
+  "timestamp": "ISO 8601",
+  "source_system": "economy_domain",
+  "dimension": "account",
+  "entities": [{ "code": "4010", "name": "Löner", "type": "leaf" }, ...],
+  "relations": [
+    { "child_code": "4010", "parent_code": "_ALL" },
+    { "child_code": "4010", "parent_code": "40" },
+    { "child_code": "40", "parent_code": "COSTS" },
+    { "child_code": "COSTS", "parent_code": "RES" }
+  ]
+}
+```
+
+> **Hierarkimodell:** En snapshot kan innehålla **flera oberoende rötter**.
+> `_ALL` är en flat lista av alla leaf-entiteter + `_MISSING` (system-nod).
+> ERP-hierarkin (t.ex. RES → COSTS → 40 → 4010) lever som en separat rotstruktur.
+> Grupp-noder (RES, COSTS, 30, 40 etc.) kopplas **inte** till `_ALL`.
+
+**Structural Policies:**
+
+Policies appliceras efter synk och skapar/underhåller systemgenererade strukturer.
+Konfigureras per dimension (eller `*` för alla) via `POST /api/economy/policies`.
+
+| Policy | Beteende |
+|--------|----------|
+| `auto_root` | Skapar `_ALL`-nod (type=system). Kopplar alla **leaf**-entiteter som barn till `_ALL`. Grupp-noder (type=group) lämnas orörda — de behåller sin ERP-hierarki. |
+| `auto_missing` | Skapar `_MISSING`-nod (type=system) under `_ALL`. Används för transaktioner som refererar okända koder. |
+| `grouping_rules` | Skapar grupp-noder baserat på regler (first_n_chars, char_range, regex) och kopplar leafs under matchande grupp. |
+
+**Exekveringsordning:** auto_root → auto_missing → grouping_rules (inom varje dimension).
+
+**Triggerpunkter:**
+- `runEconSync` — efter adapter + structural policies har körts
+- `POST /api/economy/policies/apply` — efter enskild dimension-apply
+- `POST /api/economy/policies/apply-all` — efter alla dimensioner applicerats
+
+**Mottagning i produkter:**
+- Product A & Product B: prenumererar på `platform.dimensions.out`
+- Ingestion: sparar entiteter i lokal `dim_members`-tabell + relationer i `dim_relations`-tabell
+- Produkterna kan utöka med egen metadata (t.ex. `budgetable`, `aggregation_rule`)
+- Admin Dimensions-flik: drill-down-vy med breadcrumb-navigation genom hierarkin
 
 ### Product B Ingestion Pipeline
 
@@ -404,19 +555,34 @@ Admin-vy på `localhost:3000/admin.html` — åtkomlig via användare `admin/dem
 
 ### Flikstruktur
 
-UI:t är organiserat i **sju flikar** som speglar arbetsflödet vid kundinstallation:
+UI:t är organiserat i **sju flikar** som speglar tre ansvarsområden — plattformsinfrastruktur, master data/domänregistrering, och domändrift:
 
-| Flik | Syfte | Nyckelord |
-|---|---|---|
-| **⚙️ Initial Setup** | Engångskonfiguration per kund | Dimensioner, ekonomimodell, routing, externa verktyg |
-| **🔑 Identity & Access** | Användarhantering | SCIM, lokal skapning, roller, grupp-mappning |
-| **📊 Data Operations** | Daglig administration | Projekt, länkning, planning-dims |
-| **🔗 Operations** | Systemstatus | Aktiva system, konfiguration |
-| **📋 Events** | Övervakning | Realtids event-logg |
-| **🎬 Demo** | Testverktyg | 11-stegs demoflöde |
-| **📝 POC & Production** | Arkitektur & dokumentation | Två sub-flikar: *Architecture Vision* och *Production Notes* |
+| Flik | Syfte | Målgrupp | Nyckelord |
+|---|---|---|---|
+| **⚙️ Configuration** | Plattformsinfrastruktur — system, produkter, routing, integrationer | Leverantör (driftsättning) | Connected Systems, Event Subscriptions, External Tools |
+| **📊 Master Data** | Domänregistrering + kors-domän referensdata | Kundadmin / domänexpert | Economy Domain, HR Domain, Shared Dimensions, Identity Linking |
+| **🔧 Domains** | Domänspecifik pipeline och drift (med domän-selector) | Platform Ops | Pipeline Status, Sync, Validate, Publish, Recovery |
+| **🔑 Identity & Access** | Användarhantering | Kundadmin | SCIM, lokal skapning, roller, grupp-mappning |
+| **📋 Events** | Övervakning | Alla | Realtids event-logg |
+| **🎬 Demo** | Testverktyg | Intern | Demo Runner + Golden Path |
+| **📝 POC & Production** | Arkitektur & dokumentation | Intern | Architecture Vision + Production Notes |
 
 Aktiv flik sparas i `localStorage` och behålls vid sidladdning.
+Legacy-tabnamn (`setup`, `economy`, `operations`) mappas automatiskt till nya.
+
+**Designprinciper:**
+- **Configuration** = saker man ställer in en gång vid installation (infrastruktur-nivå)
+- **Master Data** = hur kundens data ser ut — domäner, dimensioner, kopplingar (domän-nivå)
+- **Domains** = allt om det löpande dataflödet — sync, publish, felhantering (drift-nivå)
+
+**Master Data** organiseras i tre visuella sektioner:
+1. **Data Domains** — Domänregistreringar med egna adapters (Economy ● aktiv, HR ○ placeholder)
+2. **Cross-domain** — Dimensioner och routing som delas av alla domäner
+3. **Identity & Entity Resolution** — Kanoniska entiteter, cross-system linking, planning tolkning
+
+**Domains** har en domän-selector i headern. Varje domän har sin egen pipeline,
+fakta-hantering och konfiguration. I nuläget finns en domän (Economy), men
+arkitekturen stödjer fler (HR, Supply Chain, etc.) utan ny flik.
 
 ### External Tools
 
@@ -441,63 +607,75 @@ external_tools (id, name, url, icon_url, sort_order, visible, created_at)
 - 4+ verktyg: de två första direkt, resten i "Tools ▾"-dropdown
 - Admin-UI: tabell med Edit/Hide/Show/Delete + formulär för add/edit
 
-### ⚙️ Grundinställning — "Ny kund? Börja här."
+### ⚙️ Configuration — Plattformsinfrastruktur
 
-Mörk header-banner med **statuschecklista** (6 indikatorer som uppdateras live):
+Mörk header-banner med **statuschecklista** (2 indikatorer som uppdateras live):
 
 | Indikator | Grön när |
 |---|---|
-| 🏦 Economy Domain | ≥1 entitet i Economy Domain |
-| 🖥️ System | ≥1 system aktiverat (via Connected Systems) |
-| 📚 Dimensioner | ≥1 delad dimension registrerad |
-| 👥 Deltagare | Minst en dimension har deltagare |
-| 🏷️ Kodlistor | ≥1 kod i någon dimension |
-| 📐 Ekonomimodell | ≥1 dim-slot konfigurerad |
+| 🖥️ Systems | ≥1 system aktiverat (via Connected Systems) |
 | 🔀 Routing | ≥1 routing-regel |
 
-**Steg 1 — Economy Domain (staginglager):**
-Översikt av Economy Domain med antal entiteter, relationer och dimensioner.
-Visar per-dimension-tabell med entitetsantal och shared/flex-taggar.
-Economy Domain är ett standardiserat lager — adapters (t.ex. `runEconSync`) transformerar källdata till gemensamt format.
-Plattformen är ERP-oberoende: nya datakällor behöver bara en adapter som skriver till econ_*-tabellerna.
-
-**Steg 1b — Connected Systems:**
+**Connected Systems:**
 Aktivera interna produkter (Product A, Product B) och visa aktiva system.
 Varje system har `task_base_url` (för deep links i inbox) och `system_type` (erp/budgeting/analytics) från `system_config`.
 ERP aktiveras automatiskt vid Economy Domain-staging. Interna produkter aktiveras manuellt via Enable-knappar.
 Tabellen visar: System, Namn, Typ, Task-URL, med redigeringsmöjlighet.
 
-**Steg 2 — Registrera delade dimensioner:**
-Tabell med alla registrerade dimensioner (namn, etikett, ägare, taxonomi-typ, antal koder, deltagare).
-Klicka på en rad → expanderbar panel med kanonisk kodlista + kodmappningar per produkt.
-Två formulär sida vid sida:
-- Registrera ny dimension (namn, etikett, ägare från kända system, taxonomi shared/mapped)
-- Lägg till deltagare (dimension-dropdown, produkt från kända system, roll producer/consumer/owner)
+**Event Subscriptions:**
+Matris som kontrollerar vilka event-typer varje produkt tar emot. Toggling loggar blockerade leveranser.
 
-**Steg 3 — Ekonomimodell & Routing:**
-Två tabeller sida vid sida:
-- Dimensionsmodell — vad dim1-dim3 betyder (slot → etikett → produkt)
-- Routing — hur källfält mappas till dim-slots (källa → slot → etikett)
-Två formulär sida vid sida:
-- Dimensionsmodell (produkt från kända system, slot dim1/dim2/dim3, etikett)
-- Routing-regel (källa från kända system, fält, mål-produkt, → slot)
+**External Tools:**
+Konfigurerbara länkar till externa system som visas i platform shell header.
 
-Alla steg markerade med "Engångsinställning"-badge.
-Formulär-dropdowns populeras dynamiskt från kända system och dimensioner.
+### 📊 Master Data — Domäner & referensdata
 
-### 🔗 Löpande drift
+Mörk header-banner med **statuschecklista** (5 indikatorer):
 
-**Projekt (Canonical Entities):**
-Tabell med alla canonical projects och deras ID-mappningar.
-Uppdateras automatiskt när ERP/Product A publicerar events.
+| Indikator | Grön när |
+|---|---|
+| 🏦 Economy Domain | ≥1 entitet i Economy Domain |
+| 📚 Dimensioner | ≥1 delad dimension registrerad |
+| 👥 Deltagare | Minst en dimension har deltagare |
+| 🏷️ Kodlistor | ≥1 kod i någon dimension |
+| 📐 Ekonomimodell | ≥1 dim-slot konfigurerad |
 
-**Länka projekt:**
-Dropdown-baserat UI för att koppla ihop ERP ↔ Product A-projekt.
-Anropar `POST /api/link`.
+**Sektion: Data Domains**
 
-**Planning-dimensioner:**
-Visar hur Product A:s budget-versioner översätts till Product B:s planning-dimensioner.
-Auto-tolkning per budgetversion, manuell korrigering via dropdown (Budget/F1/F2/F3).
+Varje domän visas som ett kort med enable/sync och KPI:er.
+Fler domäner (HR, Supply Chain) registreras på samma sätt — ny adapter + nytt kort.
+
+- *Economy Domain* — Standardiserat staginglager (econ_*). Adapter transformerar ERP-data.
+- *HR Domain* — Placeholder (ej aktiverad). Samma mönster med egen adapter.
+
+**Sektion: Cross-domain**
+
+- *Shared Dimensions* — Dimensioner delade mellan domäner/system (account, org_unit, project). Ägare, taxonomi, kodlistor, deltagare.
+- *Economic Model & Routing* — Flex-dimensionsmodell (dim1=Aktivitet etc.) och routing-regler (source_field → target_slot).
+
+**Sektion: Identity & Entity Resolution**
+
+- *Projects (Canonical Entities)* — Tabell med alla canonical projects och deras ID-mappningar.
+- *Link Entities* — Dropdown-baserat UI för att koppla ihop ERP ↔ Product A-projekt.
+- *Planning Dimensions* — Hur Product A:s budget-versioner översätts till Product B:s planning-dimensioner.
+
+### 🔧 Domains — Domänpipeline (drift)
+
+Domän-selector i headern (Economy / HR coming soon).
+All pipeline-data filtrekras per vald domän.
+
+Innehåll per domän:
+- **Pipeline Status** — KPI:er (entiteter, received, validated, published, rejected, DLQ)
+- **Actions** — Validate, Publish, Full Sync
+- **Recovery & Re-read** — Sync Period, Re-read Period, Full Re-read, Re-validate
+- **Rejected Facts** — Avvisade rader med orsak (expanderbar)
+- **Entities** — Entitetstabell filtrerad per dimension (expanderbar)
+- **Sync State & Scheduler** — Watermark-tabell + cron-scheduler (expanderbar)
+- **Pipeline Configuration** — Error policy, auto-publish (expanderbar)
+- **Structural Policies** — Platform-level regler per dimension (expanderbar)
+- **Attribute Publishing** — Kontroll av vilka attribut som publiceras downstream (expanderbar)
+
+### 🔗 Operations → (borttagen — absorberad i Master Data + Domains)
 
 ### 📋 Events
 
@@ -584,7 +762,7 @@ platform-poc/
 │   │   └── router.ts       # Kafka consumer/producer + event log + enrichment + dim routing (GL + budget)
 │   └── public/
 │       ├── login.html       # Login-sida (centrerad, ihopfällbar info)
-│       ├── admin.html       # Platform Admin: 7 flikar (Setup, Identity, Data Ops, Operations, Events, Demo, POC & Production)
+│       ├── admin.html       # Platform Admin: 7 flikar (Configuration, Master Data, Domains, Identity, Events, Demo, POC & Production)
 │       ├── shell.js         # Gemensam header (pin/unpin, notch pill, inbox, external tools)
 │       └── architecture.png # Arkitekturbild för Architecture Vision-fliken
 ```
@@ -1089,7 +1267,7 @@ När en användare klickar på en budgetuppgift i inboxen öppnas Product A med 
 | `econ_facts` | **Economy Domain** — transaktionsdata (GL, budget) i staging |
 | `econ_sync_state` | **Economy Domain** — synkstatus per källa |
 
-> **Arkitekturbeslut:** Economy Domain (econ_*) är enda sanningskälla för kodlistor, hierarkier och attribut. De gamla tabellerna `dimension_codes`, `dimension_attributes`, `dimension_code_attributes` och `dimension_hierarchy` har tagits bort. Befintliga API-funktioner (`getDimensionCodes`, `getHierarchy` etc.) delegerar nu till econ_*-tabellerna via tunna wrappers.
+> **Arkitekturbeslut:** Economy Domain (econ_*) är enda sanningskälla för kodlistor, hierarkier och attribut. De gamla tabellerna `dimension_codes`, `dimension_attributes`, `dimension_code_attributes` och `dimension_hierarchy` har tagits bort — hierarkier lagras nu i `econ_relations`, attribut i `econ_attribute_defs` + `econ_entity_attributes`. Befintliga API-funktioner (`getDimensionCodes`, `getHierarchy` etc.) delegerar nu till econ_*-tabellerna via tunna wrappers.
 
 ---
 
@@ -1355,7 +1533,7 @@ Dessa val i POC:n fungerar direkt i produktion:
 - [x] Transaktionsdatum: GL-poster har transaction_date TEXT, Product B lagrar + visar i analytics
 - [x] Kodmappning i routing: applyDimRouting() översätter lokala koder → kanoniska via dimension_code_mappings
 - [x] Dimensionsattribut: dimension_attributes + dimension_code_attributes-tabeller, 4 API-endpoints, admin-UI visar attribut i kodtabell
-- [x] Dimensionshierarki: dimension_hierarchy-tabell, 2 API-endpoints, admin-UI visar hierarki-sektion
+- [x] Dimensionshierarki: econ_relations-tabell (parent-child), API-endpoints, admin-UI drill-down dimension explorer med breadcrumb
 - [x] Dimensionstyp: shared_dimensions utökad med dimension_type (flat/hierarchy/time/account), visas i admin-UI
 - [x] Demo steg 1: Registrerar attribut (kontotyp, kontogrupp, region, nivå) + kodattribut + org-hierarki (OU→DIV)
 - [x] shared/events.ts: GeneralLedgerEntry + BudgetLine utökade med flex-dim-fält, BudgetSubmitted tillagd
@@ -1382,10 +1560,10 @@ Product B lagrar och visar `transaction_date` i analytics + demo step 9.
 Fallback: passthrough om ingen mappning finns (bakåtkompatibelt).
 
 **✅ Prio 3 — Dimensionsattribut + hierarki** (IMPLEMENTERAD)
-Nya tabeller: `dimension_attributes`, `dimension_code_attributes`, `dimension_hierarchy`.
+Nya tabeller: `econ_attribute_defs`, `econ_entity_attributes`. Hierarkier lagras i `econ_relations`.
 `shared_dimensions` utökad med `dimension_type` (flat/hierarchy/time/account).
 Demo: 4010 → `{kontotyp: kostnad, kontogrupp: personal}`, org-enhet OU-100 → `{region: Stockholm, parent: DIV-01}`.
-7 nya API-endpoints. Admin-UI visar attribut i kodtabell + hierarki-sektion.
+API-endpoints för attribut + relationer. Admin-UI: drill-down dimension explorer med breadcrumb.
 
 **Prio 4 — Tidsdimensionsmappning** (medel insats, stor demoeffekt)
 Ny tabell: `time_granularities` (product, grain, format).
@@ -1406,8 +1584,204 @@ Economy Domain kopplas starkare till dim_routing:
 - Validera att routing-regler matchar dimensioner i Economy Domain
 - Visa varningar: *"prod_a har 'counterpart' i Economy Domain men saknar routing-regel"*
 
+### ✅ Prio 8 — Error Policy + Auto-Publish (IMPLEMENTERAD)
+Fullautomatisk publish-pipeline efter manuell setup av förutsättningarna.
+
+**Error Policy per källa** — styr vad som händer vid valideringsfel:
+- `skip_invalid` — publicera validerade rader, logga rejected (default)
+- `abort_on_error` — blockera ALL publish om ≥1 rad rejected
+- `threshold:N` — blockera om rejektandelen överstiger N%
+
+**Auto-publish i sync-runner:**
+- Sync → stage → validate → evaluate policy → publish (om tillåtet)
+- Status `blocked` sätts om policy stoppar publish
+- Fullständig loggning: `[SCHEDULER] Auto-publish: 312 facts published (policy: skip_invalid)`
+
+**Rejection reason per rad:**
+- `econ_facts.rejection_reason` lagrar varför en rad avvisades
+- Exponeras via `GET /api/economy/facts?status=rejected`
+
+**Admin UI:**
+- "Pipeline Configuration" card i Data Operations
+- Dropdown: error policy val
+- Checkbox: auto-publish on/off
+- Sparas till `system_config` per källa, persisterar över omstarter
+
+**API:**
+- `GET /api/economy/pipeline-config/:source` — läs aktuell config
+- `PUT /api/economy/pipeline-config/:source` — sätt policy + auto-publish
+
+---
+
+### ✅ Prio 9 — Rejected Facts View (IMPLEMENTERAD)
+Fullständig synlighet över avvisade rader direkt i Admin UI.
+
+**Rejected Facts card i Data Operations:**
+- Visar alla rader med `staging_status = 'rejected'` (max 200)
+- Kolumner: Account, Org Unit, Period, Amount, Rejection Reason, Received
+- Automatisk refresh efter validate/publish/sync-operationer
+- Röd-markerad rejection reason per rad
+- Tomt-state med grön ✓ om inga rejected finns
+- Scrollbar vid >400px höjd
+
+**API (existerande):**
+- `GET /api/economy/facts?status=rejected&limit=200` — hämta rejected rows med `rejection_reason`
+
+**XSS-skydd:**
+- `escapeHtml()` utility för all user-data i tabellen
+
+---
+
+### ✅ Prio 10 — Event Subscriptions (IMPLEMENTERAD)
+Central routing policy som styr vilka event-typer varje produkt tar emot.
+
+**Modell:**
+- `event_subscriptions`-tabell: `(product, event_type, enabled)`
+- Event types: `accounts`, `gl`, `budget`, `projects`, `dimensions`, `entity-linked`
+- Default: alla produkter prenumererar på allt (seeded vid första start)
+
+**Router enforcement:**
+- `publishEgress()` i router.ts kontrollerar `isTopicEnabledForProduct(product, eventType)`
+- Blockerade leveranser loggas: `[ROUTER] Subscription gate: platform.budget.out blocked for [prod_a]`
+- V1: observability + gating — konsumenter prenumererar fortfarande tekniskt men routern skickar inte
+
+**Admin UI — "Event Subscriptions" card:**
+- Matris: produkter × event types med checkboxar (toggle on/off)
+- Real-time save vid klick
+- Statusmeddelande vid ändring
+- Placerad under "Connected Systems" i Integration-tabben
+
+**API:**
+- `GET /api/subscriptions` — hämta alla subscriptions
+- `PUT /api/subscriptions` — `{ product, event_type, enabled }` — toggle on/off
+
+**Mönster:**
+- Inspirerat av AWS EventBridge rules + Confluent topic ACLs
+- Separation: plattformen styr routing, produkterna styr ingestion
+- Framtid (V2): dynamiska Kafka ACLs per consumer group
+
+---
+
+### Integration Pipeline Backlog (prioritetsordning)
+
+| # | Åtgärd | Status | Effekt |
+|---|--------|--------|--------|
+| 1 | Error policy per källa (abort/skip/threshold) | ✅ Klar | Styr om felaktig data blockerar pipeline |
+| 2 | Auto-publish i sync-runner respektera policy | ✅ Klar | Fullautomatisk pipeline efter setup |
+| 3 | Rejected facts-vy i Admin UI med felorsak | ✅ Klar | Synlighet vid fel |
+| 4 | DLQ-tabell + exponering i UI | ✅ Klar | Fånga Kafka/router-fel |
+| 5 | Change detection (hash-diff på dimension snapshots) | ✅ Klar | Undvik onödiga publishes |
+| 6 | Re-read UI-knappar (period/full/re-validate) | ✅ Klar | Praktisk felhantering utan API-calls |
+| 7 | Sync audit trail koppla till befintliga audit events | ✅ Klar | Spårbarhet |
+| 8 | Attribute versioning (SCD2 valid_from/valid_to) | 🔲 | Historik, tillbakablick |
+
+**Best practice-referenser:**
+- Idempotent ingestion med upsert + watermark (Fivetran, Airbyte)
+- Error policy (abort/skip/threshold) (Snowflake `ON_ERROR`, dbt `store_failures`)
+- DLQ + retry pattern (Confluent Kafka best practices)
+- Change detection (hash-based publish) (dbt incremental models, Databricks Delta)
+- Staging → validate → publish pipeline (ELT-pattern: Fivetran → Snowflake → dbt)
+- Autonomous consumers (subscribe fromBeginning + dedupe) (Event Sourcing / CQRS)
+- SCD Type 2 för dimensionshistorik (Kimball methodology)
+
 ### Framtida (utanför POC)
 - [ ] Multi-tenant / organisationshantering
+- [ ] **AI Assistant som plattformstjänst** — se nedan
+
+---
+
+### Implementerade pipeline-förstärkningar (2025-05-06)
+
+**Pipeline Health Dashboard (ny)**
+- API: `GET /api/pipeline-health` — aggregerar KPI:er från econ_facts, dead_letter_queue, sync_state, audit_events
+- UI: Nytt dashboard-kort överst i Data Operations med 6 live-KPI:er:
+  - Entities | Facts Published | Rejected | DLQ Pending | Skipped (no change) | Last Publish
+- Dynamisk statusindikator: grön/amber/röd beroende på DLQ och rejected-status
+- Uppdateras var 3:e sekund via poll-loopen
+
+**Operational Actions — Backlog #6**
+- *Re-read Period*: API `POST /api/economy/sync/:source/run?scope=facts&period_from=X&period_to=Y`
+  Raderar gamla fakta för perioden och hämtar på nytt från ERP
+- *Full Re-read*: API `POST /api/economy/sync/:source/full-reread`
+  Nollställer watermark (high_watermark = NULL) och kör full sync
+- *Re-validate*: API `POST /api/economy/facts/revalidate`
+  Återställer rejected → received, kör validering igen (använd efter att referensdata fixats)
+- UI: Eget kort "Operational Actions" med 3 färgkodade sektioner (lila/amber/grön)
+
+**Golden Path — Full Lifecycle Demo**
+- API: `POST /api/demo/golden-path` — kör 6 steg i sekvens:
+  1. Full sync (entities + facts) → audit trail
+  2. Re-sync entities → change detection (skipped)
+  3. Inject ogiltiga GL-rader → rejected
+  4. Re-validate (misslyckas — referensdata saknas)
+  5. Fix referensdata + re-validate → partiell återhämtning
+  6. Final publish → alla validerade fakta levereras
+- UI: Nytt "Golden Path" kort i Demo-fliken med steg-för-steg-logg
+- Demonstrerar ALLA pipeline-capabilities med ett klick
+
+**Dead Letter Queue (DLQ) — Backlog #4**
+- Tabell `dead_letter_queue` (id, topic, event_type, raw_message, error, status, created_at, retried_at)
+- Router: catch i `eachMessage` skriver misslyckade meddelanden till DLQ istället för att tappa dem
+- API: `GET /api/dlq` (lista + count), `POST /api/dlq/:id/retry` (markera retried)
+- Admin UI: DLQ-kort i Events-fliken med röd vänsterkant, tabell med retry-knappar
+
+**Change Detection — Backlog #5**
+- `computeContentHash(data)`: SHA256 av sorterat JSON-data, trunkerad till 16 tecken
+- Sync-runner: innan dimension-publish beräknas hash → jämförs med `sync_state.content_hash`
+- Om hash matchar: loggar "unchanged, skipping publish" och hoppar över
+- Om hash ändrats: publicerar snapshot + uppdaterar `content_hash` i sync_state
+
+**Sync Audit Trail — Backlog #7**
+- `insertAuditEvent()` anropas vid 4 nyckelmoment:
+  1. Entity-synk (organisationsträd)
+  2. Fact-synk (ekonomidata)
+  3. Publish blockerad (pga error policy)
+  4. Dimension-publish (snapshot till Kafka)
+- Alla synkhändelser syns i Events-fliken med IN/UT-taggar
+
+---
+
+### AI Assistant — Framkomlig väg
+
+Chatten i plattformens shell (sparkle-ikonen) är idag en placeholder. Vägen till en fungerande AI-tjänst:
+
+**Varför plattformen äger detta:**
+- Plattformen äger identitet — vet vilka produkter användaren har behörighet till
+- Cross-product-frågor ("varför skiljer budget från utfall?") kräver data från flera produkter
+- Governance (modellval, loggning, policies) hanteras centralt
+- Produkterna förblir autonoma — de levererar kontext, äger inte LLM-anropet
+
+**Arkitektur:**
+```
+Vector DB (namespace per produkt)
+ ├── prod_a: hjälpdocs, arbetsflöden, budgetforklaringar
+ ├── prod_b: rapportdefinitioner, analysbeskrivningar
+ └── platform: konfiguration, ekonomidomän, dimensioner
+
+Query Router
+ • user.products → filtrera namespaces (behörighetsstyrning)
+ • current_product → boost relevans för aktiv produkt
+ • platform-namespace → alltid inkluderat
+
+LLM Endpoint (extern eller self-hosted)
+ • System prompt + RAG-kontext
+ • Streaming response till shell-chatten
+```
+
+**Steg 1 (minimal viable):**
+- `POST /api/ai/chat` — tar `{ message, history }`, injicerar plattformsdata som kontext
+- Behörighetsfilter: `req.user.products` styr vilken kontext som inkluderas
+- Ingen vektor-DB — systemprompten fylls med live-data (dimensioner, fakta-summary, config)
+
+**Steg 2 (RAG):**
+- Vector DB container (chromadb/pgvector) med namespace per produkt
+- Varje produkt pushar docs via webhook: `POST /api/ai/index`
+- Embedding-pipeline: chunking + vektorisering vid push
+- Retrieval: `WHERE namespace IN (user.products)` vid query
+
+**Steg 3 (agentic):**
+- Tool-use / function calling — chatten kan utföra handlingar (skapa uppgift, visa rapport)
+- Produkt-specifika tools registreras centralt, körs via produktens API
 
 ---
 

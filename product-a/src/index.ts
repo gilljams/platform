@@ -82,6 +82,21 @@ db.exec(`
     name TEXT NOT NULL DEFAULT '',
     PRIMARY KEY (dimension, code)
   );
+
+  CREATE TABLE IF NOT EXISTS dim_relations (
+    dimension TEXT NOT NULL,
+    child_code TEXT NOT NULL,
+    parent_code TEXT NOT NULL,
+    PRIMARY KEY (dimension, child_code, parent_code)
+  );
+
+  CREATE TABLE IF NOT EXISTS dim_member_attributes (
+    dimension TEXT NOT NULL,
+    code TEXT NOT NULL,
+    attribute_name TEXT NOT NULL,
+    attribute_value TEXT NOT NULL,
+    PRIMARY KEY (dimension, code, attribute_name)
+  );
 `);
 
 // ── Kafka ──
@@ -98,6 +113,7 @@ const consumer = kafka.consumer({ groupId: "product-a-consumer" });
 const CONSUME_TOPICS = [
   "platform.accounts.out",
   "platform.projects.out",
+  "platform.dimensions.out",
 ];
 
 async function startConsumer() {
@@ -144,6 +160,34 @@ async function startConsumer() {
           }
           break;
         }
+        case "platform.dimensions.out": {
+          // Dimension snapshot from platform — ingest entities + relations + attributes
+          const dim = data.dimension;
+          const entities = data.entities || [];
+          const relations = data.relations || [];
+          const stmtDim = db.prepare("INSERT OR REPLACE INTO dim_members (dimension, code, name) VALUES (?, ?, ?)");
+          for (const e of entities) {
+            stmtDim.run(dim, e.code, e.name || e.code);
+          }
+          // Store relations (clear old + insert new)
+          db.prepare("DELETE FROM dim_relations WHERE dimension = ?").run(dim);
+          const stmtRel = db.prepare("INSERT OR IGNORE INTO dim_relations (dimension, child_code, parent_code) VALUES (?, ?, ?)");
+          for (const r of relations) {
+            stmtRel.run(dim, r.child_code, r.parent_code);
+          }
+          // Store member attributes (clear old + insert new)
+          db.prepare("DELETE FROM dim_member_attributes WHERE dimension = ?").run(dim);
+          const stmtAttr = db.prepare("INSERT OR REPLACE INTO dim_member_attributes (dimension, code, attribute_name, attribute_value) VALUES (?, ?, ?, ?)");
+          for (const e of entities) {
+            if (e.attributes) {
+              for (const [attrName, attrValue] of Object.entries(e.attributes)) {
+                stmtAttr.run(dim, e.code, attrName, String(attrValue));
+              }
+            }
+          }
+          console.log(`[PROD-A] Dimension "${dim}" updated: ${entities.length} members, ${relations.length} relations`);
+          break;
+        }
       }
 
       // Mark event as processed (idempotency)
@@ -187,6 +231,39 @@ app.get("/api/accounts", (_req, res) => {
   const accounts = db.prepare("SELECT * FROM accounts").all();
   const org_units = db.prepare("SELECT * FROM org_units").all();
   res.json({ accounts, org_units });
+});
+
+// GET /api/dim-members — dimension members received from platform
+app.get("/api/dim-members", (req, res) => {
+  const dimension = req.query.dimension as string | undefined;
+  if (dimension) {
+    res.json(db.prepare("SELECT * FROM dim_members WHERE dimension = ? ORDER BY code").all(dimension));
+  } else {
+    res.json(db.prepare("SELECT * FROM dim_members ORDER BY dimension, code").all());
+  }
+});
+
+// GET /api/dim-relations — hierarchy relations
+app.get("/api/dim-relations", (req, res) => {
+  const dimension = req.query.dimension as string | undefined;
+  if (dimension) {
+    res.json(db.prepare("SELECT * FROM dim_relations WHERE dimension = ? ORDER BY parent_code, child_code").all(dimension));
+  } else {
+    res.json(db.prepare("SELECT * FROM dim_relations ORDER BY dimension, parent_code, child_code").all());
+  }
+});
+
+// GET /api/dim-member-attributes — member attributes
+app.get("/api/dim-member-attributes", (req, res) => {
+  const dimension = req.query.dimension as string | undefined;
+  const code = req.query.code as string | undefined;
+  if (dimension && code) {
+    res.json(db.prepare("SELECT * FROM dim_member_attributes WHERE dimension = ? AND code = ? ORDER BY attribute_name").all(dimension, code));
+  } else if (dimension) {
+    res.json(db.prepare("SELECT * FROM dim_member_attributes WHERE dimension = ? ORDER BY code, attribute_name").all(dimension));
+  } else {
+    res.json(db.prepare("SELECT * FROM dim_member_attributes ORDER BY dimension, code, attribute_name").all());
+  }
 });
 
 // GET /api/projects — all projects (own + ERP)
@@ -696,7 +773,7 @@ app.get("/api/capabilities", (_req, res) => {
 });
 
 app.post("/api/reset", (_req, res) => {
-  db.exec("DELETE FROM processed_events; DELETE FROM budget_assignments; DELETE FROM budget_lines; DELETE FROM budget_versions; DELETE FROM projects; DELETE FROM accounts; DELETE FROM org_units; DELETE FROM dim_members;");
+  db.exec("DELETE FROM processed_events; DELETE FROM budget_assignments; DELETE FROM budget_lines; DELETE FROM budget_versions; DELETE FROM projects; DELETE FROM accounts; DELETE FROM org_units; DELETE FROM dim_members; DELETE FROM dim_relations; DELETE FROM dim_member_attributes;");
   console.log("[PROD-A] All data reset");
   res.json({ ok: true });
 });

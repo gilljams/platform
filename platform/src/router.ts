@@ -1,5 +1,5 @@
 import { Kafka, Consumer, Producer, Partitioners } from "kafkajs";
-import { getOrCreateDimensionMapping, applyDimRouting, addInboxItem, updateInboxItem, upsertEconEntity, upsertEconRelation, insertAuditEvent, isEventProcessed, markEventProcessed } from "./mapper";
+import { getOrCreateDimensionMapping, applyDimRouting, addInboxItem, updateInboxItem, upsertEconEntity, upsertEconRelation, insertAuditEvent, isEventProcessed, markEventProcessed, getAttributePublishRules, isTopicEnabledForProduct, insertDLQ } from "./mapper";
 
 const INGRESS = {
   ERP_PROJECTS: "erp.projects",
@@ -15,6 +15,7 @@ const EGRESS = {
   BUDGET_OUT: "platform.budget.out",
   GL_OUT: "platform.gl.out",
   ENTITY_LINKED_OUT: "platform.entity-linked.out",
+  DIMENSIONS_OUT: "platform.dimensions.out",
 };
 
 let producer: Producer;
@@ -36,6 +37,21 @@ export function getEventLog(limit = 100) {
 }
 
 async function publishEgress(topic: string, message: Record<string, unknown>) {
+  // Extract event type from topic (e.g. "platform.budget.out" → "budget")
+  const eventType = topic.replace("platform.", "").replace(".out", "");
+
+  // Check if any product has this topic disabled (log for observability)
+  // Note: actual filtering happens at consumer side, but we log blocked deliveries
+  const blockedProducts: string[] = [];
+  for (const product of ["prod_a", "prod_b"]) {
+    if (!isTopicEnabledForProduct(product, eventType)) {
+      blockedProducts.push(product);
+    }
+  }
+  if (blockedProducts.length > 0) {
+    console.log(`[ROUTER] Subscription gate: ${topic} blocked for [${blockedProducts.join(", ")}]`);
+  }
+
   // Stamp each egress message with a unique event_id to avoid idempotency collisions
   // when the same original event is published to multiple egress topics
   if (!message.event_id) {
@@ -184,14 +200,93 @@ export async function startRouter(kafka: Kafka) {
   await consumer.run({
     eachMessage: async ({ topic, message }) => {
       if (message.value) {
+        const raw = message.value.toString();
         try {
-          await handleMessage(topic, message.value.toString());
+          await handleMessage(topic, raw);
         } catch (err) {
-          console.error(`[ROUTER] Error processing ${topic}:`, err);
+          const errMsg = err instanceof Error ? err.message : String(err);
+          console.error(`[ROUTER] Error processing ${topic}: ${errMsg}`);
+          // Write to Dead Letter Queue for later inspection/retry
+          let eventType: string | undefined;
+          try { eventType = JSON.parse(raw).event_type; } catch {}
+          insertDLQ(topic, eventType, raw.slice(0, 4000), errMsg);
+          console.log(`[ROUTER] → DLQ: ${topic} (${eventType || "unknown"})`);
         }
       }
     },
   });
+}
+
+export async function publishDimensionSnapshot(
+  dimension: string,
+  entities: any[],
+  relations: any[],
+  attribute_defs?: any[],
+  entity_attributes?: any[]
+) {
+  // Load publish rules for this dimension
+  const publishRules = getAttributePublishRules(dimension);
+  const hasRules = publishRules.length > 0;
+
+  // Build per-entity attributes map: { code → { attr_name: attr_value, ... } }
+  const attrByCode: Record<string, Record<string, string>> = {};
+  if (entity_attributes) {
+    for (const a of entity_attributes) {
+      if (!attrByCode[a.code]) attrByCode[a.code] = {};
+      attrByCode[a.code][a.attribute_name] = a.attribute_value;
+    }
+  }
+
+  // Apply publish rules: rename attributes, remap values, filter
+  let publishedAttrDefs = attribute_defs || [];
+  if (hasRules) {
+    const enabledRules = publishRules.filter((r: any) => r.enabled);
+    const ruleMap = new Map(enabledRules.map((r: any) => [r.source_attribute, r]));
+
+    // Transform attribute_defs: only include published attributes with renamed labels
+    publishedAttrDefs = (attribute_defs || []).filter((d: any) => ruleMap.has(d.attribute_name)).map((d: any) => {
+      const rule = ruleMap.get(d.attribute_name);
+      return { ...d, attribute_name: rule.publish_as, attribute_label: rule.publish_as };
+    });
+
+    // Transform per-entity attributes: rename keys + remap values
+    for (const code of Object.keys(attrByCode)) {
+      const original = attrByCode[code];
+      const transformed: Record<string, string> = {};
+      for (const [srcAttr, value] of Object.entries(original)) {
+        const rule = ruleMap.get(srcAttr);
+        if (!rule) continue; // not published
+        let publishedValue = value;
+        if (rule.transform) {
+          try {
+            const mapping = JSON.parse(rule.transform);
+            if (mapping[value] !== undefined) publishedValue = mapping[value];
+          } catch {}
+        }
+        transformed[rule.publish_as] = publishedValue;
+      }
+      attrByCode[code] = transformed;
+    }
+  }
+
+  // Enrich entities with their attributes
+  const enrichedEntities = entities.map(e => {
+    const attrs = attrByCode[e.code];
+    return attrs ? { ...e, attributes: attrs } : e;
+  });
+
+  const event = {
+    event_id: require("uuid").v4(),
+    event_type: "DimensionSnapshot",
+    timestamp: new Date().toISOString(),
+    source_system: "economy_domain",
+    dimension,
+    entities: enrichedEntities,
+    relations,
+    attribute_defs: publishedAttrDefs,
+  };
+  await publishEgress(EGRESS.DIMENSIONS_OUT, event);
+  return event;
 }
 
 export async function publishEntityLinked(dimension: string, entities: Array<{source_system: string; source_key: string; name: string}>) {
