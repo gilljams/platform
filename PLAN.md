@@ -24,7 +24,7 @@ Demonstrera en event-driven arkitektur med:
 | Grafana | Nej, Jaeger räcker |
 | Flex-dimensioner | Approach C: namngivna kärndims + generiska dim1-dim3 slots |
 | Dimension Mapping | Shared Taxonomy: plattformen äger kanonisk kodlista, per-produkt mappning |
-| Admin UI-struktur | 7 flikar: Configuration → Master Data → Domains → Identity & Access → Events → Demo → POC & Production |
+| Admin UI-struktur | 8 flikar: Configuration → Master Data → Domains → Identity & Access → Events → Demo → Help → POC & Production |
 | Budget dim-routing | Budget berikas med flex-dims via samma applyDimRouting-mekanism som GL |
 | Economy Domain | Standardiserat staginglager (econ_*) — adapters transformerar källdata till gemensamt format. Ersätter Connector Registry. |
 
@@ -501,6 +501,92 @@ Scriptet renderar en **gemensam header** överst i varje produkt:
 - Navigeringslänkar visas **bara för produkter användaren har tillgång till**
 - Entitlement-check: redirect om ej behörig
 - Toast-notifikationer: vit bakgrund, färgad vänsterkant (grön/röd), SVG-ikoner
+- Help panel: ? icon öppnar hjälppanel med artiklar, sök och deep-linking
+- AI chat: ✦ icon öppnar AI-assistent med RAG-integration mot hjälpartiklar
+
+### Help Service (Shared Platform Capability)
+
+Plattformen tillhandahåller en **gemensam hjälptjänst** som alla produkter kan använda utan egen implementation.
+
+**Arkitektur:**
+```
+┌─────────────────────────────────────────────────────────┐
+│  Platform                                               │
+│  ┌─────────────┐   ┌────────────┐   ┌──────────────┐  │
+│  │ help_articles│   │ REST API   │   │ Shell.js     │  │
+│  │ (SQLite)    │◄──│ /api/help  │◄──│ Help Panel   │  │
+│  └─────────────┘   └────────────┘   └──────┬───────┘  │
+│                                             │          │
+└─────────────────────────────────────────────┼──────────┘
+                                              │
+         window.shellOpenHelp('slug')         │ Deep-link API
+              ┌───────────────────────────────┘
+              ▼
+┌──────────────────┐
+│  Product A/B     │
+│  [?] ikon i UI   │
+│  → öppnar hjälp  │
+└──────────────────┘
+```
+
+**Datamodell (`help_articles`):**
+
+| Kolumn | Typ | Beskrivning |
+|--------|-----|-------------|
+| `id` | INTEGER PK | Auto-increment |
+| `slug` | TEXT UNIQUE | URL-vänligt ID för deep-linking |
+| `title` | TEXT | Artikelrubrik |
+| `product` | TEXT | Produktfilter (null = alla produkter) |
+| `category` | TEXT | Kategorigruppering |
+| `body_md` | TEXT | Artikelinnehåll i Markdown |
+| `keywords` | TEXT | Sökord (kommaseparerade) |
+| `sort_order` | INTEGER | Sortering inom kategori |
+| `updated_at` | DATETIME | Senast uppdaterad |
+
+**API:**
+
+| Metod | Endpoint | Beskrivning |
+|-------|----------|-------------|
+| GET | `/api/help` | Lista alla artiklar (stödjer `?q=sök` och `?products=filter`) |
+| GET | `/api/help/user?products=X,Y` | Artiklar filtrerade per användarens produkter |
+| GET | `/api/help/slug/:slug` | Hämta artikel via slug (för deep-linking) |
+| GET | `/api/help/:id` | Hämta artikel via ID |
+| POST | `/api/help` | Skapa ny artikel |
+| PUT | `/api/help/:id` | Uppdatera artikel |
+| DELETE | `/api/help/:id` | Ta bort artikel |
+
+**Shell Help Panel (i shell.js):**
+- Öppnas via ? icon i shell-baren
+- Sökfält med realtidsfiltrering (titel + keywords)
+- Artiklar grupperade per kategori
+- Produktbadge visar vilken produkt artikeln tillhör
+- Markdown-rendering med stöd för rubriker, listor, kod, tabeller
+- Back-knapp för att återgå till artikellistan
+
+**Deep-linking från produkter:**
+```javascript
+// Produkten anropar globalt exponerad funktion:
+window.shellOpenHelp('budget-entry');
+```
+- Öppnar hjälppanelen direkt på angiven artikel
+- Fungerar från vilken produkt som helst som laddar shell.js
+- Exempel: Product A har en ?-ikon i Budget Entry som deep-linkar till `budget-entry`-artikeln
+
+**Admin-tab (Help) i Platform Admin:**
+- Trädvy med alla artiklar grupperade per kategori
+- Markdown-editor med live-preview
+- Fält: titel, slug, kategori, produkt, sortering, nyckelord
+- Toast-notifikation vid sparning
+
+**AI Chat RAG-integration:**
+- AI-chatten söker automatiskt i hjälpartiklar baserat på användarens fråga
+- Matchande artiklar visas som klickbara kort i chatten
+- Klick öppnar artikeln i hjälppanelen
+
+**Framtida förbättringar:**
+- 🔲 Bilduppladdning (upload till `/api/help/images` → markdown-referens)
+- 🔲 Versionering av artiklar (revision history)
+- 🔲 Rollbaserad synlighet (admin-only artiklar)
 
 ### Flöde
 1. Användaren öppnar `localhost:3000` → ser login-sida
@@ -555,7 +641,7 @@ Admin-vy på `localhost:3000/admin.html` — åtkomlig via användare `admin/dem
 
 ### Flikstruktur
 
-UI:t är organiserat i **sju flikar** som speglar tre ansvarsområden — plattformsinfrastruktur, master data/domänregistrering, och domändrift:
+UI:t är organiserat i **åtta flikar** som speglar tre ansvarsområden — plattformsinfrastruktur, master data/domänregistrering, och domändrift:
 
 | Flik | Syfte | Målgrupp | Nyckelord |
 |---|---|---|---|
@@ -565,6 +651,7 @@ UI:t är organiserat i **sju flikar** som speglar tre ansvarsområden — plattf
 | **🔑 Identity & Access** | Användarhantering | Kundadmin | SCIM, lokal skapning, roller, grupp-mappning |
 | **📋 Events** | Övervakning | Alla | Realtids event-logg |
 | **🎬 Demo** | Testverktyg | Intern | Demo Runner + Golden Path |
+| **❓ Help** | Hjälpartiklar — CRUD-editor med markdown + live-preview | Alla | Artiklar, kategorier, deep-linking |
 | **📝 POC & Production** | Arkitektur & dokumentation | Intern | Architecture Vision + Production Notes |
 
 Aktiv flik sparas i `localStorage` och behålls vid sidladdning.
@@ -762,8 +849,8 @@ platform-poc/
 │   │   └── router.ts       # Kafka consumer/producer + event log + enrichment + dim routing (GL + budget)
 │   └── public/
 │       ├── login.html       # Login-sida (centrerad, ihopfällbar info)
-│       ├── admin.html       # Platform Admin: 7 flikar (Configuration, Master Data, Domains, Identity, Events, Demo, POC & Production)
-│       ├── shell.js         # Gemensam header (pin/unpin, notch pill, inbox, external tools)
+│       ├── admin.html       # Platform Admin: 8 flikar (Configuration, Master Data, Domains, Identity, Events, Demo, Help, POC & Production)
+│       ├── shell.js         # Gemensam header (pin/unpin, notch pill, inbox, help panel, AI chat, external tools)
 │       └── architecture.png # Arkitekturbild för Architecture Vision-fliken
 ```
 
@@ -1266,6 +1353,7 @@ När en användare klickar på en budgetuppgift i inboxen öppnas Product A med 
 | `econ_entity_attributes` | **Economy Domain** — attributvärden per entitet |
 | `econ_facts` | **Economy Domain** — transaktionsdata (GL, budget) i staging |
 | `econ_sync_state` | **Economy Domain** — synkstatus per källa |
+| `help_articles` | **Help Service** — artiklar med slug, markdown, kategori, produktfilter |
 
 > **Arkitekturbeslut:** Economy Domain (econ_*) är enda sanningskälla för kodlistor, hierarkier och attribut. De gamla tabellerna `dimension_codes`, `dimension_attributes`, `dimension_code_attributes` och `dimension_hierarchy` har tagits bort — hierarkier lagras nu i `econ_relations`, attribut i `econ_attribute_defs` + `econ_entity_attributes`. Befintliga API-funktioner (`getDimensionCodes`, `getHierarchy` etc.) delegerar nu till econ_*-tabellerna via tunna wrappers.
 

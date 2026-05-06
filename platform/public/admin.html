@@ -459,6 +459,7 @@
       <a href="#" onclick="switchTab('users');toggleSidebar();return false">Identity & Access</a>
       <a href="#" onclick="switchTab('events');toggleSidebar();return false">Events</a>
       <a href="#" onclick="switchTab('demo');toggleSidebar();return false">Demo</a>
+      <a href="#" onclick="switchTab('help');toggleSidebar();return false">Help</a>
       <a href="#" onclick="switchTab('notes');toggleSidebar();return false">POC & Production</a>
     </nav>
     <div class="sidebar-section">Shell</div>
@@ -488,6 +489,7 @@
     <button class="tab-btn" onclick="switchTab('users')">Identity & Access</button>
     <button class="tab-btn" onclick="switchTab('events')">Events</button>
     <button class="tab-btn" onclick="switchTab('demo')">Demo</button>
+    <button class="tab-btn" onclick="switchTab('help')">Help</button>
     <button class="tab-btn" onclick="switchTab('notes')">POC & Production</button>
   </div>
 
@@ -2448,6 +2450,95 @@ In production:
     </div>
   </div>
 
+  <!-- --------------------------------------------------------------- -->
+  <!-- TAB: HELP -->
+  <!-- --------------------------------------------------------------- -->
+  <div class="tab-panel" id="tab-help">
+    <div class="container" style="max-width:960px">
+
+      <div class="setup-intro">
+        <h2>Help Articles</h2>
+        <p>Manage the shared product help content. Articles are served to users through the shell help panel,
+          filtered by their product access. Products can deep-link to specific articles via <code>slug</code>.</p>
+      </div>
+
+      <!-- Article list + editor layout -->
+      <div style="display:grid;grid-template-columns:280px 1fr;gap:16px;min-height:500px;">
+
+        <!-- Left: article tree -->
+        <div class="card" style="padding:12px;overflow-y:auto;max-height:600px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <h3 style="font-size:13px;margin:0;color:#555;">Articles</h3>
+            <button class="btn btn-primary btn-sm" onclick="newHelpArticle()">+ New</button>
+          </div>
+          <input type="text" id="helpTreeFilter" placeholder="Filter..." style="width:100%;margin-bottom:8px;padding:4px 8px;font-size:12px;border:1px solid #ddd;border-radius:4px;" oninput="filterHelpTree(this.value)">
+          <div id="helpArticleTree"></div>
+        </div>
+
+        <!-- Right: editor -->
+        <div class="card" style="padding:16px;">
+          <div id="helpEditorEmpty" style="color:#999;font-size:13px;text-align:center;padding:60px 20px;">
+            Select an article from the list or create a new one.
+          </div>
+          <div id="helpEditor" style="display:none;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+              <div class="form-group"><label>Title</label><input type="text" id="helpTitle" placeholder="Article title"></div>
+              <div class="form-group"><label>Slug</label><input type="text" id="helpSlug" placeholder="unique-slug"></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 80px;gap:10px;margin-bottom:12px;">
+              <div class="form-group"><label>Category</label><input type="text" id="helpCategory" placeholder="General" list="helpCategoryList"><datalist id="helpCategoryList"></datalist></div>
+              <div class="form-group"><label>Product</label><select id="helpProduct"><option value="">Platform (all users)</option><option value="prod_a">Product A</option><option value="prod_b">Product B</option></select></div>
+              <div class="form-group"><label>Sort</label><input type="number" id="helpSort" value="0"></div>
+            </div>
+            <div class="form-group" style="margin-bottom:8px;"><label>Keywords <span style="color:#aaa;font-weight:400">(comma separated)</span></label><input type="text" id="helpKeywords" placeholder="budget, workflow, approval"></div>
+
+            <!-- Markdown editor with preview toggle -->
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+              <label style="font-size:12px;font-weight:600;color:#555;">Content (Markdown)</label>
+              <button class="btn btn-sm" onclick="toggleHelpPreview()" id="helpPreviewBtn">Preview</button>
+            </div>
+            <textarea id="helpBody" rows="14" style="width:100%;font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.5;padding:10px;border:1px solid #ddd;border-radius:6px;resize:vertical;"></textarea>
+            <div id="helpPreview" style="display:none;border:1px solid #ddd;border-radius:6px;padding:12px 16px;min-height:200px;font-size:13px;line-height:1.6;overflow-y:auto;max-height:400px;"></div>
+
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;">
+              <button class="btn btn-primary" onclick="saveHelpArticle()">Save</button>
+              <button class="btn" style="color:#c0392b;border-color:#e0b4b4;" onclick="deleteCurrentHelpArticle()">Delete</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="info-block" style="margin-top:16px">
+        <div class="info-trigger" onclick="toggleInfo(this)">Show details ▸</div>
+        <div class="info-content">
+          <div class="info-title">Help Service Architecture</div>
+          <p>The help service is a <strong>shared platform capability</strong> — all products in the installation share the same article database.</p>
+          <p><strong>Access model:</strong> Each article is tagged with a product (or null for platform-wide). The shell help panel filters articles based on the logged-in user's product access.</p>
+          <p><strong>Deep linking:</strong> Products can open a specific article via <code>shell.openHelp('slug')</code> or by linking to the platform help URL with a slug parameter. This enables inline help buttons in product reports.</p>
+          <pre style="font-size:11px;line-height:1.5;margin:8px 0;">
+Platform Help Service
+─────────────────────
+  help_articles (slug PK, title, product?, category, body_md, keywords)
+  
+  API:
+    GET  /api/help              — all articles (admin)
+    GET  /api/help/user?products=prod_a,prod_b — filtered for user
+    GET  /api/help/slug/:slug   — single article by slug (product deep-link)
+    POST /api/help              — create article
+    PUT  /api/help/:id          — update article
+    DELETE /api/help/:id        — delete article
+
+  Shell integration:
+    ? icon in shell bar → opens help panel (search + browse)
+    shell.openHelp('slug') → opens panel at specific article
+    AI chat → uses article content as RAG context</pre>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
   <!-- JAVASCRIPT -->
   <script>
     var API = '';
@@ -2498,7 +2589,7 @@ In production:
       document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
       document.getElementById('tab-' + tabId).classList.add('active');
       var btns = document.querySelectorAll('.tab-btn');
-      var tabMap = ['config', 'masterdata', 'domains', 'users', 'events', 'demo', 'notes'];
+      var tabMap = ['config', 'masterdata', 'domains', 'users', 'events', 'demo', 'help', 'notes'];
       var idx = tabMap.indexOf(tabId);
       if (idx >= 0 && btns[idx]) btns[idx].classList.add('active');
       localStorage.setItem('activeTab', tabId);
@@ -4713,10 +4804,170 @@ In production:
       if (typeof window.__platformShellReloadNav === 'function') window.__platformShellReloadNav();
     }
 
+    // ── Help Articles ──
+    var helpArticles = [];
+    var currentHelpId = null;
+
+    function loadHelpArticles() {
+      fetch(API + '/api/help').then(r => r.json()).then(function(data) {
+        helpArticles = data;
+        renderHelpTree();
+      });
+    }
+
+    function renderHelpTree(filter) {
+      var tree = document.getElementById('helpArticleTree');
+      if (!tree) return;
+      var filtered = helpArticles;
+      if (filter) {
+        var f = filter.toLowerCase();
+        filtered = helpArticles.filter(function(a) {
+          return a.title.toLowerCase().includes(f) || a.category.toLowerCase().includes(f) || (a.keywords || '').toLowerCase().includes(f);
+        });
+      }
+      // Group by category
+      var cats = {};
+      filtered.forEach(function(a) {
+        var c = a.category || 'General';
+        if (!cats[c]) cats[c] = [];
+        cats[c].push(a);
+      });
+      var html = '';
+      Object.keys(cats).sort().forEach(function(cat) {
+        html += '<div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;margin:8px 0 4px;letter-spacing:0.3px;">' + escapeHtml(cat) + '</div>';
+        cats[cat].forEach(function(a) {
+          var active = a.id === currentHelpId ? 'background:#e8f0fe;' : '';
+          var prodBadge = a.product ? '<span style="font-size:9px;background:#f0f4ff;color:#1f64a4;border-radius:3px;padding:1px 4px;margin-left:4px;">' + escapeHtml(a.product) + '</span>' : '';
+          html += '<div onclick="editHelpArticle(' + a.id + ')" style="padding:5px 8px;cursor:pointer;border-radius:4px;font-size:12px;margin:1px 0;' + active + '">' + escapeHtml(a.title) + prodBadge + '</div>';
+        });
+      });
+      if (!html) html = '<div style="color:#aaa;font-size:12px;padding:10px;">No articles</div>';
+      tree.innerHTML = html;
+      // populate category datalist
+      var dl = document.getElementById('helpCategoryList');
+      if (dl) {
+        var existingCats = [...new Set(helpArticles.map(function(a) { return a.category || 'General'; }))];
+        dl.innerHTML = existingCats.map(function(c) { return '<option value="' + escapeHtml(c) + '">'; }).join('');
+      }
+    }
+
+    function filterHelpTree(val) { renderHelpTree(val); }
+
+    function newHelpArticle() {
+      currentHelpId = null;
+      document.getElementById('helpEditorEmpty').style.display = 'none';
+      document.getElementById('helpEditor').style.display = '';
+      document.getElementById('helpTitle').value = '';
+      document.getElementById('helpSlug').value = '';
+      document.getElementById('helpCategory').value = 'General';
+      document.getElementById('helpProduct').value = '';
+      document.getElementById('helpSort').value = '0';
+      document.getElementById('helpKeywords').value = '';
+      document.getElementById('helpBody').value = '';
+      document.getElementById('helpPreview').style.display = 'none';
+      document.getElementById('helpBody').style.display = '';
+      document.getElementById('helpPreviewBtn').textContent = 'Preview';
+      renderHelpTree();
+    }
+
+    function editHelpArticle(id) {
+      var a = helpArticles.find(function(x) { return x.id === id; });
+      if (!a) return;
+      currentHelpId = id;
+      document.getElementById('helpEditorEmpty').style.display = 'none';
+      document.getElementById('helpEditor').style.display = '';
+      document.getElementById('helpTitle').value = a.title;
+      document.getElementById('helpSlug').value = a.slug;
+      document.getElementById('helpCategory').value = a.category || 'General';
+      document.getElementById('helpProduct').value = a.product || '';
+      document.getElementById('helpSort').value = a.sort_order || 0;
+      document.getElementById('helpKeywords').value = a.keywords || '';
+      document.getElementById('helpBody').value = a.body_md || '';
+      document.getElementById('helpPreview').style.display = 'none';
+      document.getElementById('helpBody').style.display = '';
+      document.getElementById('helpPreviewBtn').textContent = 'Preview';
+      renderHelpTree();
+    }
+
+    function saveHelpArticle() {
+      var payload = {
+        title: document.getElementById('helpTitle').value,
+        slug: document.getElementById('helpSlug').value,
+        category: document.getElementById('helpCategory').value || 'General',
+        product: document.getElementById('helpProduct').value || null,
+        sort_order: parseInt(document.getElementById('helpSort').value) || 0,
+        keywords: document.getElementById('helpKeywords').value,
+        body_md: document.getElementById('helpBody').value
+      };
+      if (!payload.slug || !payload.title) {
+        showToast('Title and slug are required', 'error');
+        return;
+      }
+      var method = currentHelpId ? 'PUT' : 'POST';
+      var url = currentHelpId ? API + '/api/help/' + currentHelpId : API + '/api/help';
+      fetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+        .then(function(r) { if (!r.ok) return r.json().then(function(e) { throw new Error(e.error); }); return r.json(); })
+        .then(function(saved) {
+          currentHelpId = saved.id;
+          showToast('Article saved', 'success');
+          loadHelpArticles();
+        })
+        .catch(function(err) {
+          showToast(err.message, 'error');
+        });
+    }
+
+    function deleteCurrentHelpArticle() {
+      if (!currentHelpId) return;
+      if (!confirm('Delete this article?')) return;
+      fetch(API + '/api/help/' + currentHelpId, { method: 'DELETE' })
+        .then(function() {
+          currentHelpId = null;
+          document.getElementById('helpEditor').style.display = 'none';
+          document.getElementById('helpEditorEmpty').style.display = '';
+          loadHelpArticles();
+        });
+    }
+
+    function toggleHelpPreview() {
+      var body = document.getElementById('helpBody');
+      var preview = document.getElementById('helpPreview');
+      var btn = document.getElementById('helpPreviewBtn');
+      if (preview.style.display === 'none') {
+        preview.innerHTML = renderMarkdown(body.value);
+        preview.style.display = '';
+        body.style.display = 'none';
+        btn.textContent = 'Edit';
+      } else {
+        preview.style.display = 'none';
+        body.style.display = '';
+        btn.textContent = 'Preview';
+      }
+    }
+
+    // Simple markdown renderer (headings, bold, italic, code, links, lists, paragraphs)
+    function renderMarkdown(md) {
+      if (!md) return '<p style="color:#999">No content</p>';
+      var html = md
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/^### (.+)$/gm, '<h3 style="font-size:14px;margin:12px 0 4px;">$1</h3>')
+        .replace(/^## (.+)$/gm, '<h2 style="font-size:16px;margin:14px 0 6px;">$1</h2>')
+        .replace(/^# (.+)$/gm, '<h1 style="font-size:18px;margin:16px 0 8px;">$1</h1>')
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        .replace(/`([^`]+)`/g, '<code style="background:#f4f4f4;padding:1px 4px;border-radius:3px;font-size:11px;">$1</code>')
+        .replace(/^\- (.+)$/gm, '<li>$1</li>')
+        .replace(/^\* (.+)$/gm, '<li>$1</li>')
+        .replace(/(<li>.*<\/li>)/s, '<ul style="margin:4px 0 8px 16px;">$1</ul>')
+        .replace(/\n\n/g, '</p><p>')
+        .replace(/\n/g, '<br>');
+      return '<p>' + html + '</p>';
+    }
+
     // Init
     populateFormSelects();
     populateEconDimSelect();
-    refreshAll(); initDemo();
+    refreshAll(); initDemo(); loadHelpArticles();
     setInterval(refreshAll, 3000);
   </script>
 </body>

@@ -5,7 +5,7 @@ import jwt from "jsonwebtoken";
 import { Kafka } from "kafkajs";
 import path from "path";
 
-import { getOrCreateDimensionMapping, getAllDimensionMappings, updateDimensionMapping, configureDimModel, getDimModel, getAllDimModels, configureDimRouting, getAllDimRouting, registerSharedDimension, deleteSharedDimension, getAllSharedDimensions, upsertDimensionCode, getDimensionCodes, deleteDimensionCode, registerParticipant, getParticipants, upsertCodeMapping, getCodeMappings, registerDimensionAttribute, getDimensionAttributes, setCodeAttribute, getCodeAttributes, getAllCodeAttributes, setHierarchy, getHierarchy, resetAllData, getInboxItems, addInboxItem, updateInboxItem, setSystemConfig, getSystemConfig, getAllSystemConfigs, deleteDimModel, deleteDimRouting, deleteSystem, deleteParticipant, getAllUsers, getUser, getUserByUsername, getUserByExternalId, upsertUser, updateUser, deleteUser, updateLastLogin, getUserCount, getAuditEvents, getAuditEventCount, upsertEconEntity, getEconEntities, getEconDimensions, deleteEconEntity, upsertEconEntityAttribute, getEconEntityAttributes, upsertEconAttributeDef, getEconAttributeDefs, upsertEconRelation, getEconRelations, insertEconFacts, validateEconFacts, getEconFacts, getEconFactsSummary, publishEconFacts, getEconFactsForPublish, evaluateErrorPolicy, upsertSyncState, getSyncStates, getSyncState, applyDimRouting, getExternalTools, getAllExternalTools, createExternalTool, updateExternalTool, deleteExternalTool, getDimensionPolicies, upsertDimensionPolicy, deleteDimensionPolicy, applyStructuralPolicies, upsertAttributePublishRule, getAttributePublishRules, deleteAttributePublishRule, deleteEconFactsByPeriods, getEventSubscriptions, setEventSubscription, getDLQItems, getDLQCount, markDLQRetried, insertAuditEvent, computeContentHash, getSyncContentHash, setSyncContentHash, getPipelineHealth, revalidateEconFacts, resetSyncWatermark } from "./mapper";
+import { getOrCreateDimensionMapping, getAllDimensionMappings, updateDimensionMapping, configureDimModel, getDimModel, getAllDimModels, configureDimRouting, getAllDimRouting, registerSharedDimension, deleteSharedDimension, getAllSharedDimensions, upsertDimensionCode, getDimensionCodes, deleteDimensionCode, registerParticipant, getParticipants, upsertCodeMapping, getCodeMappings, registerDimensionAttribute, getDimensionAttributes, setCodeAttribute, getCodeAttributes, getAllCodeAttributes, setHierarchy, getHierarchy, resetAllData, getInboxItems, addInboxItem, updateInboxItem, setSystemConfig, getSystemConfig, getAllSystemConfigs, deleteDimModel, deleteDimRouting, deleteSystem, deleteParticipant, getAllUsers, getUser, getUserByUsername, getUserByExternalId, upsertUser, updateUser, deleteUser, updateLastLogin, getUserCount, getAuditEvents, getAuditEventCount, upsertEconEntity, getEconEntities, getEconDimensions, deleteEconEntity, upsertEconEntityAttribute, getEconEntityAttributes, upsertEconAttributeDef, getEconAttributeDefs, upsertEconRelation, getEconRelations, insertEconFacts, validateEconFacts, getEconFacts, getEconFactsSummary, publishEconFacts, getEconFactsForPublish, evaluateErrorPolicy, upsertSyncState, getSyncStates, getSyncState, applyDimRouting, getExternalTools, getAllExternalTools, createExternalTool, updateExternalTool, deleteExternalTool, getDimensionPolicies, upsertDimensionPolicy, deleteDimensionPolicy, applyStructuralPolicies, upsertAttributePublishRule, getAttributePublishRules, deleteAttributePublishRule, deleteEconFactsByPeriods, getEventSubscriptions, setEventSubscription, getDLQItems, getDLQCount, markDLQRetried, insertAuditEvent, computeContentHash, getSyncContentHash, setSyncContentHash, getPipelineHealth, revalidateEconFacts, resetSyncWatermark, getAllHelpArticles, getHelpArticle, getHelpArticleBySlug, searchHelpArticles, getHelpArticlesForUser, createHelpArticle, updateHelpArticle, deleteHelpArticle } from "./mapper";
 import { startRouter, publishEntityLinked, publishDimensionSnapshot, getEventLog } from "./router";
 import cron from "node-cron";
 
@@ -42,6 +42,260 @@ function seedDemoUsers() {
   }
 }
 seedDemoUsers();
+
+// Seed demo help articles
+function seedHelpArticles() {
+  const existing = getAllHelpArticles();
+  if (existing.length === 0) {
+    const articles = [
+      {
+        slug: "getting-started",
+        title: "Getting Started with the Platform",
+        product: null,
+        category: "Platform",
+        sort_order: 0,
+        keywords: "start, intro, overview, welcome",
+        body_md: `# Getting Started
+
+Welcome to the Platform! This guide will help you understand the key concepts.
+
+## What is the Platform?
+
+The platform is a **shared integration layer** that connects your ERP system with downstream products (budgeting, reporting, analysis). It:
+
+- Standardizes data from any ERP into a common format
+- Distributes curated data to products via Kafka events
+- Provides shared services: inbox, help, identity resolution
+
+## Key Concepts
+
+- **Dimensions** — shared reference data (accounts, org units, projects)
+- **Facts** — transactional data (GL entries, budget lines)
+- **Events** — notifications when data changes (DimensionSnapshot, GLPublished)
+- **Inbox** — aggregated tasks from all products in one place
+
+## Navigation
+
+Use the shell bar at the top to navigate between products. The ? icon opens this help panel, and the sparkle icon opens the AI assistant.`
+      },
+      {
+        slug: "budget-workflow",
+        title: "Budget Workflow",
+        product: "prod_a",
+        category: "Budgeting",
+        sort_order: 0,
+        keywords: "budget, workflow, approval, submit, draft",
+        body_md: `# Budget Workflow
+
+## Creating a Budget
+
+1. Open Product A and navigate to the budget module
+2. Select the budget version (e.g. "Budget 2025")
+3. Enter amounts per account and period
+4. Save as **draft** — this stores locally in Product A
+
+## Submitting a Budget
+
+When your budget is ready:
+
+1. Click **Submit** on the budget version
+2. Product A publishes a \`BudgetSubmitted\` event to the platform
+3. The platform enriches the data with dimension mappings (planning year, type, version)
+4. The enriched budget is forwarded to downstream products (e.g. Product B for consolidation)
+
+## Planning Dimensions
+
+Each budget version is mapped to:
+- **Planning Year** — which fiscal year (e.g. 2025)
+- **Planning Type** — Budget, Forecast, Outcome
+- **Planning Version** — version number within the type
+
+These mappings are configured automatically by the platform but can be adjusted by the platform admin.`
+      },
+      {
+        slug: "gl-data",
+        title: "Understanding GL Data Flow",
+        product: null,
+        category: "Data Pipeline",
+        sort_order: 0,
+        keywords: "gl, general ledger, transactions, facts, sync",
+        body_md: `# GL Data Flow
+
+## How GL data moves through the platform
+
+\`\`\`
+ERP → Adapter → Platform (staging) → Validate → Publish → Products
+\`\`\`
+
+## Sync Process
+
+1. **Fetch** — The adapter pulls GL entries from the ERP using a high watermark (only new/modified rows)
+2. **Stage** — Data is stored in the platform's Economy Domain (\`econ_facts\` table)
+3. **Validate** — Each fact is checked: does the account exist? Is the amount valid?
+4. **Publish** — Valid facts are published to Kafka (\`platform.gl.out\`)
+5. **Consume** — Products receive the event and store in their local \`gl_lines\`
+
+## Deduplication
+
+The pipeline is **idempotent** at every layer:
+- ERP provides deterministic entry IDs
+- Platform uses UPSERT (same source + row = update, not duplicate)
+- Products use period-based replace (delete old period data, insert fresh)
+
+## Period Re-sync
+
+If source data is corrected retroactively, admin can trigger a period re-read:
+- Specify period range (e.g. 2025-01 to 2025-03)
+- Platform deletes old staged data for those periods and re-fetches from ERP
+- Products receive the corrected data with sync_mode = "replace_by_period"`
+      },
+      {
+        slug: "dimensions-explained",
+        title: "Shared Dimensions",
+        product: null,
+        category: "Data Pipeline",
+        sort_order: 1,
+        keywords: "dimensions, accounts, org units, hierarchy, shared",
+        body_md: `# Shared Dimensions
+
+## What are dimensions?
+
+Dimensions are the **reference data** that gives meaning to transactions. Examples:
+- **Account** — what type of cost/revenue (e.g. "4010 Salaries")
+- **Org Unit** — where in the organization (e.g. "Finance Dept")
+- **Project** — which project the cost belongs to
+
+## How they work in the platform
+
+1. The ERP owns the master code list (canonical codes)
+2. The platform syncs these and distributes via DimensionSnapshot events
+3. Products receive snapshots and maintain local copies
+4. Cross-reference mappings handle code translation between systems
+
+## Hierarchies
+
+Dimensions can be hierarchical (org units under departments, accounts grouped by type).
+The platform applies **structural policies** to ensure consistent structures:
+- Auto Root — adds a single top-level entry point
+- Grouping — creates intermediate nodes based on code patterns
+- Auto Missing — catches transactions referencing unknown codes`
+      },
+      {
+        slug: "reporting-basics",
+        title: "Reporting & Analysis",
+        product: "prod_b",
+        category: "Reporting",
+        sort_order: 0,
+        keywords: "report, analysis, product b, consolidation",
+        body_md: `# Reporting & Analysis (Product B)
+
+## Overview
+
+Product B receives curated data from the platform and provides:
+- GL transaction reporting
+- Budget vs. actual comparison
+- Dimension-based drill-down
+
+## Data Sources
+
+Product B consumes these platform events:
+- **DimensionSnapshot** — accounts, org units, projects with hierarchies
+- **GLPublished** — actual transaction data
+- **BudgetSubmitted** — budget data with planning dimensions
+
+## Cross-system Identity
+
+When the platform links entities (e.g. ERP project = Product A project), Product B receives an EntityLinked event and can group budget + actuals for the same real-world entity.
+
+## Ingestion Rules
+
+Product B can define rules that derive additional dimensions from member attributes.
+For example: "If account has attribute kontoklass=I, tag as Revenue category."`
+      },
+      {
+        slug: "inbox-overview",
+        title: "Master Inbox",
+        product: null,
+        category: "Platform",
+        sort_order: 1,
+        keywords: "inbox, tasks, notifications, workflow",
+        body_md: `# Master Inbox
+
+## What is the Inbox?
+
+The Inbox aggregates tasks from all products into one unified list. When a product needs user action (e.g. "Approve budget", "Review rejected data"), it creates an inbox item.
+
+## How it works
+
+- Products call \`POST /api/inbox\` to create items
+- Items appear in the shell bar (bell icon) for the assigned user
+- Each item has a deep link back to the source product
+- Mark items as done to clear them
+
+## Item Properties
+
+- **Title** — short description of the task
+- **Source** — which product created it
+- **Priority** — high, medium, low
+- **Link** — deep link to the task in the product
+- **Category** — type of task (approval, review, action needed)`
+      },
+      {
+        slug: "budget-entry",
+        title: "Budget Entry — How to Use",
+        product: "prod_a",
+        category: "Budgeting",
+        sort_order: 1,
+        keywords: "budget, entry, grid, edit, amount, period, account",
+        body_md: `# Budget Entry
+
+## Overview
+
+The Budget Entry view lets you enter and edit budget amounts per account, org unit, and period. It is the primary data entry surface in Product A.
+
+## How to enter budget data
+
+1. Open **Budget Entry** from the sidebar or the portal home
+2. Select the budget version from the tab bar (e.g. "Budget 2025")
+3. Each row represents an account; columns represent periods (Jan–Dec)
+4. Click a cell to edit the amount — changes are saved automatically
+5. Use the dropdowns to filter by org unit or account group
+
+## Toolbar
+
+- **? icon** — Opens this help article (deep-link demo)
+- **Refresh icon** — Reloads the page with the latest data from the platform
+
+## Budget statuses
+
+| Status | Meaning |
+|--------|---------|
+| Draft | In progress, not yet submitted |
+| Submitted | Sent to platform for processing |
+| Approved | Accepted by the budget coordinator |
+| Returned | Sent back for corrections |
+
+## Tips
+
+- Use **Tab** to move between cells quickly
+- The grid highlights changed cells in blue until saved
+- Negative amounts are shown in red
+- Totals update live as you type
+
+## Related
+
+- See **Budget Workflow** for the end-to-end approval process
+- See **GL Data Flow** for how actuals compare to your budget`
+      }
+    ];
+
+    for (const a of articles) {
+      createHelpArticle(a);
+    }
+    console.log("[PLATFORM] Seeded demo help articles");
+  }
+}
+seedHelpArticles();
 
 // ── Kafka ──
 
@@ -92,7 +346,7 @@ function requireAuth(req: AuthenticatedRequest, res: express.Response, next: exp
 
 // Apply auth to all /api/* except public endpoints
 // Public paths: auth endpoints, SCIM (IdP service account), health, and system-to-system discovery
-const PUBLIC_PATHS = ["/api/login", "/api/logout", "/api/scim/v2", "/health", "/api/economy/policies", "/api/economy/dimensions"];
+const PUBLIC_PATHS = ["/api/login", "/api/logout", "/api/scim/v2", "/health", "/api/economy/policies", "/api/economy/dimensions", "/api/help"];
 
 app.use((req: AuthenticatedRequest, res, next) => {
   // Only protect /api/ routes (static files, HTML pages pass through)
@@ -1922,6 +2176,58 @@ app.post("/api/demo/golden-path", async (_req, res) => {
 // Fallback: serve login page for root
 app.get("/", (_req, res) => {
   res.sendFile(path.join(__dirname, "..", "public", "login.html"));
+});
+
+// ── Help Articles API ──
+
+app.get("/api/help", (req: any, res) => {
+  const { q, products } = req.query;
+  if (q) {
+    const productList = products ? (products as string).split(",") : undefined;
+    res.json(searchHelpArticles(q as string, productList));
+  } else {
+    res.json(getAllHelpArticles());
+  }
+});
+
+app.get("/api/help/user", (req: any, res) => {
+  // Return articles filtered by user's product access
+  const products = req.query.products ? (req.query.products as string).split(",") : [];
+  res.json(getHelpArticlesForUser(products));
+});
+
+app.get("/api/help/slug/:slug", (req, res) => {
+  const article = getHelpArticleBySlug(req.params.slug);
+  if (!article) { res.status(404).json({ error: "Not found" }); return; }
+  res.json(article);
+});
+
+app.get("/api/help/:id", (req, res) => {
+  const article = getHelpArticle(Number(req.params.id));
+  if (!article) { res.status(404).json({ error: "Not found" }); return; }
+  res.json(article);
+});
+
+app.post("/api/help", (req, res) => {
+  const { slug, title, product, category, body_md, keywords, sort_order } = req.body;
+  if (!slug || !title) { res.status(400).json({ error: "slug and title required" }); return; }
+  try {
+    const article = createHelpArticle({ slug, title, product, category, body_md, keywords, sort_order });
+    res.status(201).json(article);
+  } catch (err: any) {
+    res.status(409).json({ error: err.message });
+  }
+});
+
+app.put("/api/help/:id", (req, res) => {
+  const article = updateHelpArticle(Number(req.params.id), req.body);
+  if (!article) { res.status(404).json({ error: "Not found" }); return; }
+  res.json(article);
+});
+
+app.delete("/api/help/:id", (req, res) => {
+  const ok = deleteHelpArticle(Number(req.params.id));
+  res.json({ ok });
 });
 
 // ── Start ──

@@ -1189,6 +1189,79 @@ export function deleteDimensionPolicy(dimension: string, policyType: string): bo
   return db.prepare("DELETE FROM dimension_policies WHERE dimension = ? AND policy_type = ?").run(dimension, policyType).changes > 0;
 }
 
+// ── Help Articles ──
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS help_articles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    slug TEXT NOT NULL UNIQUE,
+    title TEXT NOT NULL,
+    product TEXT,
+    category TEXT NOT NULL DEFAULT 'General',
+    body_md TEXT NOT NULL DEFAULT '',
+    keywords TEXT NOT NULL DEFAULT '',
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`);
+
+export function getAllHelpArticles(): any[] {
+  return db.prepare("SELECT * FROM help_articles ORDER BY category, sort_order, title").all();
+}
+
+export function getHelpArticle(id: number): any {
+  return db.prepare("SELECT * FROM help_articles WHERE id = ?").get(id);
+}
+
+export function getHelpArticleBySlug(slug: string): any {
+  return db.prepare("SELECT * FROM help_articles WHERE slug = ?").get(slug);
+}
+
+export function searchHelpArticles(query: string, products?: string[]): any[] {
+  const likeQuery = `%${query}%`;
+  let rows = db.prepare(
+    "SELECT * FROM help_articles WHERE (title LIKE ? OR body_md LIKE ? OR keywords LIKE ?) ORDER BY sort_order, title"
+  ).all(likeQuery, likeQuery, likeQuery) as any[];
+  if (products && products.length > 0) {
+    rows = rows.filter((r: any) => !r.product || products.includes(r.product));
+  }
+  return rows;
+}
+
+export function getHelpArticlesForUser(products: string[]): any[] {
+  const all = db.prepare("SELECT * FROM help_articles ORDER BY category, sort_order, title").all() as any[];
+  return all.filter((r: any) => !r.product || products.includes(r.product));
+}
+
+export function createHelpArticle(article: { slug: string; title: string; product?: string; category?: string; body_md?: string; keywords?: string; sort_order?: number }): any {
+  const stmt = db.prepare(`
+    INSERT INTO help_articles (slug, title, product, category, body_md, keywords, sort_order, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+  `);
+  const info = stmt.run(article.slug, article.title, article.product || null, article.category || 'General', article.body_md || '', article.keywords || '', article.sort_order || 0);
+  return db.prepare("SELECT * FROM help_articles WHERE id = ?").get(info.lastInsertRowid);
+}
+
+export function updateHelpArticle(id: number, updates: { slug?: string; title?: string; product?: string; category?: string; body_md?: string; keywords?: string; sort_order?: number }): any {
+  const fields: string[] = [];
+  const values: any[] = [];
+  if (updates.slug !== undefined) { fields.push("slug = ?"); values.push(updates.slug); }
+  if (updates.title !== undefined) { fields.push("title = ?"); values.push(updates.title); }
+  if (updates.product !== undefined) { fields.push("product = ?"); values.push(updates.product || null); }
+  if (updates.category !== undefined) { fields.push("category = ?"); values.push(updates.category); }
+  if (updates.body_md !== undefined) { fields.push("body_md = ?"); values.push(updates.body_md); }
+  if (updates.keywords !== undefined) { fields.push("keywords = ?"); values.push(updates.keywords); }
+  if (updates.sort_order !== undefined) { fields.push("sort_order = ?"); values.push(updates.sort_order); }
+  fields.push("updated_at = datetime('now')");
+  values.push(id);
+  db.prepare(`UPDATE help_articles SET ${fields.join(", ")} WHERE id = ?`).run(...values);
+  return db.prepare("SELECT * FROM help_articles WHERE id = ?").get(id);
+}
+
+export function deleteHelpArticle(id: number): boolean {
+  return db.prepare("DELETE FROM help_articles WHERE id = ?").run(id).changes > 0;
+}
+
 export function applyStructuralPolicies(dimension: string): { actions: string[], created_entities: number, created_relations: number, applied: number } {
   const policies = db.prepare("SELECT * FROM dimension_policies WHERE (dimension = ? OR dimension = '*') AND enabled = 1 ORDER BY policy_type").all(dimension) as any[];
   const actions: string[] = [];

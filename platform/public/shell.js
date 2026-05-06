@@ -201,6 +201,111 @@
     .shell-pin-btn svg { width: 16px; height: 16px; }
     .shell-pin-btn:hover { color: #666; background: #f0f0f0; }
     .shell-pin-btn.pinned { color: #555; }
+    .shell-help-btn {
+      background: none;
+      border: 1px solid #ddd;
+      cursor: pointer;
+      padding: 3px 7px;
+      border-radius: 3px;
+      line-height: 1;
+      color: #666;
+      transition: all 0.15s;
+      margin-left: 6px;
+      display: inline-flex;
+      align-items: center;
+      font-family: inherit;
+    }
+    .shell-help-btn svg { width: 14px; height: 14px; vertical-align: middle; }
+    .shell-help-btn:hover { color: #1f64a4; border-color: #93c5fd; background: #eff6ff; }
+    .shell-help-btn.active { color: #1f64a4; border-color: #93c5fd; background: #eff6ff; }
+    .shell-help-panel {
+      position: fixed;
+      top: 38px;
+      right: 12px;
+      width: 380px;
+      max-height: calc(100vh - 60px);
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.08);
+      z-index: 100001;
+      display: none;
+      flex-direction: column;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    .shell-help-panel.open { display: flex; }
+    .shell-help-panel-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      border-bottom: 1px solid #eee;
+      font-weight: 600;
+      font-size: 13px;
+      color: #333;
+    }
+    .shell-help-panel-header svg { width: 16px; height: 16px; color: #1f64a4; }
+    .shell-help-panel-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 16px;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .shell-help-panel-body .help-search {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 13px;
+      margin-bottom: 12px;
+    }
+    .shell-help-panel-body .help-search:focus { outline: none; border-color: #93c5fd; }
+    .shell-help-panel-body .help-cat {
+      font-size: 11px;
+      color: #888;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      margin: 12px 0 4px;
+    }
+    .shell-help-panel-body .help-item {
+      padding: 6px 10px;
+      cursor: pointer;
+      border-radius: 5px;
+      font-size: 13px;
+      margin: 2px 0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .shell-help-panel-body .help-item:hover { background: #f0f7ff; }
+    .shell-help-panel-body .help-item .help-prod-badge {
+      font-size: 9px;
+      background: #f0f4ff;
+      color: #1f64a4;
+      border-radius: 3px;
+      padding: 1px 4px;
+    }
+    .shell-help-panel-body .help-article-view h1 { font-size: 18px; margin: 0 0 12px; color: #222; }
+    .shell-help-panel-body .help-article-view h2 { font-size: 15px; margin: 14px 0 6px; color: #333; }
+    .shell-help-panel-body .help-article-view h3 { font-size: 13px; margin: 10px 0 4px; color: #444; }
+    .shell-help-panel-body .help-article-view code { background: #f4f4f4; padding: 1px 4px; border-radius: 3px; font-size: 11px; }
+    .shell-help-panel-body .help-article-view ul { margin: 4px 0 8px 0; padding-left: 20px; list-style: disc; }
+    .shell-help-panel-body .help-article-view li { margin: 3px 0; list-style: disc; }
+    .shell-help-back-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #1f64a4;
+      font-size: 12px;
+      padding: 4px 0;
+      margin-bottom: 8px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .shell-help-back-btn:hover { text-decoration: underline; }
     .shell-ai-btn {
       background: none;
       border: 1px solid #ddd;
@@ -570,6 +675,7 @@
           </div>
         </div>
       </div>
+      <button class="shell-help-btn" id="platform-help-btn" title="Help — search product documentation and guides."><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></button>
       <button class="shell-ai-btn" id="platform-ai-btn" title="AI Assistant — ask questions about your data, get help with tasks, or explore platform capabilities."><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3z"/><path d="M19 2l.5 1.5L21 4l-1.5.5L19 6l-.5-1.5L17 4l1.5-.5L19 2z"/></svg></button>
       <button class="shell-pin-btn" id="platform-pin-btn" title="Pin/unpin the shell bar. When unpinned, the bar hides to give products more space. Hover the top edge or use the notch pill to access inbox and navigation."><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4.5l-4 4l-4 1.5l-1.5 1.5l7 7l1.5 -1.5l1.5 -4l4 -4"/><line x1="9" y1="15" x2="4.5" y2="19.5"/><line x1="14.5" y1="4" x2="20" y2="9.5"/></svg></button>
     </div>
@@ -596,6 +702,164 @@
     </div>
   `;
   document.body.appendChild(aiPanel);
+
+  // ── Help Panel ──
+  var helpPanel = document.createElement("div");
+  helpPanel.className = "shell-help-panel";
+  helpPanel.id = "platform-help-panel";
+  helpPanel.innerHTML = `
+    <div class="shell-help-panel-header">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      Help
+      <span style="flex:1"></span>
+      <button onclick="document.getElementById('platform-help-panel').classList.remove('open');document.getElementById('platform-help-btn').classList.remove('active')" style="background:none;border:none;cursor:pointer;color:#999;font-size:16px;padding:2px 6px;">&times;</button>
+    </div>
+    <div class="shell-help-panel-body" id="platform-help-body">
+      <input type="text" class="help-search" id="platform-help-search" placeholder="Search help articles..." oninput="shellHelpSearch(this.value)">
+      <div id="platform-help-list"></div>
+    </div>
+  `;
+  document.body.appendChild(helpPanel);
+
+  // Help button toggle
+  var helpBtn = document.getElementById("platform-help-btn");
+  helpBtn.addEventListener("click", function() {
+    var panel = document.getElementById("platform-help-panel");
+    var isOpen = panel.classList.toggle("open");
+    helpBtn.classList.toggle("active", isOpen);
+    if (isOpen) {
+      document.getElementById("platform-help-search").focus();
+      shellHelpLoadArticles();
+    }
+  });
+
+  // Close help panel on outside click
+  document.addEventListener("click", function(e) {
+    var panel = document.getElementById("platform-help-panel");
+    if (!panel.classList.contains("open")) return;
+    if (panel.contains(e.target) || helpBtn.contains(e.target)) return;
+    panel.classList.remove("open");
+    helpBtn.classList.remove("active");
+  });
+
+  // Help panel logic
+  var shellHelpArticles = [];
+  var shellHelpCurrentSlug = null;
+
+  function shellHelpLoadArticles() {
+    var products = (user && user.products) ? user.products.join(",") : "";
+    fetch(PLATFORM_URL + "/api/help/user?products=" + encodeURIComponent(products), { credentials: "include" })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        shellHelpArticles = data;
+        shellHelpRenderList(data);
+      })
+      .catch(function() {
+        document.getElementById("platform-help-list").innerHTML = '<div style="color:#999;padding:20px;text-align:center;">Could not load help articles</div>';
+      });
+  }
+
+  function shellHelpRenderList(articles) {
+    var listEl = document.getElementById("platform-help-list");
+    if (!articles || articles.length === 0) {
+      listEl.innerHTML = '<div style="color:#999;padding:20px;text-align:center;">No articles available</div>';
+      return;
+    }
+    var cats = {};
+    articles.forEach(function(a) {
+      var c = a.category || "General";
+      if (!cats[c]) cats[c] = [];
+      cats[c].push(a);
+    });
+    var html = "";
+    Object.keys(cats).sort().forEach(function(cat) {
+      html += '<div class="help-cat">' + cat + '</div>';
+      cats[cat].forEach(function(a) {
+        var badge = a.product ? '<span class="help-prod-badge">' + a.product + '</span>' : '';
+        html += '<div class="help-item" onclick="event.stopPropagation();shellHelpOpenArticle(\'' + a.slug + '\')">' + a.title + badge + '</div>';
+      });
+    });
+    listEl.innerHTML = html;
+  }
+
+  window.shellHelpSearch = function(q) {
+    if (!q) {
+      shellHelpRenderList(shellHelpArticles);
+      return;
+    }
+    var lower = q.toLowerCase();
+    var filtered = shellHelpArticles.filter(function(a) {
+      return a.title.toLowerCase().indexOf(lower) >= 0 ||
+        (a.keywords || "").toLowerCase().indexOf(lower) >= 0 ||
+        (a.body_md || "").toLowerCase().indexOf(lower) >= 0;
+    });
+    shellHelpRenderList(filtered);
+  };
+
+  window.shellHelpOpenArticle = function(slug) {
+    shellHelpCurrentSlug = slug;
+    var article = shellHelpArticles.find(function(a) { return a.slug === slug; });
+    if (!article) {
+      // Try fetching by slug from API
+      fetch(PLATFORM_URL + "/api/help/slug/" + encodeURIComponent(slug), { credentials: "include" })
+        .then(function(r) { if (!r.ok) throw new Error("Not found"); return r.json(); })
+        .then(function(a) { shellHelpRenderArticle(a); })
+        .catch(function() {
+          document.getElementById("platform-help-list").innerHTML = '<div style="color:#999;padding:20px;text-align:center;">Article not found</div>';
+        });
+      return;
+    }
+    shellHelpRenderArticle(article);
+  };
+
+  function shellHelpRenderArticle(article) {
+    var listEl = document.getElementById("platform-help-list");
+    var html = '<button class="shell-help-back-btn" onclick="event.stopPropagation();shellHelpBack()">← Back to list</button>';
+    html += '<div class="help-article-view">';
+    html += '<h1>' + article.title + '</h1>';
+    html += shellHelpRenderMd(article.body_md || "");
+    html += '</div>';
+    listEl.innerHTML = html;
+    document.getElementById("platform-help-search").style.display = "none";
+  }
+
+  window.shellHelpBack = function() {
+    shellHelpCurrentSlug = null;
+    document.getElementById("platform-help-search").style.display = "";
+    shellHelpRenderList(shellHelpArticles);
+  };
+
+  function shellHelpRenderMd(md) {
+    if (!md) return '<p style="color:#999">No content</p>';
+    var html = md
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+      .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+      .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>')
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/^[\-\*] (.+)$/gm, '<li>$1</li>')
+      .replace(/\n\n/g, '</p><p>')
+      .replace(/\n/g, '<br>');
+    // Wrap consecutive <li> into <ul>
+    html = html.replace(/(<li>.*?<\/li>(?:<br>)?)+/g, function(match) {
+      return '<ul>' + match.replace(/<br>/g, '') + '</ul>';
+    });
+    return html;
+  }
+
+  // Global open-help function (for product deep-linking)
+  window.shellOpenHelp = function(slug) {
+    var panel = document.getElementById("platform-help-panel");
+    panel.classList.add("open");
+    helpBtn.classList.add("active");
+    if (slug) {
+      shellHelpOpenArticle(slug);
+    } else {
+      shellHelpLoadArticles();
+    }
+  };
 
   // AI button toggle
   var aiBtn = document.getElementById("platform-ai-btn");
@@ -624,16 +888,47 @@
     input.value = "";
     var container = document.getElementById("platform-ai-messages");
     container.innerHTML += '<div class="ai-msg user">' + msg.replace(/</g, "&lt;") + '</div>';
-    container.innerHTML += '<div class="ai-msg assistant" style="opacity:0.6">Thinking...</div>';
+    container.innerHTML += '<div class="ai-msg assistant" style="opacity:0.6">Searching help articles...</div>';
     container.scrollTop = container.scrollHeight;
-    // Simulate AI response (replace with real endpoint later)
-    setTimeout(function() {
-      var msgs = container.querySelectorAll(".ai-msg");
-      var last = msgs[msgs.length - 1];
-      last.style.opacity = "1";
-      last.textContent = "This is a placeholder response. Connect me to an LLM endpoint to enable real AI assistance over your platform data.";
-      container.scrollTop = container.scrollHeight;
-    }, 800);
+
+    // RAG: search help articles for relevant context
+    var products = (user && user.products) ? user.products.join(",") : "";
+    fetch(PLATFORM_URL + "/api/help?q=" + encodeURIComponent(msg) + "&products=" + encodeURIComponent(products), { credentials: "include" })
+      .then(function(r) { return r.json(); })
+      .then(function(articles) {
+        var msgs = container.querySelectorAll(".ai-msg");
+        var last = msgs[msgs.length - 1];
+        last.style.opacity = "1";
+
+        if (articles && articles.length > 0) {
+          // Build response from matching articles
+          var top = articles.slice(0, 3);
+          var response = '<strong>I found ' + articles.length + ' relevant article' + (articles.length > 1 ? 's' : '') + ':</strong><br><br>';
+          top.forEach(function(a) {
+            response += '<div style="margin-bottom:8px;padding:6px 10px;background:#f8f9fa;border-radius:5px;cursor:pointer;" onclick="shellOpenHelp(\'' + a.slug + '\')">';
+            response += '<strong>' + a.title + '</strong>';
+            if (a.body_md) {
+              var preview = a.body_md.replace(/[#*`\-]/g, '').substring(0, 120);
+              response += '<br><span style="font-size:11px;color:#666;">' + preview + '...</span>';
+            }
+            response += '</div>';
+          });
+          if (articles.length > 3) {
+            response += '<div style="font-size:11px;color:#888;margin-top:4px;">...and ' + (articles.length - 3) + ' more. Try refining your question.</div>';
+          }
+          last.innerHTML = response;
+        } else {
+          last.textContent = "I couldn't find any help articles matching your question. Try different keywords, or browse the help panel (? icon) for available topics.";
+        }
+        container.scrollTop = container.scrollHeight;
+      })
+      .catch(function() {
+        var msgs = container.querySelectorAll(".ai-msg");
+        var last = msgs[msgs.length - 1];
+        last.style.opacity = "1";
+        last.textContent = "Sorry, I couldn't search the help articles right now. Please try again later.";
+        container.scrollTop = container.scrollHeight;
+      });
   };
 
   // ── Try loading a custom logo image (if enabled in platform config) ──
@@ -663,6 +958,9 @@
       <button class="notch-inbox-btn" id="platform-notch-inbox-btn" title="Master Inbox — aggregated tasks from all products.">
         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3l8 -8"></path><path d="M20 12v6a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h9"></path></svg>
         Inbox <span class="notch-count" id="platform-notch-count">0</span>
+      </button>
+      <button class="notch-inbox-btn" id="platform-notch-help-btn" title="Help" style="gap:0;padding:3px 7px;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
       </button>
       <button class="notch-inbox-btn" id="platform-notch-ai-btn" title="AI Assistant" style="gap:0;padding:3px 7px;">
         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3z"/><path d="M19 2l.5 1.5L21 4l-1.5.5L19 6l-.5-1.5L17 4l1.5-.5L19 2z"/></svg>
@@ -706,6 +1004,15 @@
     var isOpen = panel.classList.toggle("open");
     aiBtn.classList.toggle("active", isOpen);
     if (isOpen) document.getElementById("platform-ai-input").focus();
+  });
+  // Notch Help button → toggle help panel
+  var notchHelpBtn = document.getElementById("platform-notch-help-btn");
+  notchHelpBtn.addEventListener("click", function(e) {
+    e.stopPropagation();
+    var panel = document.getElementById("platform-help-panel");
+    var isOpen = panel.classList.toggle("open");
+    helpBtn.classList.toggle("active", isOpen);
+    if (isOpen) shellHelpLoadArticles();
   });
   document.addEventListener("click", function(e) {
     var dd = document.getElementById("platform-notch-dropdown");
