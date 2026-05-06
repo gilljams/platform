@@ -142,9 +142,9 @@ Published                              received → validated → published
 **Nyckelprinciper:**
 - **Economy Domain** (`econ_*`) är plattformens standardiserade staginglager — ERP-oberoende
 - **Adapter-mönster**: `runEconSync` transformerar källdata (ERP API) till Economy Domain-format
-- **Fact Pipeline**: 3-stegs validering (received → validated → published) med idempotent sync (se nedan)
+- **Fact Pipeline**: 3-stegs validering (received → validated → published) med idempotent sync + auto-revalidate
 - **Dim Routing**: `applyDimRouting` översätter källfält till dim-slots via `dim_routing` + `dimension_code_mappings`
-- **Shell injection**: Alla produkter inkluderar `/shell.js` som renderar gemensam header med nav, inbox och externa verktyg
+- **Shell injection**: Alla produkter inkluderar `/shell.js` som renderar gemensam header med nav, inbox, help och AI-chat
 - **SCIM 2.0**: Användare provisioneras från IdP; `parseGroupClaims` mappar gruppnamn till roll/produkt/org
 
 ### Fact Pipeline — Idempotent GL-ingestion
@@ -184,6 +184,37 @@ Designen förhindrar dubbletter vid omsync, stödjer periodbaserad omläsning oc
 }
 ```
 Produkten läser `sync_mode` och `periods` för att avgöra om gammal data ska raderas före insert.
+
+### Auto-revalidate (Quarantine Pattern)
+
+Rejected facts åtgärdas automatiskt via **auto-revalidate** — en mekanism som triggas vid varje entity-synk:
+
+```
+Entity-synk (konton, org-enheter) slutförs
+    ↓
+Auto-revalidate körs mot alla rejected facts
+    ↓
+Transaktion med konto "9999" → finns nu i Economy Domain → recovered
+    ↓
+Status: rejected → validated → (auto-publish om aktivt) → published
+```
+
+**Designprinciper (branschstandard):**
+- **Quarantine pattern** (EIP): Felaktig data isoleras, inte defaultas bort
+- **Fix at source** (DAMA DMBOK): Datakvalitet korrigeras uppströms (ERP-synk), inte nedströms (produkten)
+- **Quality contracts** (Data Mesh): Plattformen publicerar bara data som möter kvalitetskrav
+- **Referential integrity** (MDM): Transaktioner som refererar okända masters väntar tills mastern finns
+
+**Ansvarsfördelning:**
+
+| Lager | Ansvar | Strategi |
+|-------|--------|----------|
+| **Platform** | Validera att referensdata existerar | Strict gatekeeper — rejecta okända koder |
+| **Platform Error Policy** | reject / warn / skip_invalid | Admin styr strikthet per källa |
+| **Platform Auto-revalidate** | Retry rejected facts vid entity-synk | Självläkande — rejected löser sig automatiskt |
+| **Produkt (ingestion rules)** | Default-ifyllning av *valfria berikningsdimensioner* | Produktens egen affärslogik |
+
+> **Finansiell kontext:** Strukturella fält (konto, org-enhet, belopp) ska aldrig defaultas bort — en bokföringstransaktion utan konto är per definition ogiltig (GAAP/IFRS). Valbara dimensioner (aktivitet, motpart) kan däremot defaultas av produkten.
 
 ## Komponenter (7 containers)
 

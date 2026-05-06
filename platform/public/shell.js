@@ -748,7 +748,8 @@
 
   function shellHelpLoadArticles() {
     var products = (user && user.products) ? user.products.join(",") : "";
-    fetch(PLATFORM_URL + "/api/help/user?products=" + encodeURIComponent(products), { credentials: "include" })
+    var role = (user && user.role) ? user.role : "";
+    fetch(PLATFORM_URL + "/api/help/user?products=" + encodeURIComponent(products) + "&role=" + encodeURIComponent(role), { credentials: "include" })
       .then(function(r) { return r.json(); })
       .then(function(data) {
         shellHelpArticles = data;

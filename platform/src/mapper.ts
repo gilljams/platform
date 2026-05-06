@@ -1201,9 +1201,13 @@ db.exec(`
     body_md TEXT NOT NULL DEFAULT '',
     keywords TEXT NOT NULL DEFAULT '',
     sort_order INTEGER NOT NULL DEFAULT 0,
+    audience TEXT NOT NULL DEFAULT 'all',
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   )
 `);
+
+// Ensure audience column exists for existing databases
+try { db.exec("ALTER TABLE help_articles ADD COLUMN audience TEXT NOT NULL DEFAULT 'all'"); } catch(e) { /* already exists */ };
 
 export function getAllHelpArticles(): any[] {
   return db.prepare("SELECT * FROM help_articles ORDER BY category, sort_order, title").all();
@@ -1228,21 +1232,26 @@ export function searchHelpArticles(query: string, products?: string[]): any[] {
   return rows;
 }
 
-export function getHelpArticlesForUser(products: string[]): any[] {
+export function getHelpArticlesForUser(products: string[], role?: string): any[] {
   const all = db.prepare("SELECT * FROM help_articles ORDER BY category, sort_order, title").all() as any[];
-  return all.filter((r: any) => !r.product || products.includes(r.product));
+  const isTechnical = role === "admin" || role === "controller";
+  return all.filter((r: any) => {
+    if (r.product && !products.includes(r.product)) return false;
+    if (!isTechnical && r.audience === 'technical') return false;
+    return true;
+  });
 }
 
-export function createHelpArticle(article: { slug: string; title: string; product?: string; category?: string; body_md?: string; keywords?: string; sort_order?: number }): any {
+export function createHelpArticle(article: { slug: string; title: string; product?: string; category?: string; body_md?: string; keywords?: string; sort_order?: number; audience?: string }): any {
   const stmt = db.prepare(`
-    INSERT INTO help_articles (slug, title, product, category, body_md, keywords, sort_order, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    INSERT INTO help_articles (slug, title, product, category, body_md, keywords, sort_order, audience, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
   `);
-  const info = stmt.run(article.slug, article.title, article.product || null, article.category || 'General', article.body_md || '', article.keywords || '', article.sort_order || 0);
+  const info = stmt.run(article.slug, article.title, article.product || null, article.category || 'General', article.body_md || '', article.keywords || '', article.sort_order || 0, article.audience || 'all');
   return db.prepare("SELECT * FROM help_articles WHERE id = ?").get(info.lastInsertRowid);
 }
 
-export function updateHelpArticle(id: number, updates: { slug?: string; title?: string; product?: string; category?: string; body_md?: string; keywords?: string; sort_order?: number }): any {
+export function updateHelpArticle(id: number, updates: { slug?: string; title?: string; product?: string; category?: string; body_md?: string; keywords?: string; sort_order?: number; audience?: string }): any {
   const fields: string[] = [];
   const values: any[] = [];
   if (updates.slug !== undefined) { fields.push("slug = ?"); values.push(updates.slug); }
@@ -1252,6 +1261,7 @@ export function updateHelpArticle(id: number, updates: { slug?: string; title?: 
   if (updates.body_md !== undefined) { fields.push("body_md = ?"); values.push(updates.body_md); }
   if (updates.keywords !== undefined) { fields.push("keywords = ?"); values.push(updates.keywords); }
   if (updates.sort_order !== undefined) { fields.push("sort_order = ?"); values.push(updates.sort_order); }
+  if (updates.audience !== undefined) { fields.push("audience = ?"); values.push(updates.audience); }
   fields.push("updated_at = datetime('now')");
   values.push(id);
   db.prepare(`UPDATE help_articles SET ${fields.join(", ")} WHERE id = ?`).run(...values);

@@ -261,6 +261,7 @@
       background: #e8eaed; color: #888; transition: all 0.3s; flex-shrink: 0;
     }
     .step-badge.done { background: #e8f5e9; color: #2e7d32; }
+    .step-badge.error { background: #fef2f2; color: #dc2626; }
     .step-badge.active { background: #0d1822; color: #fff; }
     .step-badge.running { background: #fff3e0; color: #e65100; animation: pulse 1s infinite; }
     @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
@@ -1758,42 +1759,24 @@ POST /api/demo/step/11 → Process: open budget + assign users</pre>
         </div>
       </div>
 
-      <!-- Lab Scenarios (standalone, outside the chained flow) -->
-      <div class="card" style="border-left:3px solid #f59e0b;">
-        <div class="card-header">
-          <h2 style="display:flex;align-items:center;gap:8px;">🧪 Lab Scenarios</h2>
-          <span style="font-size:11px;color:#888;">Standalone — run after the demo chain</span>
-        </div>
-        <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:start;">
-          <div style="flex:1;min-width:250px;">
-            <button class="btn" onclick="injectBadFacts()" style="background:#dc2626;color:#fff;font-weight:600;">💥 Inject Invalid GL Rows</button>
-            <p style="font-size:11px;color:#666;margin-top:6px;">Inserts 5 GL rows with unknown accounts/org units to demonstrate rejected facts, error policy, and the Rejected Facts table in Data Operations.</p>
-          </div>
-          <div id="labScenarioResult" style="flex:1;min-width:250px;font-size:13px;"></div>
-        </div>
-      </div>
-
       <!-- Golden Path -->
-      <div class="card" style="border-left:3px solid #8b5cf6;background:linear-gradient(135deg,#faf5ff 0%,#fff 100%);">
-        <div class="card-header">
-          <h2 style="display:flex;align-items:center;gap:8px;">🏆 Golden Path — Pipeline Resilience</h2>
-          <button class="btn" onclick="runGoldenPath()" style="background:#7c3aed;color:#fff;font-weight:600;" id="btnGoldenPath">▶ Run Scenario</button>
-        </div>
-        <p style="font-size:12px;color:#555;margin-bottom:4px;">
-          <strong>Shows what happens when things go wrong — and how the platform recovers.</strong>
-        </p>
-        <p style="font-size:11px;color:#888;margin-bottom:12px;">
-          Unlike Demo Runner (which shows the normal flow), Golden Path tests error handling, change detection, DLQ, and operational actions. Perfect as "act 2" in a presentation — after Demo Runner has shown the happy path.
-        </p>
-        <div id="goldenPathSteps" style="font-size:12px;">
-          <div style="display:grid;grid-template-columns:24px 1fr;gap:4px 8px;color:#666;">
-            <span>①</span><span>Sync entities + facts from ERP → audit trail logs</span>
-            <span>②</span><span>Publish dimensions → content hash saved</span>
-            <span>③</span><span>Re-sync same data → "unchanged, skipping publish" detected</span>
-            <span>④</span><span>Inject invalid GL rows → facts rejected by validation</span>
-            <span>⑤</span><span>Fix reference data + re-validate → rejected facts recovered</span>
-            <span>⑥</span><span>Final publish → all facts delivered to products</span>
+      <div class="card">
+        <div class="demo-header">
+          <h2>🏆 Golden Path — Pipeline Resilience</h2>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button class="btn btn-step" onclick="runGoldenPath()" id="btnGoldenPath" style="background:#7c3aed;border-color:#7c3aed;">▶ Run Scenario</button>
           </div>
+        </div>
+        <p style="font-size:12px;color:#555;margin-bottom:12px;">
+          Shows what happens when things go wrong — and how the platform recovers. Run after Demo Runner to stress-test the pipeline.
+        </p>
+        <div style="display:flex;flex-direction:column;gap:6px;" id="goldenPathSteps">
+          <div class="demo-step"><div class="step-badge">1</div><div class="step-body"><div class="step-name">Sync entities + facts from ERP</div><div class="step-desc">Audit trail logs all changes</div></div></div>
+          <div class="demo-step"><div class="step-badge">2</div><div class="step-body"><div class="step-name">Publish dimensions</div><div class="step-desc">Content hash saved for change detection</div></div></div>
+          <div class="demo-step"><div class="step-badge">3</div><div class="step-body"><div class="step-name">Re-sync same data</div><div class="step-desc">"Unchanged, skipping publish" detected</div></div></div>
+          <div class="demo-step"><div class="step-badge">4</div><div class="step-body"><div class="step-name">Inject invalid GL rows</div><div class="step-desc">Facts rejected by validation</div></div></div>
+          <div class="demo-step"><div class="step-badge">5</div><div class="step-body"><div class="step-name">Fix reference data + re-validate</div><div class="step-desc">Rejected facts recovered</div></div></div>
+          <div class="demo-step"><div class="step-badge">6</div><div class="step-body"><div class="step-name">Final publish</div><div class="step-desc">All facts delivered to products</div></div></div>
         </div>
         <div id="goldenPathLog" style="margin-top:12px;max-height:300px;overflow-y:auto;"></div>
       </div>
@@ -2490,7 +2473,10 @@ In production:
               <div class="form-group"><label>Product</label><select id="helpProduct"><option value="">Platform (all users)</option><option value="prod_a">Product A</option><option value="prod_b">Product B</option></select></div>
               <div class="form-group"><label>Sort</label><input type="number" id="helpSort" value="0"></div>
             </div>
-            <div class="form-group" style="margin-bottom:8px;"><label>Keywords <span style="color:#aaa;font-weight:400">(comma separated)</span></label><input type="text" id="helpKeywords" placeholder="budget, workflow, approval"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+              <div class="form-group"><label>Audience</label><select id="helpAudience"><option value="all">All users</option><option value="technical">Technical only (admin/controller)</option></select></div>
+              <div class="form-group"><label>Keywords <span style="color:#aaa;font-weight:400">(comma separated)</span></label><input type="text" id="helpKeywords" placeholder="budget, workflow, approval"></div>
+            </div>
 
             <!-- Markdown editor with preview toggle -->
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
@@ -2875,19 +2861,7 @@ Platform Help Service
             (result.dim_model ? '<br>Flex-dims: dim1=' + result.dim_model.dim1 + ', dim2=' + result.dim_model.dim2 + ', dim3=' + result.dim_model.dim3 : '') + '</div>';
         }
         if (result && result.analytics && result.analytics.length > 0) {
-          resultHtml += '<div class="demo-analytics"><table>' +
-            '<thead><tr><th>Account</th><th>Type</th><th>Date</th><th>Dim1</th><th>Dim2</th><th>Dim3</th><th>Planning</th><th style="text-align:right">Amount</th></tr></thead>' +
-            '<tbody>' + result.analytics.map(function(r) {
-              var isBudget = r.source === 'budget';
-              function dim(v) { return v ? '<span class="tag tag-linked">' + v + '</span>' : '<span style="color:#ccc">—</span>'; }
-              var plan = r.planning_type ? r.planning_type + ' ' + r.planning_year + ' v' + r.planning_version : '—';
-              var txDate = r.transaction_date ? r.transaction_date : '<span style="color:#ccc">—</span>';
-              return '<tr><td><strong>' + r.account + '</strong></td><td><span style="color:' + (isBudget?'#4361ee':'#2e7d32') + ';font-weight:600">' + (isBudget?'Budget':'Actuals') + '</span></td>' +
-                '<td style="font-size:11px">' + txDate + '</td>' +
-                '<td>' + dim(r.dim1) + '</td><td>' + dim(r.dim2) + '</td><td>' + dim(r.dim3) + '</td>' +
-                '<td><span class="tag" style="font-size:0.8em">' + plan + '</span></td>' +
-                '<td style="text-align:right">' + Number(r.amount).toLocaleString('en-US') + '</td></tr>';
-            }).join('') + '</tbody></table></div>';
+          resultHtml += '<div class="step-result success" style="margin-top:6px;">📊 Product B received ' + result.analytics.length + ' rows (budget + actuals)</div>';
         }
         return '<div class="demo-step">' +
           '<div class="step-badge ' + badgeClass + '">' + (isDone ? '✓' : s.step) + '</div>' +
@@ -4130,52 +4104,46 @@ Platform Help Service
       } catch (e) { console.error('savePipelineConfig error:', e); }
     }
 
-    async function injectBadFacts() {
-      var el = document.getElementById('labScenarioResult');
-      el.innerHTML = '<span style="color:#888;">Injecting invalid rows…</span>';
-      try {
-        var r = await fetch('/api/demo/inject-bad-facts', { method: 'POST', credentials: 'include' }).then(function(r) { return r.json(); });
-        if (r.ok) {
-          el.innerHTML = '<span style="color:#27ae60;">✓ ' + r.description + '</span>';
-          loadEconomyDomain();
-          loadRejectedFacts();
-        } else {
-          el.innerHTML = '<span style="color:#e74c3c;">⚠ ' + (r.error || 'Unknown error') + '</span>';
-        }
-      } catch (e) {
-        el.innerHTML = '<span style="color:#e74c3c;">Failed: ' + e.message + '</span>';
-      }
-    }
-
     async function runGoldenPath() {
       var btn = document.getElementById('btnGoldenPath');
+      var stepsEl = document.getElementById('goldenPathSteps');
       var log = document.getElementById('goldenPathLog');
       btn.disabled = true; btn.textContent = 'Running…';
       log.innerHTML = '';
-      function addStep(num, text, status) {
-        var color = status === 'ok' ? '#059669' : status === 'running' ? '#888' : '#dc2626';
-        var icon = status === 'ok' ? '✓' : status === 'running' ? '⏳' : '✗';
-        log.innerHTML += '<div style="padding:4px 8px;font-size:12px;border-left:3px solid ' + color + ';margin-bottom:4px;background:#f9fafb;border-radius:0 4px 4px 0;">' +
-          '<span style="color:' + color + ';font-weight:600;">' + icon + ' Step ' + num + ':</span> ' + escapeHtml(text) + '</div>';
-        log.scrollTop = log.scrollHeight;
-      }
+
+      // Reset all badges to number state
+      var badges = stepsEl.querySelectorAll('.step-badge');
+      badges.forEach(function(b, i) { b.className = 'step-badge'; b.textContent = (i+1); });
+      // Remove any previous result divs
+      stepsEl.querySelectorAll('.step-result').forEach(function(el) { el.remove(); });
+
       try {
-        addStep(1, 'Starting full lifecycle scenario…', 'running');
+        // Show step 1 as running
+        badges[0].className = 'step-badge running';
         var r = await fetch('/api/demo/golden-path', { method: 'POST', credentials: 'include' }).then(function(r) { return r.json(); });
-        log.innerHTML = '';
+
         if (r.steps) {
           r.steps.forEach(function(s, i) {
-            addStep(i + 1, s.step + ' — ' + s.result, s.ok ? 'ok' : 'error');
+            if (badges[i]) {
+              badges[i].className = 'step-badge ' + (s.ok ? 'done' : 'error');
+              badges[i].textContent = s.ok ? '✓' : '✗';
+              // Add result text under the step
+              var stepBody = badges[i].parentElement.querySelector('.step-body');
+              var resultDiv = document.createElement('div');
+              resultDiv.className = 'step-result ' + (s.ok ? 'success' : 'error');
+              resultDiv.textContent = (s.ok ? '✓ ' : '✗ ') + s.result;
+              stepBody.appendChild(resultDiv);
+            }
           });
         }
         if (r.ok) {
-          log.innerHTML += '<div style="padding:8px 12px;margin-top:8px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:6px;font-size:13px;font-weight:600;color:#065f46;">🏆 Golden Path complete! Check Data Operations tab for updated pipeline health.</div>';
+          log.innerHTML = '<div style="padding:8px 12px;margin-top:8px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:6px;font-size:13px;font-weight:600;color:#065f46;">🏆 Golden Path complete! Check Domains tab for updated pipeline health.</div>';
         } else {
-          log.innerHTML += '<div style="padding:8px 12px;margin-top:8px;background:#fef2f2;border:1px solid #fca5a5;border-radius:6px;font-size:13px;color:#dc2626;">Failed: ' + escapeHtml(r.error || 'Unknown') + '</div>';
+          log.innerHTML = '<div style="padding:8px 12px;margin-top:8px;background:#fef2f2;border:1px solid #fca5a5;border-radius:6px;font-size:13px;color:#dc2626;">Failed: ' + escapeHtml(r.error || 'Unknown') + '</div>';
         }
         refreshAll();
       } catch (e) {
-        addStep('?', 'Network error: ' + e.message, 'error');
+        log.innerHTML = '<div style="padding:8px;font-size:12px;color:#dc2626;">Network error: ' + escapeHtml(e.message) + '</div>';
       }
       btn.disabled = false; btn.textContent = '▶ Run Scenario';
     }
@@ -4862,6 +4830,7 @@ Platform Help Service
       document.getElementById('helpCategory').value = 'General';
       document.getElementById('helpProduct').value = '';
       document.getElementById('helpSort').value = '0';
+      document.getElementById('helpAudience').value = 'all';
       document.getElementById('helpKeywords').value = '';
       document.getElementById('helpBody').value = '';
       document.getElementById('helpPreview').style.display = 'none';
@@ -4881,6 +4850,7 @@ Platform Help Service
       document.getElementById('helpCategory').value = a.category || 'General';
       document.getElementById('helpProduct').value = a.product || '';
       document.getElementById('helpSort').value = a.sort_order || 0;
+      document.getElementById('helpAudience').value = a.audience || 'all';
       document.getElementById('helpKeywords').value = a.keywords || '';
       document.getElementById('helpBody').value = a.body_md || '';
       document.getElementById('helpPreview').style.display = 'none';
@@ -4896,6 +4866,7 @@ Platform Help Service
         category: document.getElementById('helpCategory').value || 'General',
         product: document.getElementById('helpProduct').value || null,
         sort_order: parseInt(document.getElementById('helpSort').value) || 0,
+        audience: document.getElementById('helpAudience').value || 'all',
         keywords: document.getElementById('helpKeywords').value,
         body_md: document.getElementById('helpBody').value
       };

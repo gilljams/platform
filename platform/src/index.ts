@@ -118,6 +118,7 @@ These mappings are configured automatically by the platform but can be adjusted 
         product: null,
         category: "Data Pipeline",
         sort_order: 0,
+        audience: "technical",
         keywords: "gl, general ledger, transactions, facts, sync",
         body_md: `# GL Data Flow
 
@@ -155,6 +156,7 @@ If source data is corrected retroactively, admin can trigger a period re-read:
         product: null,
         category: "Data Pipeline",
         sort_order: 1,
+        audience: "technical",
         keywords: "dimensions, accounts, org units, hierarchy, shared",
         body_md: `# Shared Dimensions
 
@@ -1405,6 +1407,15 @@ async function runEconSync(source: string, scope: "all" | "entities" | "facts" =
     }
    } // end scope !== "facts"
 
+    // Auto-revalidate: after entity sync, retry rejected facts against updated reference data
+    if (scope !== "facts") {
+      const reval = revalidateEconFacts();
+      if (reval.reset > 0) {
+        console.log(`[SCHEDULER] Auto-revalidate: ${reval.reset} rejected facts recovered (${reval.validated} now valid, ${reval.rejected} still rejected)`);
+        insertAuditEvent("in", "economy.auto-revalidate", "AutoRevalidate", undefined, source, `Auto-revalidated after entity sync: ${reval.reset} recovered, ${reval.validated} validated, ${reval.rejected} still rejected`);
+      }
+    }
+
     // 2. Sync facts — pull from ERP with period filtering and idempotent upsert
    if (scope !== "entities") {
     const syncState = getSyncState(source, "facts") as any;
@@ -2191,9 +2202,10 @@ app.get("/api/help", (req: any, res) => {
 });
 
 app.get("/api/help/user", (req: any, res) => {
-  // Return articles filtered by user's product access
+  // Return articles filtered by user's product access and role
   const products = req.query.products ? (req.query.products as string).split(",") : [];
-  res.json(getHelpArticlesForUser(products));
+  const role = (req.query.role as string) || "";
+  res.json(getHelpArticlesForUser(products, role));
 });
 
 app.get("/api/help/slug/:slug", (req, res) => {
