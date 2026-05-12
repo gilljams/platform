@@ -1363,6 +1363,18 @@ export function applyStructuralPolicies(dimension: string): { actions: string[],
             groupName = rule.params?.name_template
               ? rule.params.name_template.replace("{group}", groupCode)
               : `Group ${groupCode}`;
+          } else if (rule.strategy === "attribute_value") {
+            // Group by attribute value, e.g. { attribute_name: "project_type" }
+            const attrName = rule.params?.attribute_name;
+            if (!attrName) continue;
+            const attr = db.prepare(
+              "SELECT attribute_value FROM econ_entity_attributes WHERE dimension = ? AND code = ? AND attribute_name = ?"
+            ).get(effDim, leaf.code, attrName) as { attribute_value: string } | undefined;
+            if (!attr || !attr.attribute_value) continue;
+            groupCode = `_GRP_${attrName}_${attr.attribute_value}`;
+            groupName = rule.params?.name_template
+              ? rule.params.name_template.replace("{value}", attr.attribute_value)
+              : attr.attribute_value;
           }
 
           if (!groupCode) continue;

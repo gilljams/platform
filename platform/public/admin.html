@@ -392,7 +392,7 @@
     .pol-status.off { background: #f1f5f9; color: #94a3b8; }
     .pol-rules-section { padding: 8px 14px; background: #fafbfc; border-top: 1px solid #e8edf4; }
     .pol-rules-section h5 { font-size: 11px; font-weight: 700; color: #555; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.3px; }
-    .pol-rule-item { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12px; }
+    .pol-rule-item { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12px; flex-wrap: wrap; }
     .pol-rule-item select, .pol-rule-item input { padding: 3px 6px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 11px; font-family: inherit; }
     .pol-rule-item input { width: 50px; }
     .pol-rule-item .rule-remove { color: #c62828; cursor: pointer; font-size: 14px; border: none; background: none; padding: 0 2px; }
@@ -1260,30 +1260,7 @@ Enriched on BudgetSubmitted event when routing to platform.budget.out</pre>
         </div>
       </details>
 
-      <!-- Structural Policies -->
-      <details class="card-details">
-        <summary class="card-details-summary">
-          <h2>Structural Policies</h2>
-        </summary>
-        <div style="padding:16px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-            <p style="font-size:12px;color:#666;margin:0;">
-              Platform-level rules applied after sync, before products consume data.
-              Ensures consistent dimension structures (root nodes, grouping) across all sources.
-            </p>
-            <div style="display:flex;gap:6px;flex-shrink:0;margin-left:12px;">
-              <button class="btn btn-sm" onclick="policiesApplyAll()">▶ Apply All</button>
-              <button class="btn btn-sm" onclick="policiesLoad()">↻</button>
-            </div>
-          </div>
-          <div id="policiesDimGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px;margin-bottom:14px;">
-            <div style="color:#999;font-size:12px;padding:16px;text-align:center;">Loading…</div>
-          </div>
-          <div id="policiesResult" style="display:none;margin-top:10px;padding:10px 14px;background:#f8f9fa;border:1px solid #e0e0e0;border-radius:6px;font-size:12px;font-family:Consolas,monospace;white-space:pre-wrap;max-height:200px;overflow-y:auto;"></div>
-        </div>
-      </details>
-
-      <!-- Attribute Publishing -->
+      <!-- Attribute Publishing (before Structural Policies — attributes must be mapped first) -->
       <details class="card-details">
         <summary class="card-details-summary">
           <h2>Attribute Publishing</h2>
@@ -1328,6 +1305,29 @@ Enriched on BudgetSubmitted event when routing to platform.budget.out</pre>
             </div>
           </div>
           <div id="attrPubResult" style="display:none;margin-top:10px;padding:8px 12px;background:#f8f9fa;border:1px solid #e0e0e0;border-radius:6px;font-size:12px;"></div>
+        </div>
+      </details>
+
+      <!-- Structural Policies (after Attribute Publishing — grouping can reference mapped attributes) -->
+      <details class="card-details">
+        <summary class="card-details-summary">
+          <h2>Structural Policies</h2>
+        </summary>
+        <div style="padding:16px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <p style="font-size:12px;color:#666;margin:0;">
+              Platform-level rules applied after sync, before products consume data.
+              Ensures consistent dimension structures (root nodes, grouping) across all sources.
+            </p>
+            <div style="display:flex;gap:6px;flex-shrink:0;margin-left:12px;">
+              <button class="btn btn-sm" onclick="policiesApplyAll()">▶ Apply All</button>
+              <button class="btn btn-sm" onclick="policiesLoad()">↻</button>
+            </div>
+          </div>
+          <div id="policiesDimGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px;margin-bottom:14px;">
+            <div style="color:#999;font-size:12px;padding:16px;text-align:center;">Loading…</div>
+          </div>
+          <div id="policiesResult" style="display:none;margin-top:10px;padding:10px 14px;background:#f8f9fa;border:1px solid #e0e0e0;border-radius:6px;font-size:12px;font-family:Consolas,monospace;white-space:pre-wrap;max-height:200px;overflow-y:auto;"></div>
         </div>
       </details>
 
@@ -1394,22 +1394,6 @@ ERP (source)                        Platform                                Prod
         </div>
 
         <div class="info-content">
-          <div class="info-title">Structural Policies</div>
-          <p>Rules that shape dimension hierarchies <strong>after</strong> adapter sync but <strong>before</strong> products receive the data.
-            They ensure consistent structures without modifying the original source data.</p>
-          <table style="font-size:12px;margin:8px 0;border-collapse:collapse;width:100%;">
-            <tr><td style="padding:4px 12px 4px 0;vertical-align:top;font-weight:600;white-space:nowrap">Auto Root</td>
-              <td style="padding:4px 0">Creates a <code>_ALL</code> root node and connects all leaf entities as children. Gives every dimension a single entry point for drill-down.</td></tr>
-            <tr><td style="padding:4px 12px 4px 0;vertical-align:top;font-weight:600;white-space:nowrap">Auto Missing</td>
-              <td style="padding:4px 0">Creates a <code>_MISSING</code> node under the root. Transactions referencing unknown codes can be caught here instead of being lost.</td></tr>
-            <tr><td style="padding:4px 12px 4px 0;vertical-align:top;font-weight:600;white-space:nowrap">Grouping Rules</td>
-              <td style="padding:4px 0">Creates intermediate group nodes based on patterns (first N characters, character range, or regex). E.g. accounts 3010–3030 grouped under a "30" node.</td></tr>
-          </table>
-          <p><strong>Execution order:</strong> Auto Root → Auto Missing → Grouping Rules (per dimension).<br>
-            <strong>When applied:</strong> Automatically after each ERP sync, or manually via "Apply All".</p>
-        </div>
-
-        <div class="info-content">
           <div class="info-title">Attribute Publishing</div>
           <p>Controls which <strong>member attributes</strong> are included in DimensionSnapshot events sent to products.
             Attributes originate from the ERP (e.g. <code>account_type</code>, <code>region</code>) and are discovered automatically
@@ -1424,6 +1408,22 @@ ERP (source)                        Platform                                Prod
               <td style="padding:4px 0">When rules exist for a dimension, any attribute <em>without</em> a rule is excluded from the snapshot. This lets you filter out irrelevant attributes.</td></tr>
           </table>
           <p>Click <strong>Republish</strong> after changing rules to re-send dimension snapshots immediately.</p>
+        </div>
+
+        <div class="info-content">
+          <div class="info-title">Structural Policies</div>
+          <p>Rules that shape dimension hierarchies <strong>after</strong> adapter sync but <strong>before</strong> products receive the data.
+            They ensure consistent structures without modifying the original source data.</p>
+          <table style="font-size:12px;margin:8px 0;border-collapse:collapse;width:100%;">
+            <tr><td style="padding:4px 12px 4px 0;vertical-align:top;font-weight:600;white-space:nowrap">Auto Root</td>
+              <td style="padding:4px 0">Creates a <code>_ALL</code> root node and connects all leaf entities as children. Gives every dimension a single entry point for drill-down.</td></tr>
+            <tr><td style="padding:4px 12px 4px 0;vertical-align:top;font-weight:600;white-space:nowrap">Auto Missing</td>
+              <td style="padding:4px 0">Creates a <code>_MISSING</code> node under the root. Transactions referencing unknown codes can be caught here instead of being lost.</td></tr>
+            <tr><td style="padding:4px 12px 4px 0;vertical-align:top;font-weight:600;white-space:nowrap">Grouping Rules</td>
+              <td style="padding:4px 0">Creates intermediate group nodes based on patterns (first N characters, character range, regex) or <strong>attribute values</strong> (e.g. group projects by project_type). Attributes used here come from Attribute Publishing above.</td></tr>
+          </table>
+          <p><strong>Execution order:</strong> Auto Root → Auto Missing → Grouping Rules (per dimension).<br>
+            <strong>When applied:</strong> Automatically after each ERP sync, or manually via "Apply All".</p>
         </div>
 
         <div class="info-content">
@@ -2469,7 +2469,7 @@ In production:
               <div class="form-group"><label>Slug</label><input type="text" id="helpSlug" placeholder="unique-slug"></div>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr 80px;gap:10px;margin-bottom:12px;">
-              <div class="form-group"><label>Category</label><input type="text" id="helpCategory" placeholder="General" list="helpCategoryList"><datalist id="helpCategoryList"></datalist></div>
+              <div class="form-group"><label>Category <span style="color:#aaa;font-weight:400">(välj eller skriv ny, t.ex. Budgeting / Entry)</span></label><input type="text" id="helpCategory" placeholder="Platform / Overview" list="helpCategoryList" style="border-style:solid;"><datalist id="helpCategoryList"></datalist></div>
               <div class="form-group"><label>Product</label><select id="helpProduct"><option value="">Platform (all users)</option><option value="prod_a">Product A</option><option value="prod_b">Product B</option></select></div>
               <div class="form-group"><label>Sort</label><input type="number" id="helpSort" value="0"></div>
             </div>
@@ -2696,8 +2696,12 @@ Platform Help Service
         '</tr>';
       }).join('') || '<tr><td colspan="4" style="color:#999">No projects yet — projects are created by ERP and Product A</td></tr>';
       var opts = entities.map(function(e) { return '<option value="' + e.source_system + '::' + e.code + '">' + e.source_system + ':' + e.code + ' (' + e.name + ')</option>'; }).join('');
+      var prevSource = sourceSel.value;
+      var prevTarget = targetSel.value;
       sourceSel.innerHTML = opts;
       targetSel.innerHTML = opts;
+      if (prevSource) sourceSel.value = prevSource;
+      if (prevTarget) targetSel.value = prevTarget;
     }
 
     async function linkEntities() {
@@ -4372,15 +4376,22 @@ Platform Help Service
       { value: 'first_n_chars', label: 'First N characters', params: [{ key: 'n', label: 'N', type: 'number', default: 2 }] },
       { value: 'char_range', label: 'Character range', params: [{ key: 'start', label: 'Start pos', type: 'number', default: 0 }, { key: 'end', label: 'End pos', type: 'number', default: 1 }] },
       { value: 'regex', label: 'Regex pattern', params: [{ key: 'pattern', label: 'Pattern', type: 'text', default: '^(\\d{2})' }, { key: 'group_index', label: 'Capture group', type: 'number', default: 1 }] },
+      { value: 'attribute_value', label: 'Group by attribute', params: [{ key: 'attribute_name', label: 'Attribute', type: 'text', default: 'project_type' }, { key: 'name_template', label: 'Group name', type: 'text', default: '{value}', placeholder: '{value}', hint: 'Optional. Use {value} for the attribute value.' }] },
     ];
     var polData = [];
+    var polAttrDefs = []; // attribute defs per dimension, loaded alongside policies
 
     async function policiesLoad() {
       try {
         var dims = await fetch('/api/economy/dimensions').then(function(r) { return r.json(); });
         polDimensions = dims.map(function(d) { return d.dimension; });
-        polData = await fetch('/api/economy/policies').then(function(r) { return r.json(); });
-      } catch (e) { polData = []; polDimensions = []; }
+        var [policies, attrDefs] = await Promise.all([
+          fetch('/api/economy/policies').then(function(r) { return r.json(); }),
+          fetch(API + '/api/economy/attribute-defs').then(function(r) { return r.json(); })
+        ]);
+        polData = policies;
+        polAttrDefs = attrDefs;
+      } catch (e) { polData = []; polDimensions = []; polAttrDefs = []; }
       policiesRender();
     }
 
@@ -4491,9 +4502,22 @@ Platform Help Service
             var strat = GROUPING_STRATEGIES.find(function(s) { return s.value === rule.strategy; }) || GROUPING_STRATEGIES[0];
             var paramInputs = strat.params.map(function(p) {
               var val = (rule.params && rule.params[p.key] !== undefined) ? rule.params[p.key] : p.default;
+              // For attribute_value strategy's attribute_name param, render a dropdown from attribute defs
+              if (rule.strategy === 'attribute_value' && p.key === 'attribute_name') {
+                var dimAttrs = polAttrDefs.filter(function(d) { return d.dimension === dim; });
+                if (dimAttrs.length > 0) {
+                  var opts = dimAttrs.map(function(a) {
+                    var sel = a.attribute_name === val ? ' selected' : '';
+                    return '<option value="' + a.attribute_name + '"' + sel + '>' + a.attribute_name + ' (' + a.attribute_label + ')</option>';
+                  }).join('');
+                  return '<label style="font-size:10px;color:#888;">' + p.label + '</label><select style="width:140px;" onchange="polUpdateRule(\'' + dim + '\',' + idx + ',\'' + p.key + '\',this.value)">' + opts + '</select>';
+                }
+              }
               var inputType = p.type === 'number' ? 'number' : 'text';
-              var width = p.type === 'text' ? 'width:120px;' : 'width:50px;';
-              return '<label style="font-size:10px;color:#888;">' + p.label + '</label><input type="' + inputType + '" value="' + val + '" style="' + width + '" onchange="polUpdateRule(\'' + dim + '\',' + idx + ',\'' + p.key + '\',this.value)">';
+              var width = p.type === 'text' ? 'width:100px;' : 'width:50px;';
+              var placeholder = p.placeholder ? ' placeholder="' + p.placeholder + '"' : '';
+              var hint = p.hint ? ' title="' + p.hint + '"' : '';
+              return '<label style="font-size:10px;color:#888;"' + hint + '>' + p.label + (p.hint ? ' ⓘ' : '') + '</label><input type="' + inputType + '" value="' + val + '" style="' + width + '"' + placeholder + ' onchange="polUpdateRule(\'' + dim + '\',' + idx + ',\'' + p.key + '\',this.value)">';
             }).join(' ');
 
             return '<div class="pol-rule-item">' + stratSelect + ' ' + paramInputs + ' <button class="rule-remove" onclick="polRemoveRule(\'' + dim + '\',' + idx + ')" title="Remove rule">×</button></div>';
@@ -4523,11 +4547,15 @@ Platform Help Service
         var dimSet = {};
         defs.forEach(function(d) { dimSet[d.dimension] = true; });
         _apDimensions = Object.keys(dimSet).sort();
-        // Populate dimension selects
+        // Populate dimension selects — preserve current selections across refreshes
         var filterSel = document.getElementById('attrPubDimFilter');
         var formSel = document.getElementById('apDim');
+        var prevFilter = filterSel.value;
+        var prevForm = formSel.value;
         filterSel.innerHTML = '<option value="">All dimensions</option>' + _apDimensions.map(function(d) { return '<option value="' + d + '">' + d + '</option>'; }).join('');
         formSel.innerHTML = _apDimensions.map(function(d) { return '<option value="' + d + '">' + d + '</option>'; }).join('');
+        if (prevFilter && _apDimensions.indexOf(prevFilter) !== -1) filterSel.value = prevFilter;
+        if (prevForm && _apDimensions.indexOf(prevForm) !== -1) formSel.value = prevForm;
         attrPubUpdateSrcSelect();
         attrPubRender();
       } catch (e) { console.error('attrPubLoad error:', e); }
@@ -4536,10 +4564,16 @@ Platform Help Service
     function attrPubUpdateSrcSelect() {
       var dim = document.getElementById('apDim').value;
       var srcSel = document.getElementById('apSrcAttr');
+      var prevSrc = srcSel.value;
       var attrs = _apAttrDefs.filter(function(d) { return d.dimension === dim; });
       srcSel.innerHTML = attrs.map(function(a) { return '<option value="' + a.attribute_name + '">' + a.attribute_name + ' (' + a.attribute_label + ')</option>'; }).join('');
-      // Pre-fill publish_as with source name
-      if (attrs.length > 0) document.getElementById('apPublishAs').value = attrs[0].attribute_name;
+      // Restore previous selection if still valid, otherwise pre-fill with first
+      var attrNames = attrs.map(function(a) { return a.attribute_name; });
+      if (prevSrc && attrNames.indexOf(prevSrc) !== -1) {
+        srcSel.value = prevSrc;
+      } else if (attrs.length > 0) {
+        document.getElementById('apPublishAs').value = attrs[0].attribute_name;
+      }
     }
 
     function attrPubRender() {
@@ -4793,22 +4827,43 @@ Platform Help Service
           return a.title.toLowerCase().includes(f) || a.category.toLowerCase().includes(f) || (a.keywords || '').toLowerCase().includes(f);
         });
       }
-      // Group by category
-      var cats = {};
+      // Build nested tree from "/"-separated categories
+      var catTree = {};
       filtered.forEach(function(a) {
-        var c = a.category || 'General';
-        if (!cats[c]) cats[c] = [];
-        cats[c].push(a);
-      });
-      var html = '';
-      Object.keys(cats).sort().forEach(function(cat) {
-        html += '<div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;margin:8px 0 4px;letter-spacing:0.3px;">' + escapeHtml(cat) + '</div>';
-        cats[cat].forEach(function(a) {
-          var active = a.id === currentHelpId ? 'background:#e8f0fe;' : '';
-          var prodBadge = a.product ? '<span style="font-size:9px;background:#f0f4ff;color:#1f64a4;border-radius:3px;padding:1px 4px;margin-left:4px;">' + escapeHtml(a.product) + '</span>' : '';
-          html += '<div onclick="editHelpArticle(' + a.id + ')" style="padding:5px 8px;cursor:pointer;border-radius:4px;font-size:12px;margin:1px 0;' + active + '">' + escapeHtml(a.title) + prodBadge + '</div>';
+        var parts = (a.category || 'General').split('/').map(function(s) { return s.trim(); });
+        var cur = catTree;
+        var target;
+        parts.forEach(function(p) {
+          if (!cur[p]) cur[p] = { _articles: [], _children: {} };
+          target = cur[p];
+          cur = target._children;
         });
+        target._articles.push(a);
       });
+
+      function renderNode(obj, depth) {
+        var html = '';
+        var keys = Object.keys(obj).sort();
+        keys.forEach(function(k) {
+          if (k.charAt(0) === '_') return;
+          var node = obj[k];
+          var hasContent = node._articles.length > 0 || Object.keys(node._children).length > 0;
+          if (!hasContent) return;
+          var id = 'ht-' + Math.random().toString(36).substr(2, 6);
+          html += '<div onclick="var g=document.getElementById(\'' + id + '\');var a=this.querySelector(\'span\');if(g.style.display===\'none\'){g.style.display=\'\';a.textContent=\'▾\'}else{g.style.display=\'none\';a.textContent=\'▸\'}" style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;margin:' + (depth === 0 ? '8' : '4') + 'px 0 4px;letter-spacing:0.3px;cursor:pointer;padding-left:' + (depth * 12) + 'px;user-select:none;"><span>▾</span> ' + escapeHtml(k) + '</div>';
+          html += '<div id="' + id + '" style="padding-left:' + (depth * 12) + 'px;">';
+          node._articles.forEach(function(a) {
+            var active = a.id === currentHelpId ? 'background:#e8f0fe;' : '';
+            var prodBadge = a.product ? '<span style="font-size:9px;background:#f0f4ff;color:#1f64a4;border-radius:3px;padding:1px 4px;margin-left:4px;">' + escapeHtml(a.product) + '</span>' : '';
+            var audBadge = a.audience === 'technical' ? '<span style="font-size:9px;background:#fef3c7;color:#92400e;border-radius:3px;padding:1px 4px;margin-left:4px;">technical</span>' : '';
+            html += '<div onclick="editHelpArticle(' + a.id + ')" style="padding:5px 8px;cursor:pointer;border-radius:4px;font-size:12px;margin:1px 0;' + active + '">' + escapeHtml(a.title) + prodBadge + audBadge + '</div>';
+          });
+          html += renderNode(node._children, depth + 1);
+          html += '</div>';
+        });
+        return html;
+      }
+      var html = renderNode(catTree, 0);
       if (!html) html = '<div style="color:#aaa;font-size:12px;padding:10px;">No articles</div>';
       tree.innerHTML = html;
       // populate category datalist

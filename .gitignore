@@ -23,3 +23,8 @@
 Thumbs.db
 .vscode/
 .idea/
+
+# Test artifacts
+cookies.txt
+login.json
+**/test-demo.js

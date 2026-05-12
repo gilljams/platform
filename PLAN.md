@@ -144,7 +144,7 @@ Published                              received → validated → published
 - **Adapter-mönster**: `runEconSync` transformerar källdata (ERP API) till Economy Domain-format
 - **Fact Pipeline**: 3-stegs validering (received → validated → published) med idempotent sync + auto-revalidate
 - **Dim Routing**: `applyDimRouting` översätter källfält till dim-slots via `dim_routing` + `dimension_code_mappings`
-- **Shell injection**: Alla produkter inkluderar `/shell.js` som renderar gemensam header med nav, inbox, help och AI-chat
+- **Shell injection**: Alla produkter inkluderar `/shell.js` (v2) som renderar gemensam header med nav, inbox, help och AI-chat. Bootstrap-endpoint (`/api/shell/bootstrap`) reducerar initiala anrop till 1. Error isolation säkerställer att värdprodukten aldrig påverkas av shell-fel.
 - **SCIM 2.0**: Användare provisioneras från IdP; `parseGroupClaims` mappar gruppnamn till roll/produkt/org
 
 ### Fact Pipeline — Idempotent GL-ingestion
@@ -498,11 +498,24 @@ JWT payload:
 }
 ```
 
-### Platform Shell Header
+### Platform Shell Header (v2)
 Platform serverar `GET /shell.js` — ett litet script som alla vyer inkluderar:
 ```html
-<script src="http://localhost:3000/shell.js"></script>
+<!-- Minsta möjliga — URL auto-detekteras från script src -->
+<script src="http://platform:3000/shell.js"></script>
+
+<!-- Explicit platform URL (valfritt) -->
+<script src="http://platform:3000/shell.js" data-platform-url="http://platform:3000"></script>
 ```
+
+**Version:** `SHELL_VERSION = 2`
+
+**Produktionshärdning (v2):**
+- **Error isolation** — hela IIFE:n wrappas i `try/catch`; om shell kraschar fortsätter värdprodukten opåverkad
+- **Bootstrap endpoint** — `GET /api/shell/bootstrap` returnerar nav + config + help + inbox i ett enda anrop (ersätter 4 individuella fetches)
+- **CSP compliance** — inga inline `onclick`/`onkeydown`/`oninput` — alla lyssnare sätts via `addEventListener`
+- **Configurable URL** — `PLATFORM_URL` auto-detekteras från `<script src>` eller explicit `data-platform-url`-attribut
+- **Legacy fallback** — om bootstrap-endpointen inte svarar, faller shell tillbaka till individuella API-anrop (`/api/navigation`, `/api/shell-config`, `/api/help/user`)
 
 Scriptet renderar en **gemensam header** överst i varje produkt:
 
@@ -881,7 +894,7 @@ platform-poc/
 │   └── public/
 │       ├── login.html       # Login-sida (centrerad, ihopfällbar info)
 │       ├── admin.html       # Platform Admin: 8 flikar (Configuration, Master Data, Domains, Identity, Events, Demo, Help, POC & Production)
-│       ├── shell.js         # Gemensam header (pin/unpin, notch pill, inbox, help panel, AI chat, external tools)
+│       ├── shell.js         # Gemensam header v2 (pin/unpin, notch pill, inbox, help panel, AI chat, external tools, bootstrap, error isolation, CSP-safe)
 │       └── architecture.png # Arkitekturbild för Architecture Vision-fliken
 ```
 
@@ -1364,6 +1377,7 @@ När en användare klickar på en budgetuppgift i inboxen öppnas Product A med 
 | `PUT /api/external-tools/:id` | Uppdatera externt verktyg |
 | `DELETE /api/external-tools/:id` | Ta bort externt verktyg |
 | `GET /api/navigation` | Returnerar `{ items, externalTools }` för shell-rendering |
+| `GET /api/shell/bootstrap` | **Shell v2** — returnerar `{ version, navigation, inbox, config, help, user }` i ett enda anrop. Ersätter 4 individuella fetches. |
 | `GET /api/inbox` | Inbox med deep links (task_base_url + task_path) |
 | `PATCH /api/inbox/:id` | Markera inbox-item som done |
 | `GET /api/me` | Returnera JWT-payload för inloggad användare |

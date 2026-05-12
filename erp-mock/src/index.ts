@@ -56,21 +56,30 @@ const ORG_UNITS = [
   { code: "ACME",   name: "Acme Inc",       parent: null,  type: "group", region: null, level: "company" },
 ];
 
-const FLEX_DIMENSIONS: Record<string, { code: string; name: string }[]> = {
+const FLEX_DIMENSIONS: Record<string, { code: string; name: string; [attr: string]: any }[]> = {
   activity: [
-    { code: "AKT-100", name: "Core Operations" },
-    { code: "AKT-200", name: "Support" },
-    { code: "AKT-300", name: "Management" },
+    { code: "AKT-100", name: "Core Operations", activity_category: "Planning" },
+    { code: "AKT-200", name: "Support", activity_category: "Execution" },
+    { code: "AKT-300", name: "Management", activity_category: "Quality" },
   ],
   cost_center: [
-    { code: "KB-500", name: "Product Development" },
-    { code: "KB-600", name: "Operations" },
+    { code: "KB-500", name: "Product Development", cost_center_type: "Direct" },
+    { code: "KB-600", name: "Operations", cost_center_type: "Indirect" },
   ],
   counterpart: [
-    { code: "MP-200", name: "Customer A" },
-    { code: "MP-300", name: "Customer B" },
+    { code: "MP-200", name: "Customer A", supplier_region: "Domestic" },
+    { code: "MP-300", name: "Customer B", supplier_region: "International" },
   ],
 };
+
+const PROJECTS: { code: string; name: string; project_type: string }[] = [
+  { code: "P-100", name: "Platform Redesign", project_type: "Infrastructure" },
+  { code: "P-200", name: "Data Lake Migration", project_type: "Infrastructure" },
+  { code: "P-300", name: "Customer Analytics", project_type: "Research" },
+  { code: "P-400", name: "AI Forecasting", project_type: "Research" },
+  { code: "P-500", name: "Server Patching", project_type: "Maintenance" },
+  { code: "P-600", name: "Network Audit", project_type: "Maintenance" },
+];
 
 // ── Kafka setup ──
 
@@ -104,7 +113,17 @@ app.get("/health", (_req, res) => {
 // ── GET endpoints (read-only, no Kafka) — for UI ──
 
 app.get("/api/data/dimensions", (_req, res) => {
-  res.json({ accounts: ACCOUNTS, org_units: ORG_UNITS, flex: FLEX_DIMENSIONS });
+  res.json({ accounts: ACCOUNTS, org_units: ORG_UNITS, flex: FLEX_DIMENSIONS, projects: PROJECTS });
+});
+
+// GET /api/flex-dimensions — Returns flex-dim members with attributes (platform reads this during sync)
+app.get("/api/flex-dimensions", (_req, res) => {
+  res.json(FLEX_DIMENSIONS);
+});
+
+// GET /api/projects — Returns project members with attributes
+app.get("/api/projects", (_req, res) => {
+  res.json(PROJECTS);
 });
 
 app.get("/api/data/gl", (_req, res) => {
@@ -137,6 +156,18 @@ app.get("/api/capabilities", (_req, res) => {
       org_unit: [
         { attribute_name: "region", attribute_label: "Region", data_type: "string" },
         { attribute_name: "level", attribute_label: "Level", data_type: "string", allowed_values: ["company", "division", "department"] }
+      ],
+      project: [
+        { attribute_name: "project_type", attribute_label: "Project Type", data_type: "string", allowed_values: ["Research", "Infrastructure", "Maintenance"] }
+      ],
+      activity: [
+        { attribute_name: "activity_category", attribute_label: "Activity Category", data_type: "string", allowed_values: ["Planning", "Execution", "Quality"] }
+      ],
+      cost_bearer: [
+        { attribute_name: "cost_center_type", attribute_label: "Cost Center Type", data_type: "string", allowed_values: ["Direct", "Indirect"] }
+      ],
+      counterpart: [
+        { attribute_name: "supplier_region", attribute_label: "Supplier Region", data_type: "string", allowed_values: ["Domestic", "International"] }
       ]
     }
   });

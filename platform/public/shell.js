@@ -1,8 +1,26 @@
-// Platform Shell — Injected header for all products
-// Loaded via: <script src="http://localhost:3000/shell.js"></script>
+// Platform Shell v2 — Injected header for all products
+// Usage: <script src="http://platform:3000/shell.js" data-platform-url="http://platform:3000"></script>
+// The data-platform-url attribute is optional — auto-detected from script src if omitted.
 
 (function () {
-  const PLATFORM_URL = "http://localhost:3000";
+  "use strict";
+  var SHELL_VERSION = 2;
+
+  // ── Error isolation: if anything fails, the host product must not break ──
+  try {
+
+  // ── Configuration: auto-detect platform URL from script tag or data attribute ──
+  var PLATFORM_URL = (function() {
+    var scripts = document.querySelectorAll("script[src*='shell.js']");
+    for (var i = 0; i < scripts.length; i++) {
+      var s = scripts[i];
+      // Prefer explicit data attribute
+      if (s.getAttribute("data-platform-url")) return s.getAttribute("data-platform-url").replace(/\/$/, "");
+      // Fall back to script src origin
+      try { return new URL(s.src).origin; } catch(e) {}
+    }
+    return window.location.origin; // last resort
+  })();
 
   function getCookie(name) {
     const match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
@@ -27,13 +45,23 @@
     return;
   }
 
-  // Fetch dynamic navigation from platform API
+  // Fetch all shell data in a single call (navigation, inbox, config, help, user)
+  var _bootstrapData = null;
+  async function loadBootstrap() {
+    try {
+      var res = await fetch(PLATFORM_URL + "/api/shell/bootstrap", { credentials: "include" });
+      if (!res.ok) return null;
+      _bootstrapData = await res.json();
+      return _bootstrapData;
+    } catch { return null; }
+  }
+
+  // Legacy fallback: if bootstrap endpoint is unavailable, fall back to individual calls
   async function loadNavigation() {
     try {
-      const res = await fetch(PLATFORM_URL + "/api/navigation", { credentials: "include" });
+      var res = await fetch(PLATFORM_URL + "/api/navigation", { credentials: "include" });
       if (!res.ok) return { items: [], externalTools: [] };
       var data = await res.json();
-      // Support both old array format and new object format
       if (Array.isArray(data)) return { items: data, externalTools: [] };
       return { items: data.items || [], externalTools: data.externalTools || [] };
     } catch { return { items: [], externalTools: [] }; }
@@ -268,7 +296,17 @@
       text-transform: uppercase;
       letter-spacing: 0.3px;
       margin: 12px 0 4px;
+      cursor: pointer;
+      user-select: none;
+      display: flex;
+      align-items: center;
+      gap: 4px;
     }
+    .shell-help-panel-body .help-cat:hover { color: #555; }
+    .shell-help-panel-body .help-cat-toggle { font-size: 9px; transition: transform 0.15s; display: inline-block; }
+    .shell-help-panel-body .help-cat-toggle.open { transform: rotate(90deg); }
+    .shell-help-panel-body .help-group { padding-left: 12px; }
+    .shell-help-panel-body .help-group.collapsed { display: none; }
     .shell-help-panel-body .help-item {
       padding: 6px 10px;
       cursor: pointer;
@@ -691,17 +729,27 @@
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M16 18a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2m0 -12a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2m-7 12a6 6 0 0 1 6 -6a6 6 0 0 1 -6 -6a6 6 0 0 1 -6 6a6 6 0 0 1 6 6"></path></svg>
       AI Assistant
       <span style="flex:1"></span>
-      <button onclick="document.getElementById('platform-ai-panel').classList.remove('open');document.getElementById('platform-ai-btn').classList.remove('active')" style="background:none;border:none;cursor:pointer;color:#999;font-size:16px;padding:2px 6px;">&times;</button>
+      <button id="platform-ai-close" style="background:none;border:none;cursor:pointer;color:#999;font-size:16px;padding:2px 6px;">&times;</button>
     </div>
     <div class="shell-ai-panel-body" id="platform-ai-messages">
       <div class="ai-msg assistant">Hi! I'm the platform AI assistant. I can help you explore data, understand configurations, or answer questions about your integration setup. What would you like to know?</div>
     </div>
     <div class="shell-ai-panel-input">
-      <input type="text" id="platform-ai-input" placeholder="Ask something..." onkeydown="if(event.key==='Enter')document.getElementById('platform-ai-send').click()">
-      <button id="platform-ai-send" onclick="shellAiSend()">Send</button>
+      <input type="text" id="platform-ai-input" placeholder="Ask something...">
+      <button id="platform-ai-send">Send</button>
     </div>
   `;
   document.body.appendChild(aiPanel);
+
+  // Wire AI panel events (CSP-safe — no inline handlers)
+  document.getElementById("platform-ai-close").addEventListener("click", function() {
+    document.getElementById("platform-ai-panel").classList.remove("open");
+    document.getElementById("platform-ai-btn").classList.remove("active");
+  });
+  document.getElementById("platform-ai-send").addEventListener("click", function() { shellAiSend(); });
+  document.getElementById("platform-ai-input").addEventListener("keydown", function(e) {
+    if (e.key === "Enter") document.getElementById("platform-ai-send").click();
+  });
 
   // ── Help Panel ──
   var helpPanel = document.createElement("div");
@@ -712,14 +760,23 @@
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
       Help
       <span style="flex:1"></span>
-      <button onclick="document.getElementById('platform-help-panel').classList.remove('open');document.getElementById('platform-help-btn').classList.remove('active')" style="background:none;border:none;cursor:pointer;color:#999;font-size:16px;padding:2px 6px;">&times;</button>
+      <button id="platform-help-close" style="background:none;border:none;cursor:pointer;color:#999;font-size:16px;padding:2px 6px;">&times;</button>
     </div>
     <div class="shell-help-panel-body" id="platform-help-body">
-      <input type="text" class="help-search" id="platform-help-search" placeholder="Search help articles..." oninput="shellHelpSearch(this.value)">
+      <input type="text" class="help-search" id="platform-help-search" placeholder="Search help articles...">
       <div id="platform-help-list"></div>
     </div>
   `;
   document.body.appendChild(helpPanel);
+
+  // Wire help panel events (CSP-safe — no inline handlers)
+  document.getElementById("platform-help-close").addEventListener("click", function() {
+    document.getElementById("platform-help-panel").classList.remove("open");
+    document.getElementById("platform-help-btn").classList.remove("active");
+  });
+  document.getElementById("platform-help-search").addEventListener("input", function() {
+    shellHelpSearch(this.value);
+  });
 
   // Help button toggle
   var helpBtn = document.getElementById("platform-help-btn");
@@ -747,6 +804,12 @@
   var shellHelpCurrentSlug = null;
 
   function shellHelpLoadArticles() {
+    // Use bootstrap data if available (saves an HTTP request)
+    if (_bootstrapData && _bootstrapData.help) {
+      shellHelpArticles = _bootstrapData.help;
+      shellHelpRenderList(_bootstrapData.help);
+      return;
+    }
     var products = (user && user.products) ? user.products.join(",") : "";
     var role = (user && user.role) ? user.role : "";
     fetch(PLATFORM_URL + "/api/help/user?products=" + encodeURIComponent(products) + "&role=" + encodeURIComponent(role), { credentials: "include" })
@@ -766,21 +829,41 @@
       listEl.innerHTML = '<div style="color:#999;padding:20px;text-align:center;">No articles available</div>';
       return;
     }
-    var cats = {};
+    // Build nested tree from "/"-separated categories
+    var tree = {};
     articles.forEach(function(a) {
-      var c = a.category || "General";
-      if (!cats[c]) cats[c] = [];
-      cats[c].push(a);
-    });
-    var html = "";
-    Object.keys(cats).sort().forEach(function(cat) {
-      html += '<div class="help-cat">' + cat + '</div>';
-      cats[cat].forEach(function(a) {
-        var badge = a.product ? '<span class="help-prod-badge">' + a.product + '</span>' : '';
-        html += '<div class="help-item" onclick="event.stopPropagation();shellHelpOpenArticle(\'' + a.slug + '\')">' + a.title + badge + '</div>';
+      var parts = (a.category || "General").split("/").map(function(s) { return s.trim(); });
+      var cur = tree;
+      var target;
+      parts.forEach(function(p) {
+        if (!cur[p]) cur[p] = { _articles: [], _children: {} };
+        target = cur[p];
+        cur = target._children;
       });
+      target._articles.push(a);
     });
-    listEl.innerHTML = html;
+
+    function renderNode(obj, depth) {
+      var html = '';
+      var keys = Object.keys(obj).sort();
+      keys.forEach(function(k) {
+        if (k.charAt(0) === '_') return;
+        var node = obj[k];
+        var hasContent = node._articles.length > 0 || Object.keys(node._children).length > 0;
+        if (!hasContent) return;
+        var id = 'help-grp-' + Math.random().toString(36).substr(2, 6);
+        html += '<div class="help-cat" onclick="event.stopPropagation();var g=document.getElementById(\'' + id + '\');var t=this.querySelector(\'span\');if(g.classList.toggle(\'collapsed\')){t.classList.remove(\'open\')}else{t.classList.add(\'open\')}" style="padding-left:' + (depth * 12) + 'px"><span class="help-cat-toggle open">▶</span>' + k + '</div>';
+        html += '<div class="help-group" id="' + id + '">';
+        node._articles.forEach(function(a) {
+          var badge = a.product ? '<span class="help-prod-badge">' + a.product + '</span>' : '';
+          html += '<div class="help-item" style="padding-left:' + ((depth + 1) * 12) + 'px" onclick="event.stopPropagation();shellHelpOpenArticle(\'' + a.slug + '\')">' + a.title + badge + '</div>';
+        });
+        html += renderNode(node._children, depth + 1);
+        html += '</div>';
+      });
+      return html;
+    }
+    listEl.innerHTML = renderNode(tree, 0);
   }
 
   window.shellHelpSearch = function(q) {
@@ -932,23 +1015,18 @@
       });
   };
 
-  // ── Try loading a custom logo image (if enabled in platform config) ──
-  (function() {
-    fetch(PLATFORM_URL + "/api/shell-config", { credentials: "include" })
-      .then(function(r) { return r.json(); })
-      .then(function(cfg) {
-        if (!cfg.use_custom_logo) return;
-        var logoSpan = document.getElementById("platform-shell-logo");
-        var img = new Image();
-        img.onload = function() {
-          logoSpan.textContent = "";
-          img.alt = "Logo";
-          logoSpan.appendChild(img);
-        };
-        img.src = PLATFORM_URL + "/shell-logo.png";
-      })
-      .catch(function() {});
-  })();
+  // ── Try loading a custom logo image (uses bootstrap data if available, falls back to API) ──
+  function applyLogoConfig(cfg) {
+    if (!cfg || !cfg.use_custom_logo) return;
+    var logoSpan = document.getElementById("platform-shell-logo");
+    var img = new Image();
+    img.onload = function() {
+      logoSpan.textContent = "";
+      img.alt = "Logo";
+      logoSpan.appendChild(img);
+    };
+    img.src = PLATFORM_URL + "/shell-logo.png";
+  }
 
   // ── Notch pill — shows inbox count when shell is unpinned ──
   const notchPill = document.createElement("div");
@@ -1117,7 +1195,11 @@
   var lastProductCount = 0;
 
   function refreshShellNav() {
-    loadNavigation().then(function(navData) {
+    // Prefer bootstrap data (already loaded), fall back to individual endpoint
+    var navPromise = _bootstrapData && _bootstrapData.navigation
+      ? Promise.resolve(_bootstrapData.navigation)
+      : loadNavigation();
+    navPromise.then(function(navData) {
       var navItems = navData.items;
       var extTools = navData.externalTools || [];
       var nav = document.getElementById("platform-shell-nav");
@@ -1189,8 +1271,18 @@
     });
   }
 
-  // Initial load
-  refreshShellNav();
+  // Initial load — single bootstrap request covers nav + config + help
+  loadBootstrap().then(function(data) {
+    if (data && data.config) applyLogoConfig(data.config);
+    refreshShellNav();
+  }).catch(function() {
+    // Bootstrap failed — fall back to individual requests
+    fetch(PLATFORM_URL + "/api/shell-config", { credentials: "include" })
+      .then(function(r) { return r.json(); })
+      .then(function(cfg) { applyLogoConfig(cfg); })
+      .catch(function() {});
+    refreshShellNav();
+  });
 
   // Expose global reload so admin page (or any host) can trigger a nav refresh
   window.__platformShellReloadNav = refreshShellNav;
@@ -1299,5 +1391,10 @@
     window.addEventListener("message", function(e) {
       if (e.data && e.data.type === "refresh-inbox") loadInbox();
     });
+  }
+
+  // ── End of error isolation ──
+  } catch(shellErr) {
+    console.error("[Platform Shell v" + (typeof SHELL_VERSION !== "undefined" ? SHELL_VERSION : "?") + "] Error — host product unaffected:", shellErr);
   }
 })();

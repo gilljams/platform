@@ -5,7 +5,7 @@ import jwt from "jsonwebtoken";
 import { Kafka } from "kafkajs";
 import path from "path";
 
-import { getOrCreateDimensionMapping, getAllDimensionMappings, updateDimensionMapping, configureDimModel, getDimModel, getAllDimModels, configureDimRouting, getAllDimRouting, registerSharedDimension, deleteSharedDimension, getAllSharedDimensions, upsertDimensionCode, getDimensionCodes, deleteDimensionCode, registerParticipant, getParticipants, upsertCodeMapping, getCodeMappings, registerDimensionAttribute, getDimensionAttributes, setCodeAttribute, getCodeAttributes, getAllCodeAttributes, setHierarchy, getHierarchy, resetAllData, getInboxItems, addInboxItem, updateInboxItem, setSystemConfig, getSystemConfig, getAllSystemConfigs, deleteDimModel, deleteDimRouting, deleteSystem, deleteParticipant, getAllUsers, getUser, getUserByUsername, getUserByExternalId, upsertUser, updateUser, deleteUser, updateLastLogin, getUserCount, getAuditEvents, getAuditEventCount, upsertEconEntity, getEconEntities, getEconDimensions, deleteEconEntity, upsertEconEntityAttribute, getEconEntityAttributes, upsertEconAttributeDef, getEconAttributeDefs, upsertEconRelation, getEconRelations, insertEconFacts, validateEconFacts, getEconFacts, getEconFactsSummary, publishEconFacts, getEconFactsForPublish, evaluateErrorPolicy, upsertSyncState, getSyncStates, getSyncState, applyDimRouting, getExternalTools, getAllExternalTools, createExternalTool, updateExternalTool, deleteExternalTool, getDimensionPolicies, upsertDimensionPolicy, deleteDimensionPolicy, applyStructuralPolicies, upsertAttributePublishRule, getAttributePublishRules, deleteAttributePublishRule, deleteEconFactsByPeriods, getEventSubscriptions, setEventSubscription, getDLQItems, getDLQCount, markDLQRetried, insertAuditEvent, computeContentHash, getSyncContentHash, setSyncContentHash, getPipelineHealth, revalidateEconFacts, resetSyncWatermark, getAllHelpArticles, getHelpArticle, getHelpArticleBySlug, searchHelpArticles, getHelpArticlesForUser, createHelpArticle, updateHelpArticle, deleteHelpArticle } from "./mapper";
+import { getOrCreateDimensionMapping, getAllDimensionMappings, updateDimensionMapping, configureDimModel, getDimModel, getAllDimModels, configureDimRouting, getAllDimRouting, getDimRouting, registerSharedDimension, deleteSharedDimension, getAllSharedDimensions, upsertDimensionCode, getDimensionCodes, deleteDimensionCode, registerParticipant, getParticipants, upsertCodeMapping, getCodeMappings, registerDimensionAttribute, getDimensionAttributes, setCodeAttribute, getCodeAttributes, getAllCodeAttributes, setHierarchy, getHierarchy, resetAllData, getInboxItems, addInboxItem, updateInboxItem, setSystemConfig, getSystemConfig, getAllSystemConfigs, deleteDimModel, deleteDimRouting, deleteSystem, deleteParticipant, getAllUsers, getUser, getUserByUsername, getUserByExternalId, upsertUser, updateUser, deleteUser, updateLastLogin, getUserCount, getAuditEvents, getAuditEventCount, upsertEconEntity, getEconEntities, getEconDimensions, deleteEconEntity, upsertEconEntityAttribute, getEconEntityAttributes, upsertEconAttributeDef, getEconAttributeDefs, upsertEconRelation, getEconRelations, insertEconFacts, validateEconFacts, getEconFacts, getEconFactsSummary, publishEconFacts, getEconFactsForPublish, evaluateErrorPolicy, upsertSyncState, getSyncStates, getSyncState, applyDimRouting, getExternalTools, getAllExternalTools, createExternalTool, updateExternalTool, deleteExternalTool, getDimensionPolicies, upsertDimensionPolicy, deleteDimensionPolicy, applyStructuralPolicies, upsertAttributePublishRule, getAttributePublishRules, deleteAttributePublishRule, deleteEconFactsByPeriods, getEventSubscriptions, setEventSubscription, getDLQItems, getDLQCount, markDLQRetried, insertAuditEvent, computeContentHash, getSyncContentHash, setSyncContentHash, getPipelineHealth, revalidateEconFacts, resetSyncWatermark, getAllHelpArticles, getHelpArticle, getHelpArticleBySlug, searchHelpArticles, getHelpArticlesForUser, createHelpArticle, updateHelpArticle, deleteHelpArticle } from "./mapper";
 import { startRouter, publishEntityLinked, publishDimensionSnapshot, getEventLog } from "./router";
 import cron from "node-cron";
 
@@ -52,9 +52,7 @@ function seedHelpArticles() {
         slug: "getting-started",
         title: "Getting Started with the Platform",
         product: null,
-        category: "Platform",
-        sort_order: 0,
-        keywords: "start, intro, overview, welcome",
+        category: "Platform / Overview",
         body_md: `# Getting Started
 
 Welcome to the Platform! This guide will help you understand the key concepts.
@@ -82,9 +80,7 @@ Use the shell bar at the top to navigate between products. The ? icon opens this
         slug: "budget-workflow",
         title: "Budget Workflow",
         product: "prod_a",
-        category: "Budgeting",
-        sort_order: 0,
-        keywords: "budget, workflow, approval, submit, draft",
+        category: "Budgeting / Workflow",
         body_md: `# Budget Workflow
 
 ## Creating a Budget
@@ -116,10 +112,7 @@ These mappings are configured automatically by the platform but can be adjusted 
         slug: "gl-data",
         title: "Understanding GL Data Flow",
         product: null,
-        category: "Data Pipeline",
-        sort_order: 0,
-        audience: "technical",
-        keywords: "gl, general ledger, transactions, facts, sync",
+        category: "Data Pipeline / Transactions",
         body_md: `# GL Data Flow
 
 ## How GL data moves through the platform
@@ -154,10 +147,7 @@ If source data is corrected retroactively, admin can trigger a period re-read:
         slug: "dimensions-explained",
         title: "Shared Dimensions",
         product: null,
-        category: "Data Pipeline",
-        sort_order: 1,
-        audience: "technical",
-        keywords: "dimensions, accounts, org units, hierarchy, shared",
+        category: "Data Pipeline / Reference Data",
         body_md: `# Shared Dimensions
 
 ## What are dimensions?
@@ -187,8 +177,6 @@ The platform applies **structural policies** to ensure consistent structures:
         title: "Reporting & Analysis",
         product: "prod_b",
         category: "Reporting",
-        sort_order: 0,
-        keywords: "report, analysis, product b, consolidation",
         body_md: `# Reporting & Analysis (Product B)
 
 ## Overview
@@ -218,9 +206,7 @@ For example: "If account has attribute kontoklass=I, tag as Revenue category."`
         slug: "inbox-overview",
         title: "Master Inbox",
         product: null,
-        category: "Platform",
-        sort_order: 1,
-        keywords: "inbox, tasks, notifications, workflow",
+        category: "Platform / Overview",
         body_md: `# Master Inbox
 
 ## What is the Inbox?
@@ -246,9 +232,7 @@ The Inbox aggregates tasks from all products into one unified list. When a produ
         slug: "budget-entry",
         title: "Budget Entry — How to Use",
         product: "prod_a",
-        category: "Budgeting",
-        sort_order: 1,
-        keywords: "budget, entry, grid, edit, amount, period, account",
+        category: "Budgeting / Budget Entry",
         body_md: `# Budget Entry
 
 ## Overview
@@ -553,6 +537,61 @@ app.delete("/api/external-tools/:id", (req, res) => {
 app.get("/api/shell-config", (_req, res) => {
   const useLogo = getSystemConfig("platform", "use_custom_logo");
   res.json({ use_custom_logo: useLogo === "true" });
+});
+
+// Shell bootstrap — single endpoint that returns everything shell.js needs in one call
+// Replaces 4 separate fetches: /api/navigation + /api/inbox + /api/shell-config + /api/help/user
+app.get("/api/shell/bootstrap", (req: AuthenticatedRequest, res) => {
+  const user = req.user;
+  if (!user) { res.status(401).json({ error: "Not logged in" }); return; }
+
+  const allowedProducts = user.products || [];
+
+  // Navigation items
+  const navItems: Array<{ key: string; label: string; url: string }> = [];
+  if (allowedProducts.includes("platform")) {
+    navItems.push({ key: "platform", label: "Platform Admin", url: "/admin.html" });
+  }
+  const PRODUCTS: Array<{ system_name: string; label: string }> = [
+    { system_name: "prod_a", label: "Product A" },
+    { system_name: "prod_b", label: "Product B" },
+  ];
+  for (const p of PRODUCTS) {
+    if (!allowedProducts.includes(p.system_name)) continue;
+    const taskUrl = getSystemConfig(p.system_name, "task_base_url");
+    if (!taskUrl) continue;
+    navItems.push({ key: p.system_name, label: p.label, url: taskUrl });
+  }
+  const tools = getExternalTools();
+  const externalTools = tools.map(t => ({ key: "ext-" + t.id, label: t.name, url: t.url, external: true, icon_url: t.icon_url }));
+
+  // Inbox
+  const inboxItems = getInboxItems(user.user_id, undefined);
+  const FALLBACK_URLS: Record<string, string> = { prod_a: "http://localhost:3002", prod_b: "http://localhost:3003" };
+  const inbox = inboxItems.map((item: any) => {
+    let resolved_link = item.link;
+    if (!resolved_link && item.task_path && item.source) {
+      const baseUrl = item.source === "platform" ? `http://localhost:${PORT}` : (getSystemConfig(item.source, "task_base_url") || FALLBACK_URLS[item.source]);
+      if (baseUrl) resolved_link = baseUrl + item.task_path;
+    }
+    return { ...item, resolved_link };
+  });
+
+  // Shell config
+  const useLogo = getSystemConfig("platform", "use_custom_logo");
+
+  // Help article count (lightweight — just the list, not full content)
+  const productsParam = allowedProducts.join(",");
+  const helpArticles = getHelpArticlesForUser(productsParam, user.role);
+
+  res.json({
+    version: 2,
+    navigation: { items: navItems, externalTools },
+    inbox,
+    config: { use_custom_logo: useLogo === "true" },
+    help: helpArticles,
+    user: { user_id: user.user_id, name: user.name, role: user.role, org_unit: user.org_unit, products: user.products, primary_product: user.primary_product },
+  });
 });
 
 // ── Sync pipeline config (error policy + auto-publish) ──
@@ -1296,19 +1335,32 @@ async function runEconSync(source: string, scope: "all" | "entities" | "facts" =
     const capabilities = await capResp.json() as any;
     const memberAttrDefs: Record<string, Array<{ attribute_name: string; attribute_label: string; data_type?: string; allowed_values?: string[] }>> = capabilities.member_attributes || {};
 
-    // Register attribute definitions from ERP
+    // Build ERP-field → dim-slot mapping early so we can skip flex-dim attr defs here
+    // (they'll be registered under the correct dim-slot name in the flex-dim loop below)
+    const allRouting = getDimRouting(source, "prod_a");
+    const fieldToSlot: Record<string, string> = {};
+    for (const r of allRouting) { fieldToSlot[r.source_field] = r.target_slot; }
+    const fieldAliases: Record<string, string> = { cost_center: "cost_bearer" };
+    // Set of ERP field names that are flex-dim routed (including aliases)
+    const routedFields = new Set<string>();
+    for (const [alias, canonical] of Object.entries(fieldAliases)) { if (fieldToSlot[canonical]) routedFields.add(alias); }
+    for (const f of Object.keys(fieldToSlot)) { routedFields.add(f); }
+
+    // Register attribute definitions from ERP (skip flex-dim fields — handled later under dim-slot names)
     const knownAttrs: Record<string, string[]> = {}; // dimension → [attr_name, ...]
     for (const [dim, defs] of Object.entries(memberAttrDefs)) {
       knownAttrs[dim] = [];
       for (const def of defs as any[]) {
-        upsertEconAttributeDef({
-          dimension: dim,
-          attribute_name: def.attribute_name,
-          attribute_label: def.attribute_label,
-          data_type: def.data_type || "string",
-          source_system: source,
-          allowed_values: def.allowed_values ? JSON.stringify(def.allowed_values) : undefined,
-        });
+        if (!routedFields.has(dim)) {
+          upsertEconAttributeDef({
+            dimension: dim,
+            attribute_name: def.attribute_name,
+            attribute_label: def.attribute_label,
+            data_type: def.data_type || "string",
+            source_system: source,
+            allowed_values: def.allowed_values ? JSON.stringify(def.allowed_values) : undefined,
+          });
+        }
         knownAttrs[dim].push(def.attribute_name);
       }
     }
@@ -1347,33 +1399,51 @@ async function runEconSync(source: string, scope: "all" | "entities" | "facts" =
     upsertEconRelation({ source_system: source, dimension: "org_unit", child_code: "OU-100", parent_code: "DIV-01", hierarchy_name: "standard", level: 1 }); relCount++;
     upsertEconRelation({ source_system: source, dimension: "org_unit", child_code: "OU-200", parent_code: "DIV-01", hierarchy_name: "standard", level: 1 }); relCount++;
 
-    // Flex dimensions use platform dim-slots (dim1–dim5), not ERP-specific names.
-    // The adapter maps ERP fields to slots; dim_routing tells products what each slot means.
-    const flexDims = [
-      { dim: "dim1", codes: [
-        { code: "AKT-100", name: "Design" },
-        { code: "AKT-200", name: "Construction" },
-        { code: "AKT-300", name: "Inspection" },
-      ]},
-      { dim: "dim2", codes: [
-        { code: "KB-500", name: "Internal" },
-        { code: "KB-600", name: "External" },
-      ]},
-      { dim: "dim3", codes: [
-        { code: "MP-200", name: "Supplier Alpha" },
-        { code: "MP-300", name: "Supplier Beta" },
-      ]},
-    ];
-    for (const fd of flexDims) {
-      for (const c of fd.codes) {
-        upsertEconEntity({ source_system: source, dimension: fd.dim, code: c.code, name: c.name, type: "leaf" });
-        entityCount++;
-      }
-    }
+    // Flex dimensions — fetched dynamically from ERP, mapped to dim-slots via dim_routing config.
+    // The adapter reads ERP field names and looks up which platform slot each maps to.
+    try {
+      const flexResp = await fetch(`${ERP_URL}/api/flex-dimensions`);
+      const flexData = await flexResp.json() as Record<string, Array<Record<string, any>>>;
+      // fieldToSlot and fieldAliases already built above
 
-    // Register "project" as a known dimension (projects are created individually later)
-    upsertEconEntity({ source_system: source, dimension: "project", code: "_placeholder", name: "(projects added dynamically)", type: "system" });
-    entityCount++;
+      for (const [erpField, members] of Object.entries(flexData)) {
+        const routingField = fieldAliases[erpField] || erpField;
+        const dimSlot = fieldToSlot[routingField];
+        if (!dimSlot) { console.log(`[SCHEDULER] No routing for ERP field "${erpField}", skipping`); continue; }
+        // Re-register attribute defs under dim-slot name so admin UI finds them for dim1/dim2/dim3
+        const capDefs = (memberAttrDefs[erpField] || memberAttrDefs[routingField] || []) as any[];
+        for (const def of capDefs) {
+          upsertEconAttributeDef({ dimension: dimSlot, attribute_name: def.attribute_name, attribute_label: def.attribute_label, data_type: def.data_type || "string", source_system: source, allowed_values: def.allowed_values ? JSON.stringify(def.allowed_values) : undefined });
+        }
+        // Use routingField to look up knownAttrs (handles aliases like cost_center → cost_bearer)
+        const attrNames = knownAttrs[erpField] || knownAttrs[routingField] || [];
+        for (const member of members) {
+          upsertEconEntity({ source_system: source, dimension: dimSlot, code: member.code, name: member.name, type: "leaf" });
+          entityCount++;
+          for (const attr of attrNames) {
+            if (member[attr] != null) {
+              upsertEconEntityAttribute({ dimension: dimSlot, code: member.code, attribute_name: attr, attribute_value: String(member[attr]), source_system: source });
+            }
+          }
+        }
+      }
+    } catch (e) { console.log(`[SCHEDULER] Could not fetch flex dimensions: ${e}`); }
+
+    // Projects — fetched dynamically from ERP with attributes
+    try {
+      const projResp = await fetch(`${ERP_URL}/api/projects`);
+      const projects = await projResp.json() as Array<Record<string, any>>;
+      const projAttrs = knownAttrs["project"] || [];
+      for (const p of projects) {
+        upsertEconEntity({ source_system: source, dimension: "project", code: p.code, name: p.name, type: "leaf" });
+        entityCount++;
+        for (const attr of projAttrs) {
+          if (p[attr] != null) {
+            upsertEconEntityAttribute({ dimension: "project", code: p.code, attribute_name: attr, attribute_value: String(p[attr]), source_system: source });
+          }
+        }
+      }
+    } catch (e) { console.log(`[SCHEDULER] Could not fetch projects: ${e}`); }
 
     upsertSyncState(source, "entities", { last_sync_at: new Date().toISOString(), rows_received: entityCount, rows_validated: entityCount, status: "idle", duration_ms: Date.now() - t0 });
     upsertSyncState(source, "relations", { last_sync_at: new Date().toISOString(), rows_received: relCount, rows_validated: relCount, status: "idle" });
@@ -1698,24 +1768,49 @@ app.post("/api/demo/step/1", async (_req, res) => {
     // ── ERP flex dimensions → platform dim-slots (dim1/dim2/dim3) ──
     const flexDims = [
       { dim: "dim1", codes: [
-        { code: "AKT-100", name: "Design" },
-        { code: "AKT-200", name: "Construction" },
-        { code: "AKT-300", name: "Inspection" },
+        { code: "AKT-100", name: "Design", activity_category: "Planning" },
+        { code: "AKT-200", name: "Construction", activity_category: "Execution" },
+        { code: "AKT-300", name: "Inspection", activity_category: "Quality" },
       ]},
       { dim: "dim2", codes: [
-        { code: "KB-500", name: "Internal" },
-        { code: "KB-600", name: "External" },
+        { code: "KB-500", name: "Internal", cost_center_type: "Direct" },
+        { code: "KB-600", name: "External", cost_center_type: "Indirect" },
       ]},
       { dim: "dim3", codes: [
-        { code: "MP-200", name: "Supplier Alpha" },
-        { code: "MP-300", name: "Supplier Beta" },
+        { code: "MP-200", name: "Supplier Alpha", supplier_region: "Domestic" },
+        { code: "MP-300", name: "Supplier Beta", supplier_region: "International" },
       ]},
     ];
+    // Attribute defs for flex dimensions (ERP field names mapped to dim-slots)
+    upsertEconAttributeDef({ dimension: "dim1", attribute_name: "activity_category", attribute_label: "Activity Category", source_system: "erp", allowed_values: JSON.stringify(["Planning", "Execution", "Quality"]) });
+    upsertEconAttributeDef({ dimension: "dim2", attribute_name: "cost_center_type", attribute_label: "Cost Center Type", source_system: "erp", allowed_values: JSON.stringify(["Direct", "Indirect"]) });
+    upsertEconAttributeDef({ dimension: "dim3", attribute_name: "supplier_region", attribute_label: "Supplier Region", source_system: "erp", allowed_values: JSON.stringify(["Domestic", "International"]) });
     for (const fd of flexDims) {
       for (const c of fd.codes) {
         upsertEconEntity({ source_system: "erp", dimension: fd.dim, code: c.code, name: c.name, type: "leaf" });
         econEntities++;
+        // Set flex-dim attributes
+        const attrEntries = Object.entries(c).filter(([k]) => k !== "code" && k !== "name");
+        for (const [attrName, attrValue] of attrEntries) {
+          upsertEconEntityAttribute({ dimension: fd.dim, code: c.code, attribute_name: attrName, attribute_value: String(attrValue), source_system: "erp" });
+        }
       }
+    }
+
+    // ── Project entities with project_type attribute ──
+    upsertEconAttributeDef({ dimension: "project", attribute_name: "project_type", attribute_label: "Project Type", source_system: "erp", allowed_values: JSON.stringify(["Research", "Infrastructure", "Maintenance"]) });
+    const seedProjects = [
+      { code: "P-100", name: "Platform Redesign", project_type: "Infrastructure" },
+      { code: "P-200", name: "Data Lake Migration", project_type: "Infrastructure" },
+      { code: "P-300", name: "Customer Analytics", project_type: "Research" },
+      { code: "P-400", name: "AI Forecasting", project_type: "Research" },
+      { code: "P-500", name: "Server Patching", project_type: "Maintenance" },
+      { code: "P-600", name: "Network Audit", project_type: "Maintenance" },
+    ];
+    for (const p of seedProjects) {
+      upsertEconEntity({ source_system: "erp", dimension: "project", code: p.code, name: p.name, type: "leaf" });
+      upsertEconEntityAttribute({ dimension: "project", code: p.code, attribute_name: "project_type", attribute_value: p.project_type, source_system: "erp" });
+      econEntities++;
     }
 
     upsertSyncState("erp", "entities", { last_sync_at: new Date().toISOString(), rows_received: econEntities + 1, rows_validated: econEntities + 1, status: "idle" });
@@ -2221,10 +2316,10 @@ app.get("/api/help/:id", (req, res) => {
 });
 
 app.post("/api/help", (req, res) => {
-  const { slug, title, product, category, body_md, keywords, sort_order } = req.body;
+  const { slug, title, product, category, body_md, keywords, sort_order, audience } = req.body;
   if (!slug || !title) { res.status(400).json({ error: "slug and title required" }); return; }
   try {
-    const article = createHelpArticle({ slug, title, product, category, body_md, keywords, sort_order });
+    const article = createHelpArticle({ slug, title, product, category, body_md, keywords, sort_order, audience });
     res.status(201).json(article);
   } catch (err: any) {
     res.status(409).json({ error: err.message });
